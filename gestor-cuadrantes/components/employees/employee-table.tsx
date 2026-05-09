@@ -1,0 +1,65 @@
+import { type EmployeeRecord } from "@/app/employees/page";
+
+interface EmployeeTableProps {
+  employees: EmployeeRecord[];
+  onEdit: (employee: EmployeeRecord) => void;
+}
+
+const ROLE_BADGES: Record<string, { label: string; classes: string }> = {
+  ADMIN: { label: "Admin", classes: "bg-blue-100 text-blue-700" },
+  EMPLOYEE: { label: "Técnico", classes: "bg-gray-100 text-gray-600" },
+};
+
+export function EmployeeTable({ employees, onEdit }: EmployeeTableProps) {
+  if (employees.length === 0) {
+    return (
+      <div className="text-center py-12 text-gray-400 text-sm">
+        No hay empleados registrados.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200">#</th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200">Nombre</th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200">Email</th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200">Rol</th>
+            <th className="px-4 py-3 border-b border-gray-200" />
+          </tr>
+        </thead>
+        <tbody>
+          {employees.map((emp, i) => {
+            const badge = ROLE_BADGES[emp.user.role] ?? { label: emp.user.role, classes: "bg-gray-100 text-gray-600" };
+            return (
+              <tr
+                key={emp.id}
+                className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50/50"} hover:bg-yellow-50/40 transition-colors`}
+              >
+                <td className="px-4 py-3 text-gray-400 border-b border-gray-100">{emp.rotationOrder}</td>
+                <td className="px-4 py-3 font-medium text-gray-800 border-b border-gray-100">{emp.name}</td>
+                <td className="px-4 py-3 text-gray-600 border-b border-gray-100">{emp.user.email}</td>
+                <td className="px-4 py-3 border-b border-gray-100">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge.classes}`}>
+                    {badge.label}
+                  </span>
+                </td>
+                <td className="px-4 py-3 border-b border-gray-100 text-right">
+                  <button
+                    onClick={() => onEdit(emp)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Editar
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}

@@ -65,7 +65,7 @@ export const authOptions: NextAuthOptions = {
       // En el primer login 'user' contiene los datos devueltos por authorize()
       if (user) {
         token.id = user.id;
-        token.role = (user as { role: string }).role;
+        token.role = (user as unknown as { role: string }).role;
       }
       return token;
     },
@@ -73,7 +73,7 @@ export const authOptions: NextAuthOptions = {
       // Propagamos id y role al objeto session accesible en los componentes
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as string;
+        session.user.role = token.role as "ADMIN" | "EMPLOYEE";
       }
       return session;
     },

@@ -1,0 +1,116 @@
+import { describe, it, expect } from "vitest";
+import {
+  isValidRole,
+  isValidEmail,
+  isValidPassword,
+  validateCreateEmployee,
+  validateUpdateEmployee,
+} from "@/lib/employees/business-logic";
+
+describe("isValidRole", () => {
+  it("acepta ADMIN y EMPLOYEE", () => {
+    expect(isValidRole("ADMIN")).toBe(true);
+    expect(isValidRole("EMPLOYEE")).toBe(true);
+  });
+
+  it("rechaza roles desconocidos", () => {
+    expect(isValidRole("MANAGER")).toBe(false);
+    expect(isValidRole("admin")).toBe(false);
+    expect(isValidRole("")).toBe(false);
+  });
+});
+
+describe("isValidEmail", () => {
+  it("acepta emails válidos", () => {
+    expect(isValidEmail("user@example.com")).toBe(true);
+    expect(isValidEmail("tecnico1@cuadrantes.local")).toBe(true);
+  });
+
+  it("rechaza emails inválidos", () => {
+    expect(isValidEmail("noarroba")).toBe(false);
+    expect(isValidEmail("@nodomain")).toBe(false);
+    expect(isValidEmail("")).toBe(false);
+  });
+});
+
+describe("isValidPassword", () => {
+  it("acepta contraseñas fuertes", () => {
+    expect(isValidPassword("Admin1234!")).toBe(true);
+    expect(isValidPassword("Tecnico1234!")).toBe(true);
+  });
+
+  it("rechaza contraseñas débiles", () => {
+    expect(isValidPassword("short1A")).toBe(false);   // menos de 8
+    expect(isValidPassword("sinmayuscula1!")).toBe(false);
+    expect(isValidPassword("SinNumero!")).toBe(false);
+  });
+});
+
+describe("validateCreateEmployee", () => {
+  const valid = {
+    name: "Nuevo Técnico",
+    email: "nuevo@cuadrantes.local",
+    password: "Segura1234!",
+    role: "EMPLOYEE",
+  };
+
+  it("valida un body correcto", () => {
+    const result = validateCreateEmployee(valid);
+    expect(result.valid).toBe(true);
+    expect(result.data?.name).toBe("Nuevo Técnico");
+  });
+
+  it("rechaza nombre corto", () => {
+    const result = validateCreateEmployee({ ...valid, name: "A" });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("Nombre");
+  });
+
+  it("rechaza email inválido", () => {
+    const result = validateCreateEmployee({ ...valid, email: "invalido" });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("Email");
+  });
+
+  it("rechaza contraseña débil", () => {
+    const result = validateCreateEmployee({ ...valid, password: "debil" });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("Contraseña");
+  });
+
+  it("rechaza rol inválido", () => {
+    const result = validateCreateEmployee({ ...valid, role: "SUPERUSER" });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("Rol");
+  });
+
+  it("recorta espacios del nombre", () => {
+    const result = validateCreateEmployee({ ...valid, name: "  Ana García  " });
+    expect(result.valid).toBe(true);
+    expect(result.data?.name).toBe("Ana García");
+  });
+});
+
+describe("validateUpdateEmployee", () => {
+  it("valida actualización solo de nombre", () => {
+    const result = validateUpdateEmployee({ name: "Nuevo Nombre" });
+    expect(result.valid).toBe(true);
+    expect(result.data?.name).toBe("Nuevo Nombre");
+  });
+
+  it("valida actualización solo de rol", () => {
+    const result = validateUpdateEmployee({ role: "ADMIN" });
+    expect(result.valid).toBe(true);
+    expect(result.data?.role).toBe("ADMIN");
+  });
+
+  it("rechaza body vacío", () => {
+    expect(validateUpdateEmployee({}).valid).toBe(false);
+    expect(validateUpdateEmployee(null).valid).toBe(false);
+  });
+
+  it("rechaza rol inválido en update", () => {
+    const result = validateUpdateEmployee({ role: "UNKNOWN" });
+    expect(result.valid).toBe(false);
+  });
+});

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { ScheduleGrid } from "@/components/schedule/schedule-grid";
 import { Header } from "@/components/layout/header";
-import { MOCK_EMPLOYEES, MOCK_ASSIGNMENTS } from "@/lib/mock/schedule-data";
+import { ShiftEditor } from "@/components/schedule/shift-editor";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
+import { ScheduleAssignment, ScheduleEmployee } from "@/lib/schedules/types";
 
 const MONTH_NAMES = [
   "Enero","Febrero","Marzo","Abril","Mayo","Junio",
@@ -12,9 +14,61 @@ const MONTH_NAMES = [
 ];
 
 export default function HomePage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
+
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(5);
 
+  const [employees, setEmployees] = useState<ScheduleEmployee[]>([]);
+  const [assignments, setAssignments] = useState<ScheduleAssignment[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Editor de turno
+  const [editingCell, setEditingCell] = useState<{
+    employeeId: string;
+    date: string;
+    currentShift?: string;
+    assignmentId?: string;
+  } | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Carga datos del mes
+  // ---------------------------------------------------------------------------
+  const loadSchedule = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/schedules?year=${year}&month=${month}`);
+      if (!res.ok) throw new Error("Error cargando cuadrante");
+      const data: ScheduleAssignment[] = await res.json();
+
+      // Extraer empleados únicos ordenados por rotationOrder
+      const empMap = new Map<string, ScheduleEmployee>();
+      data.forEach((a) => {
+        if (a.employee && !empMap.has(a.employeeId)) {
+          empMap.set(a.employeeId, a.employee);
+        }
+      });
+      const sortedEmployees = Array.from(empMap.values()).sort(
+        (a, b) => a.rotationOrder - b.rotationOrder
+      );
+
+      setEmployees(sortedEmployees);
+      setAssignments(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [year, month]);
+
+  useEffect(() => {
+    loadSchedule();
+  }, [loadSchedule]);
+
+  // ---------------------------------------------------------------------------
+  // Navegación de mes
+  // ---------------------------------------------------------------------------
   function prevMonth() {
     if (month === 1) { setMonth(12); setYear((y) => y - 1); }
     else setMonth((m) => m - 1);
@@ -25,10 +79,50 @@ export default function HomePage() {
     else setMonth((m) => m + 1);
   }
 
+  // ---------------------------------------------------------------------------
+  // Clic en celda (solo ADMIN)
+  // ---------------------------------------------------------------------------
+  function handleCellClick(employeeId: string, date: string, currentShift?: string) {
+    const found = assignments.find(
+      (a) => a.employeeId === employeeId && a.date.slice(0, 10) === date
+    );
+    setEditingCell({ employeeId, date, currentShift, assignmentId: found?.id });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Guardar turno desde el editor
+  // ---------------------------------------------------------------------------
+  async function handleSaveShift(shiftType: string) {
+    if (!editingCell) return;
+    const { employeeId, date } = editingCell;
+
+    await fetch("/api/schedules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeId, date, shiftType }),
+    });
+    setEditingCell(null);
+    await loadSchedule();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Eliminar turno desde el editor
+  // ---------------------------------------------------------------------------
+  async function handleDeleteShift() {
+    if (!editingCell?.assignmentId) return;
+    await fetch(`/api/schedules?id=${editingCell.assignmentId}`, { method: "DELETE" });
+    setEditingCell(null);
+    await loadSchedule();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
       <main className="flex-1 p-6">
+        {/* Navegación de mes */}
         <div className="flex items-center gap-4 mb-6">
           <button
             onClick={prevMonth}
@@ -45,18 +139,34 @@ export default function HomePage() {
           >
             ›
           </button>
-          <span className="ml-2 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-1">
-            Vista de ejemplo — Mayo 2026
-          </span>
+          {isAdmin && (
+            <span className="ml-2 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1">
+              Modo edición — clic en celda para asignar turno
+            </span>
+          )}
         </div>
 
-        <ScheduleGrid
-          year={2026}
-          month={5}
-          employees={MOCK_EMPLOYEES}
-          assignments={MOCK_ASSIGNMENTS}
-        />
+        {/* Grid */}
+        {loading ? (
+          <div className="flex items-center justify-center h-64 text-gray-400">
+            Cargando cuadrante...
+          </div>
+        ) : employees.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-gray-400 gap-2">
+            <span className="text-4xl">📋</span>
+            <p className="text-sm">Sin turnos asignados este mes</p>
+          </div>
+        ) : (
+          <ScheduleGrid
+            year={year}
+            month={month}
+            employees={employees}
+            assignments={assignments}
+            onCellClick={isAdmin ? handleCellClick : undefined}
+          />
+        )}
 
+        {/* Leyenda */}
         <div className="mt-6 flex flex-wrap gap-3">
           {(["M","T","N","J","D","V","B"] as ShiftType[]).map((shift) => {
             const { color, textColor, label } = SHIFT_COLORS[shift];
@@ -74,6 +184,17 @@ export default function HomePage() {
           })}
         </div>
       </main>
+
+      {/* Modal editor de turno */}
+      {editingCell && (
+        <ShiftEditor
+          date={editingCell.date}
+          currentShift={editingCell.currentShift}
+          onSave={handleSaveShift}
+          onDelete={editingCell.assignmentId ? handleDeleteShift : undefined}
+          onClose={() => setEditingCell(null)}
+        />
+      )}
     </div>
   );
 }

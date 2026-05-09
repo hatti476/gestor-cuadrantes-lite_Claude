@@ -1,44 +1,36 @@
 import { ShiftCell } from "@/components/schedule/shift-cell";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
-import { MockEmployee, MockShiftAssignment } from "@/lib/mock/schedule-data";
+import { ScheduleEmployee, ScheduleAssignment } from "@/lib/schedules/types";
+import { countShifts } from "@/lib/schedules/business-logic";
 
 interface ScheduleGridProps {
   year: number;
   month: number; // 1-12
-  employees: MockEmployee[];
-  assignments: MockShiftAssignment[];
+  employees: ScheduleEmployee[];
+  assignments: ScheduleAssignment[];
+  /** Si se provee, las celdas son clicables (modo edición ADMIN) */
+  onCellClick?: (employeeId: string, date: string, currentShift?: string) => void;
 }
 
 const DAY_NAMES = ["D", "L", "M", "X", "J", "V", "S"];
-
-// Calcula los contadores de turnos de un empleado en el mes
-function computeCounters(
-  employeeId: string,
-  assignments: MockShiftAssignment[]
-): Record<string, number> {
-  const counters: Record<string, number> = {};
-  assignments
-    .filter((a) => a.employeeId === employeeId)
-    .forEach((a) => {
-      counters[a.shiftType] = (counters[a.shiftType] ?? 0) + 1;
-    });
-  return counters;
-}
 
 export function ScheduleGrid({
   year,
   month,
   employees,
   assignments,
+  onCellClick,
 }: ScheduleGridProps) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-  // Índice rápido: employeeId → date → shiftType
-  const index: Record<string, Record<string, ShiftType>> = {};
+  // Índice rápido: employeeId → dateStr → { id, shiftType }
+  const index: Record<string, Record<string, { id: string; shiftType: ShiftType }>> = {};
   assignments.forEach((a) => {
     if (!index[a.employeeId]) index[a.employeeId] = {};
-    index[a.employeeId][a.date] = a.shiftType as ShiftType;
+    // Normalizar fecha a YYYY-MM-DD
+    const dateStr = a.date.slice(0, 10);
+    index[a.employeeId][dateStr] = { id: a.id, shiftType: a.shiftType as ShiftType };
   });
 
   const shiftOrder: ShiftType[] = ["M", "T", "N", "J", "D", "V", "B"];
@@ -77,7 +69,10 @@ export function ScheduleGrid({
         </thead>
         <tbody>
           {employees.map((emp, rowIndex) => {
-            const counters = computeCounters(emp.id, assignments);
+            const empShifts = assignments
+              .filter((a) => a.employeeId === emp.id)
+              .map((a) => a.shiftType);
+            const counters = countShifts(empShifts);
             const rowBg = rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/50";
 
             return (
@@ -90,18 +85,20 @@ export function ScheduleGrid({
                 {/* Celdas de turno */}
                 {days.map((day) => {
                   const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                  const shift = index[emp.id]?.[dateStr];
+                  const cell = index[emp.id]?.[dateStr];
                   const date = new Date(year, month - 1, day);
                   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                  const clickable = !!onCellClick;
 
                   return (
                     <td
                       key={day}
+                      onClick={clickable ? () => onCellClick(emp.id, dateStr, cell?.shiftType) : undefined}
                       className={`w-9 h-8 p-0.5 border-r border-b border-gray-200 ${
                         isWeekend ? "bg-blue-50/30" : ""
-                      }`}
+                      } ${clickable ? "cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset" : ""}`}
                     >
-                      {shift ? <ShiftCell shiftType={shift} /> : null}
+                      {cell ? <ShiftCell shiftType={cell.shiftType} /> : null}
                     </td>
                   );
                 })}

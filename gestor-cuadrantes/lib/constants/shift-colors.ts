@@ -65,3 +65,14 @@ export const SHIFT_COLORS: Record<ShiftType, ShiftConfig> = {
     textColor: "#FFFFFF",
   },
 };
+
+/** Devuelve la config de un turno, o un fallback genérico si el código no existe */
+export function getShiftConfig(shiftType: string): ShiftConfig {
+  return (
+    SHIFT_COLORS[shiftType as ShiftType] ?? {
+      label: shiftType,
+      color: "#E0E0E0",
+      textColor: "#212121",
+    }
+  );
+}

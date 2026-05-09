@@ -1,13 +1,27 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
+import Link from "next/link";
 
 export function Header() {
   const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
-      <h1 className="text-lg font-bold text-gray-800">Gestor de Cuadrantes</h1>
+      <div className="flex items-center gap-6">
+        <h1 className="text-lg font-bold text-gray-800">Gestor de Cuadrantes</h1>
+        <nav className="flex items-center gap-4 text-sm">
+          <Link href="/" className="text-gray-600 hover:text-gray-900 transition-colors">
+            Cuadrante
+          </Link>
+          {isAdmin && (
+            <Link href="/employees" className="text-gray-600 hover:text-gray-900 transition-colors">
+              Empleados
+            </Link>
+          )}
+        </nav>
+      </div>
       <div className="flex items-center gap-4">
         {session?.user && (
           <>
