@@ -1,0 +1,37 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      # Monta el código fuente para hot-reload en desarrollo
+      - .:/app
+      # Evita que node_modules del host sobreescriba el del contenedor
+      - /app/node_modules
+      # Persiste la base de datos SQLite fuera del contenedor
+      - sqlite_data:/app/prisma
+    environment:
+      - DATABASE_URL=file:/app/prisma/dev.db
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+    restart: unless-stopped
+
+  # --- Perfil de producción: descomentar y usar 'docker compose --profile prod up' ---
+  # db:
+  #   image: postgres:16-alpine
+  #   profiles: [prod]
+  #   environment:
+  #     POSTGRES_USER: ${POSTGRES_USER}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #     POSTGRES_DB: ${POSTGRES_DB}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   restart: unless-stopped
+
+volumes:
+  sqlite_data:
+  # postgres_data:
