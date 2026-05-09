@@ -125,6 +125,7 @@ export default function HomePage() {
         {/* Navegación de mes */}
         <div className="flex items-center gap-4 mb-6">
           <button
+            data-testid="btn-prev-month"
             onClick={prevMonth}
             className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 text-lg"
           >
@@ -134,6 +135,7 @@ export default function HomePage() {
             {MONTH_NAMES[month - 1]} {year}
           </h2>
           <button
+            data-testid="btn-next-month"
             onClick={nextMonth}
             className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 text-lg"
           >

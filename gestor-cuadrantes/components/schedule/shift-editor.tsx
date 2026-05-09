@@ -21,6 +21,7 @@ export function ShiftEditor({ date, currentShift, onSave, onDelete, onClose }: S
   return (
     // Overlay
     <div
+      data-testid="shift-editor"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
       onClick={onClose}
     >
@@ -51,6 +52,7 @@ export function ShiftEditor({ date, currentShift, onSave, onDelete, onClose }: S
               <button
                 key={shift}
                 onClick={() => onSave(shift)}
+                data-testid={`shift-btn-${shift}`}
                 title={label}
                 className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all ${
                   isActive ? "border-blue-500 scale-105" : "border-transparent hover:border-gray-200"
