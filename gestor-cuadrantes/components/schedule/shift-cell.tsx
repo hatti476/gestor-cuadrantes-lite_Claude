@@ -9,6 +9,7 @@ export function ShiftCell({ shiftType }: ShiftCellProps) {
 
   return (
     <div
+      data-testid={`shift-cell-${shiftType}`}
       className="flex items-center justify-center w-full h-full text-xs font-bold rounded-sm select-none"
       style={{
         backgroundColor: config.color,

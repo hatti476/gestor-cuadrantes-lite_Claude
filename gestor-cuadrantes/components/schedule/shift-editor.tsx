@@ -2,7 +2,7 @@
 
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 
-const SHIFT_OPTIONS: ShiftType[] = ["M", "T", "N", "J", "D", "V", "B"];
+const SHIFT_OPTIONS: ShiftType[] = ["M", "T", "N", "J", "D", "V", "B", "MF", "TF", "NF"];
 
 interface ShiftEditorProps {
   date: string; // "YYYY-MM-DD"

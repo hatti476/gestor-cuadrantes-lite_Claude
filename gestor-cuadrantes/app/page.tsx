@@ -116,6 +116,26 @@ export default function HomePage() {
   }
 
   // ---------------------------------------------------------------------------
+  // Generación automática
+  // ---------------------------------------------------------------------------
+  const [generating, setGenerating] = useState(false);
+
+  async function handleGenerate() {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/schedules/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ year, month }),
+      });
+      if (!res.ok) throw new Error("Error generando cuadrante");
+      await loadSchedule();
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
   return (
@@ -142,10 +162,27 @@ export default function HomePage() {
             ›
           </button>
           {isAdmin && (
-            <span className="ml-2 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1">
+            <span className="ml-2 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1 print:hidden">
               Modo edición — clic en celda para asignar turno
             </span>
           )}
+          {isAdmin && (
+            <button
+              data-testid="btn-generate"
+              onClick={handleGenerate}
+              disabled={generating}
+              className="ml-auto text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors print:hidden"
+            >
+              {generating ? "Generando..." : "Generar cuadrante"}
+            </button>
+          )}
+          <button
+            data-testid="btn-print"
+            onClick={() => window.print()}
+            className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors print:hidden"
+          >
+            Imprimir
+          </button>
         </div>
 
         {/* Grid */}

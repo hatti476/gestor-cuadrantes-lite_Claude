@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { EmployeeTable } from "@/components/employees/employee-table";
 import { EmployeeForm } from "@/components/employees/employee-form";
+import { PasswordForm } from "@/components/employees/password-form";
 
 export interface EmployeeRecord {
   id: string;
@@ -22,6 +23,7 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<EmployeeRecord | null>(null);
+  const [passwordEmployee, setPasswordEmployee] = useState<EmployeeRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Redirigir si no es ADMIN
@@ -114,6 +116,7 @@ export default function EmployeesPage() {
           <EmployeeTable
             employees={employees}
             onEdit={(emp) => { setEditingEmployee(emp); setShowForm(false); }}
+            onChangePassword={(emp) => setPasswordEmployee(emp)}
           />
         )}
 
@@ -133,6 +136,16 @@ export default function EmployeesPage() {
             initial={editingEmployee}
             onSubmit={(data) => handleUpdate(editingEmployee.id, data)}
             onClose={() => setEditingEmployee(null)}
+          />
+        )}
+
+        {/* Modal de cambio de contraseña */}
+        {passwordEmployee && (
+          <PasswordForm
+            employeeId={passwordEmployee.id}
+            employeeName={passwordEmployee.name}
+            onClose={() => setPasswordEmployee(null)}
+            onSuccess={() => setPasswordEmployee(null)}
           />
         )}
       </main>
