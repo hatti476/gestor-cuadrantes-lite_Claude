@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { generateMonthSchedule } from "@/lib/schedules/generate";
+import { generateMonthSchedule, isWeekend } from "@/lib/schedules/generate";
 import { getMonthRange } from "@/lib/schedules/business-logic";
 
 // POST /api/schedules/generate
@@ -58,18 +58,18 @@ export async function POST(req: NextRequest) {
   // (lógica centralizada en el filtro de existingSet a continuación)
 
   // Construir el set de celdas ya ocupadas.
-  // EXCLUIR turnos que deben convertirse por festivo para que se regeneren.
+  // EXCLUIR turnos que deben convertirse por festivo o fin de semana para que se regeneren.
   const existingSet = new Set<string>(
     existing
       .filter((a) => {
         const dateStr = a.date.toISOString().slice(0, 10);
         if (a.shiftType === "N") {
-          // N: se regenera como NF si el día SIGUIENTE es festivo
+          // N: se regenera como NF si el día SIGUIENTE es festivo o fin de semana
           const nextDay = new Date(a.date.getTime() + 86_400_000);
-          if (holidaySet.has(nextDay.toISOString().slice(0, 10))) return false;
+          if (holidaySet.has(nextDay.toISOString().slice(0, 10)) || isWeekend(nextDay)) return false;
         } else if (a.shiftType === "M" || a.shiftType === "T") {
-          // M/T: se regenera como MF/TF si el día actual es festivo
-          if (holidaySet.has(dateStr)) return false;
+          // M/T: se regenera como MF/TF si el día actual es festivo o fin de semana
+          if (holidaySet.has(dateStr) || isWeekend(a.date)) return false;
         }
         return true;
       })

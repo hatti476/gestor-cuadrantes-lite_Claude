@@ -42,21 +42,22 @@ export function countShifts(shiftTypes: string[]): ShiftCounter {
 }
 
 /**
- * Dado un turno base y si el día propio / el día siguiente es festivo,
- * devuelve el turno resultante según las reglas de festivos:
- *   M → MF si festivo mismo día
- *   T → TF si festivo mismo día
- *   N → NF si el día SIGUIENTE es festivo (el turno termina en festivo)
+ * Dado un turno base y si el día propio / el día siguiente es "especial"
+ * (festivo O fin de semana), devuelve el turno resultante:
+ *   M → MF si el día actual es especial
+ *   T → TF si el día actual es especial
+ *   N → NF si el día SIGUIENTE es especial (el turno termina en ese día)
+ *          Nota: N del domingo → N si el lunes no es especial
  *   D y resto → sin cambio
  */
 export function applyHolidayRule(
   shiftType: string,
-  isTodayHoliday: boolean,
-  isTomorrowHoliday: boolean
+  isTodaySpecial: boolean,  // festivo o fin de semana
+  isTomorrowSpecial: boolean // festivo o fin de semana
 ): string {
-  if (shiftType === "M" && isTodayHoliday) return "MF";
-  if (shiftType === "T" && isTodayHoliday) return "TF";
-  if (shiftType === "N" && isTomorrowHoliday) return "NF";
+  if (shiftType === "M" && isTodaySpecial) return "MF";
+  if (shiftType === "T" && isTodaySpecial) return "TF";
+  if (shiftType === "N" && isTomorrowSpecial) return "NF";
   return shiftType;
 }
 

@@ -17,12 +17,21 @@ export const BASE_PATTERN: string[] = [
   "D", "D",
 ];
 
-/** Mapa de turno laboral → turno festivo equivalente */
+/** Mapa de turno laboral → turno de día especial equivalente (festivo o fin de semana) */
 const FESTIVO_MAP: Record<string, string> = {
   M: "MF",
   T: "TF",
   N: "NF",
 };
+
+/**
+ * Devuelve true si la fecha UTC es sábado (6) o domingo (0).
+ * Se usa UTC para ser consistente con cómo se almacenan las fechas (UTC midnight).
+ */
+export function isWeekend(date: Date): boolean {
+  const dow = date.getUTCDay();
+  return dow === 0 || dow === 6;
+}
 
 /** Número de días desde la época de referencia (2026-01-01 UTC) */
 export const EPOCH_DATE = new Date("2026-01-01T00:00:00.000Z");
@@ -44,7 +53,12 @@ export function patternIndexForDate(date: Date, offset: number): number {
 
 /**
  * Tipo de turno que le corresponde a un empleado en una fecha.
- * Si el día es festivo, M→MF, T→TF, N→NF; D permanece D.
+ * Aplica conversión si el día (o el siguiente para N) es festivo o fin de semana:
+ *   M → MF, T → TF si el propio día es festivo o sábado/domingo
+ *   N → NF si el día SIGUIENTE es festivo o sábado/domingo
+ *          EXCEPTO: N del domingo → N si el lunes no es festivo
+ *                   (el turno termina el lunes, que es laborable)
+ * D permanece D en cualquier caso.
  */
 export function shiftForEmployee(
   employee: Pick<ScheduleEmployee, "rotationOrder">,
@@ -57,13 +71,12 @@ export function shiftForEmployee(
   const dateStr = date.toISOString().slice(0, 10);
 
   if (baseShift === "N") {
-    // Turno de noche 23:00-07:00: el tipo festivo lo determina el día SIGUIENTE
-    // (el turno acaba el día siguiente, que es el que puede ser festivo)
+    // Turno de noche 23:00-07:00: el tipo especial lo determina el día SIGUIENTE
     const nextDay = new Date(date.getTime() + 86_400_000);
     const nextDateStr = nextDay.toISOString().slice(0, 10);
-    if (holidayDates.has(nextDateStr)) return "NF";
-  } else if (FESTIVO_MAP[baseShift] && holidayDates.has(dateStr)) {
-    return FESTIVO_MAP[baseShift];
+    if (holidayDates.has(nextDateStr) || isWeekend(nextDay)) return "NF";
+  } else if (FESTIVO_MAP[baseShift]) {
+    if (holidayDates.has(dateStr) || isWeekend(date)) return FESTIVO_MAP[baseShift];
   }
 
   return baseShift;

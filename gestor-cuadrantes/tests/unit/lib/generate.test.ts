@@ -58,7 +58,8 @@ describe("shiftForEmployee", () => {
     const emp = { rotationOrder: 0 };
     const date = new Date("2026-05-01T00:00:00.000Z");
     const shift = shiftForEmployee(emp, date);
-    expect(BASE_PATTERN).toContain(shift);
+    const valid = new Set(["M", "T", "N", "D", "MF", "TF", "NF"]);
+    expect(valid.has(shift)).toBe(true);
   });
 
   it("empleados con distinto rotationOrder tienen turnos distintos en el mismo día", () => {
@@ -103,10 +104,11 @@ describe("generateMonthSchedule", () => {
     expect(day1).toBeUndefined();
   });
 
-  it("todas las asignaciones tienen shiftType del patrón base", () => {
+  it("todas las asignaciones tienen shiftType del patrón base o su variante especial", () => {
     const result = generateMonthSchedule(employees, 2026, 5);
+    const valid = new Set(["M", "T", "N", "D", "MF", "TF", "NF"]);
     result.forEach((a) => {
-      expect(BASE_PATTERN).toContain(a.shiftType);
+      expect(valid.has(a.shiftType)).toBe(true);
     });
   });
 
@@ -159,6 +161,75 @@ describe("shiftForEmployee — festivos", () => {
     const date = new Date("2026-01-15T00:00:00.000Z");
     const holidays = new Set(["2026-01-15"]); // solo el propio día es festivo
     expect(shiftForEmployee(emp, date, holidays)).toBe("N");
+  });
+});
+
+describe("shiftForEmployee — fines de semana", () => {
+  const emp = { rotationOrder: 0 };
+
+  it("convierte M en MF cuando el día es sábado", () => {
+    // 2026-01-03 es sábado (dow=6) y rotationOrder=0 → M (índice 2)
+    const date = new Date("2026-01-03T00:00:00.000Z");
+    expect(shiftForEmployee(emp, date)).toBe("MF");
+  });
+
+  it("convierte M en MF cuando el día es domingo", () => {
+    // 2026-01-04 es domingo (dow=0) y rotationOrder=0 → M (índice 3)
+    const date = new Date("2026-01-04T00:00:00.000Z");
+    expect(shiftForEmployee(emp, date)).toBe("MF");
+  });
+
+  it("convierte T en TF cuando el día es sábado", () => {
+    // 2026-01-10 es sábado y rotationOrder=0 → T (índice 9)
+    const date = new Date("2026-01-10T00:00:00.000Z");
+    expect(shiftForEmployee(emp, date)).toBe("TF");
+  });
+
+  it("convierte T en TF cuando el día es domingo", () => {
+    // 2026-01-11 es domingo y rotationOrder=0 → T (índice 10)
+    const date = new Date("2026-01-11T00:00:00.000Z");
+    expect(shiftForEmployee(emp, date)).toBe("TF");
+  });
+
+  it("convierte N en NF cuando el día siguiente es sábado (turno viernes)", () => {
+    // 2026-01-16 es viernes (dow=5) y rotationOrder=0 → N (índice 15)
+    // El día siguiente (2026-01-17) es sábado → NF
+    const date = new Date("2026-01-16T00:00:00.000Z");
+    expect(shiftForEmployee(emp, date)).toBe("NF");
+  });
+
+  it("convierte N en NF cuando el día siguiente es domingo (turno sábado)", () => {
+    // 2026-01-17 es sábado (dow=6) y rotationOrder=0 → N (índice 16)
+    // El día siguiente (2026-01-18) es domingo → NF
+    const date = new Date("2026-01-17T00:00:00.000Z");
+    expect(shiftForEmployee(emp, date)).toBe("NF");
+  });
+
+  it("N del domingo NO se convierte en NF si el lunes no es festivo", () => {
+    // 2026-01-18 es domingo y rotationOrder=0 → N (índice 17)
+    // El día siguiente (2026-01-19) es lunes laborable → N permanece
+    const date = new Date("2026-01-18T00:00:00.000Z");
+    expect(shiftForEmployee(emp, date)).toBe("N");
+  });
+
+  it("N del domingo SÍ se convierte en NF si el lunes es festivo", () => {
+    // 2026-01-18 es domingo, rotationOrder=0 → N; el 19 es festivo → NF
+    const date = new Date("2026-01-18T00:00:00.000Z");
+    const holidays = new Set(["2026-01-19"]);
+    expect(shiftForEmployee(emp, date, holidays)).toBe("NF");
+  });
+
+  it("D no cambia aunque el día sea sábado o domingo", () => {
+    // 2026-01-06 es martes pero índice 5 → D; buscamos un D en finde
+    // 2026-01-24 es sábado (dow=6) y rotationOrder=0 → M (idx 23%21=2) → no D
+    // Buscamos un D en finde: día 7 es miércoles, idx=6 → D
+    // No hay D natural en finde para emp0 en enero. Usamos rotationOrder=2 que desplaza 6 posiciones.
+    // rotationOrder=2: offset=(2*3)%21=6; día 1 (2026-01-01): idx=(0+6)%21=6 → D
+    // 2026-01-25 es domingo (dow=0): idx=(24+6)%21=30%21=9 → T (no D)
+    // Mejor: rotationOrder=1, offset=3; 2026-01-04 es dom, idx=(3+3)%21=6 → D
+    const empD = { rotationOrder: 1 };
+    const date = new Date("2026-01-04T00:00:00.000Z"); // domingo
+    expect(shiftForEmployee(empD, date)).toBe("D");
   });
 });
 
