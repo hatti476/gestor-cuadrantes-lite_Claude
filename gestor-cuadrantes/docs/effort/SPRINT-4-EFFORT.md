@@ -46,6 +46,8 @@
 | applyHolidayRule + removeHolidayRule en business-logic | Dev | S | 0 | ✅ |
 | Tests E2E CP-30..CP-36 | QA | M | 0 | ✅ |
 | Tests E2E CP-37..CP-39 (añadidos post-entrega) | QA | M | 1 (directiva proactiva de tests) | ✅ |
+| Fix BUG-14: M/T en finde → MF/TF; N→NF si siguiente es finde | Dev | M | 1 (correción PM al revisar app) | ✅ |
+| Tests unitarios weekend (74→83 tests) | Dev | S | 0 | ✅ |
 | Release notes Sprint 4 | Doc | S | 0 | ✅ |
 
 ---
@@ -58,6 +60,7 @@
 4. **Corrección cabecera** — el PM señaló que la "F" ocultaba la letra del día de la semana.
 5. **Corrección contadores** — el PM señaló que MF/TF/NF no aparecían en los contadores.
 6. **Directiva proactiva de tests** — "Si, hazlo de forma proactiva a partir de ahora" → toda nueva funcionalidad debe llevar tests unitarios + E2E antes de hacer commit.
+7. **Revisión post-S5 de la app** — el PM detectó que M/T en sábado/domingo no se convertían a MF/TF (BUG-14). Corregió la regla de negocio y confirmó el caso especial del domingo.
 
 ---
 
@@ -65,12 +68,12 @@
 
 | Métrica | Valor |
 |---------|-------|
-| Tests unitarios al final del sprint | 74/74 ✅ |
+| Tests unitarios al final del sprint | 83/83 ✅ |
 | Tests E2E al final del sprint | 10/10 ✅ (total acumulado: 38/38) |
-| Bugs encontrados | 6 (BUG-08..BUG-13) |
-| Bugs resueltos en el sprint | 6 |
-| Commits del sprint | 3 (`a05f59e`, `60f598a`, `39255ad`) |
-| Ficheros modificados (estimado) | ~18 |
+| Bugs encontrados | 7 (BUG-08..BUG-14) |
+| Bugs resueltos en el sprint | 7 |
+| Commits del sprint | 4 (`a05f59e`, `60f598a`, `39255ad`, `6f7c19c`) |
+| Ficheros modificados (estimado) | ~20 |
 
 ---
 

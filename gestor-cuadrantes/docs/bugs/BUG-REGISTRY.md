@@ -10,7 +10,7 @@
 
 | Total bugs | Críticos | Altos | Medios | Bajos | Abiertos | Resueltos |
 |-----------|----------|-------|--------|-------|----------|-----------|
-| 13 | 0 | 5 | 5 | 3 | 0 | 13 |
+| 14 | 0 | 6 | 5 | 3 | 0 | 14 |
 
 ---
 
@@ -31,6 +31,7 @@
 | [BUG-11](#bug-11) | Sprint 4 | 🟡 Medium | ✅ Fixed | holidayDates como Set no permite almacenar descripción del festivo |
 | [BUG-12](#bug-12) | Sprint 4 | 🟡 Medium | ✅ Fixed | Contadores del grid no incluyen tipos MF/TF/NF |
 | [BUG-13](#bug-13) | Sprint 4 | 🟡 Medium | ✅ Fixed | Cabecera de día festivo muestra "F" en lugar de la letra del día |
+| [BUG-14](#bug-14) | Post-S5 | 🟠 High | ✅ Fixed | M/T en sábado/domingo no se convierten a MF/TF en la generación |
 
 ---
 
@@ -489,3 +490,45 @@ Añadidos `"MF"`, `"TF"` y `"NF"` al array `shiftOrder` utilizado para generar l
 ---
 
 *Registro mantenido por el agente `doc-writer`. Actualizar tras cada sesión de QA.*
+
+---
+
+### BUG-14
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-14 |
+| **Sprint** | Post-Sprint 5 (hotfix 2026-05-10) |
+| **Detectado por** | Manual — revisión del PM al revisar la app antes del Sprint 6 |
+| **Fecha detección** | 2026-05-10 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `6f7c19c` |
+
+**Descripción**  
+La lógica de generación automática aplicaba la conversión MF/TF/NF únicamente para días festivos explícitos, ignorando los fines de semana. Los turnos M y T que caían en sábado o domingo se generaban como M/T en lugar de MF/TF. Del mismo modo, un turno N cuyo día siguiente era sábado o domingo no se convertía a NF. La única excepción correcta era N del domingo → N cuando el lunes es laborable (el turno termina el lunes, que no es especial).
+
+**Pasos para reproducir**
+1. Generar el cuadrante de cualquier mes.
+2. Localizar un empleado con turno M o T en sábado o domingo.
+3. Observar que el turno figura como M/T en lugar de MF/TF.
+4. Localizar un empleado con turno N el viernes o sábado.
+5. Observar que el turno figura como N en lugar de NF (el día siguiente es fin de semana).
+
+**Resultado esperado**  
+- M en sábado o domingo → MF  
+- T en sábado o domingo → TF  
+- N cuando el día siguiente es sábado o domingo → NF  
+- N en domingo cuando el lunes es laborable → N (sin cambio)
+
+**Resultado obtenido**  
+- M/T en sábado/domingo → M/T (incorrecto)  
+- N en viernes/sábado → N (incorrecto)
+
+**Ficheros afectados**  
+- `lib/schedules/generate.ts` — función `shiftForEmployee`
+- `app/api/schedules/generate/route.ts` — construcción del `existingSet`
+- `lib/schedules/business-logic.ts` — documentación de `applyHolidayRule`
+
+**Fix aplicado**  
+Añadida función `isWeekend(date: Date): boolean` (comprueba `getUTCDay() === 0 || 6`) en `generate.ts`. La función `shiftForEmployee` ahora evalúa `holidayDates.has(dateStr) || isWeekend(date)` para M/T, y `holidayDates.has(nextDateStr) || isWeekend(nextDay)` para N. El `existingSet` de la route aplica la misma lógica para excluir los turnos que deben regenerarse. Añadidos 9 tests unitarios que cubren todos los casos (M/T en sáb/dom, N en viernes/sáb, N en domingo con lunes laborable y N en domingo con lunes festivo).

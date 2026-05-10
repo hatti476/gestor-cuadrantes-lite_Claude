@@ -18,7 +18,7 @@ Incorporar gestión de festivos, exportación CSV, historial de cambios de turno
 | ID | Requisito | Estado |
 |----|-----------|--------|
 | RF-26 | CRUD de festivos: el admin puede crear, listar y eliminar días festivos por año | ✅ |
-| RF-27 | La generación automática asigna MF/TF en días festivos (M→MF, T→TF) y NF si el día siguiente al turno de noche es festivo (N→NF) | ✅ |
+| RF-27 | La generación automática asigna MF/TF en días festivos o fines de semana (M→MF, T→TF) y NF si el día siguiente al turno de noche es festivo o fin de semana (N→NF); excepto N del domingo si el lunes es laborable | ✅ |
 | RF-28 | Botón "Exportar CSV" descarga el cuadrante del mes activo como fichero .csv | ✅ |
 | RF-29 | Historial de cambios: cada modificación manual de turno queda registrada (quién, qué, cuándo) | ✅ |
 | RF-30 | Vista de historial por empleado (últimos 20 cambios) accesible desde `/employees` | ✅ |
@@ -46,9 +46,10 @@ Incorporar gestión de festivos, exportación CSV, historial de cambios de turno
 - **Al añadir un festivo**, las asignaciones ya existentes en BD se actualizan de inmediato:
   - Mismo día: `M→MF`, `T→TF`
   - Día anterior: `N→NF` (el turno de noche de 23:00–07:00 termina en el festivo)
-- **Al generar el cuadrante**, la lógica de asignación aplica las mismas reglas:
-  - `M→MF`, `T→TF` si el propio día es festivo
-  - `N→NF` si el día **siguiente** al turno es festivo
+- **Al generar el cuadrante**, la lógica de asignación aplica las siguientes reglas:
+  - `M→MF`, `T→TF` si el propio día es festivo **o sábado/domingo**
+  - `N→NF` si el día **siguiente** al turno es festivo **o sábado/domingo**
+  - Excepción: `N` del domingo → `N` (sin cambio) si el lunes siguiente es laborable y no es festivo
   - `D` (descanso) no cambia en ningún caso
 - Los días festivos se muestran con **cabecera roja** en el grid; la letra del día de la semana (L, M, X…) se mantiene visible
 - Al pulsar sobre la cabecera de un día festivo aparece un **popover** con el nombre del festivo; se cierra haciendo clic fuera o volviendo a pulsar el mismo día
@@ -74,9 +75,20 @@ Incorporar gestión de festivos, exportación CSV, historial de cambios de turno
 ## Limitaciones conocidas (fuera de scope Sprint 4)
 
 - Los festivos son nacionales (un solo calendario), no hay festivos por comunidad/región
+- Al **eliminar** un festivo, los turnos MF/TF/NF **no** revierten a M/T/N automáticamente
 - No hay notificaciones por email ni push
 - El historial no permite revertir cambios (solo lectura)
 - No hay paginación en el historial (máximo 20 registros mostrados)
+
+---
+
+## Correcciones post-entrega
+
+### BUG-14 — M/T en fin de semana no se convertían a MF/TF (fix 2026-05-10, commit `6f7c19c`)
+La lógica de generación ignoraba los fines de semana al evaluar la conversión de turnos. Se amplió la regla para que sábado y domingo se traten igual que los festivos:
+- M/T en sábado o domingo → MF/TF
+- N cuyo día siguiente es sábado o domingo → NF
+- **Excepción**: N del domingo → N si el lunes es laborable y no festivo
 
 ---
 
@@ -100,12 +112,12 @@ Incorporar gestión de festivos, exportación CSV, historial de cambios de turno
 1. En `/holidays`, pulsar "Eliminar" en un festivo existente
 2. **Resultado esperado:** El festivo desaparece de la tabla
 
-### CP-32 — La generación respeta la lógica de festivos
-1. Añadir un festivo en un día concreto del mes próximo
-2. Generar el cuadrante de ese mes
-3. **Resultado esperado:**
-   - Empleados con turno M ese día → MF; con T → TF
-   - Empleados con turno N el día anterior → NF (turno que termina en el festivo)
+### CP-32 — La generación respeta la lógica de festivos y fines de semana
+1. Generar el cuadrante de cualquier mes con festivos registrados
+2. **Resultado esperado:**
+   - Empleados con turno M o T en día festivo o en sábado/domingo → MF/TF
+   - Empleados con turno N cuyo día siguiente es festivo o sábado/domingo → NF
+   - Empleados con turno N en domingo cuyo lunes es laborable → N (sin cambio)
    - Empleados con turno D → D (sin cambio)
 
 ### CP-33 — Exportar CSV descarga el fichero correcto
