@@ -1,3 +1,5 @@
+"use client";
+import { useState, useEffect, useRef } from "react";
 import { ShiftCell } from "@/components/schedule/shift-cell";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleEmployee, ScheduleAssignment } from "@/lib/schedules/types";
@@ -8,6 +10,8 @@ interface ScheduleGridProps {
   month: number; // 1-12
   employees: ScheduleEmployee[];
   assignments: ScheduleAssignment[];
+  /** Días festivos del mes: mapa de "YYYY-MM-DD" → descripción */
+  holidayDates?: Map<string, string>;
   /** Si se provee, las celdas son clicables (modo edición ADMIN) */
   onCellClick?: (employeeId: string, date: string, currentShift?: string) => void;
 }
@@ -19,10 +23,27 @@ export function ScheduleGrid({
   month,
   employees,
   assignments,
+  holidayDates = new Map(),
   onCellClick,
 }: ScheduleGridProps) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  // Popover de festivo: qué día está abierto y en qué posición
+  const [popup, setPopup] = useState<{ dateStr: string; x: number; y: number } | null>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  // Cerrar al hacer clic fuera
+  useEffect(() => {
+    if (!popup) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        setPopup(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [popup]);
 
   // Índice rápido: employeeId → dateStr → { id, shiftType }
   const index: Record<string, Record<string, { id: string; shiftType: ShiftType }>> = {};
@@ -36,7 +57,8 @@ export function ScheduleGrid({
   const shiftOrder: ShiftType[] = ["M", "T", "N", "MF", "TF", "NF", "J", "D", "V", "B"];
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+    <>
+      <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
       <table className="border-collapse text-xs min-w-max">
         <thead>
           {/* Fila de números de día */}
@@ -48,11 +70,26 @@ export function ScheduleGrid({
               const date = new Date(year, month - 1, day);
               const dayOfWeek = date.getDay();
               const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+              const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+              const isHoliday = holidayDates.has(dateStr);
               return (
                 <th
                   key={day}
+                  onClick={isHoliday ? (e) => {
+                    e.stopPropagation();
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    setPopup(popup?.dateStr === dateStr ? null : {
+                      dateStr,
+                      x: rect.left + rect.width / 2,
+                      y: rect.bottom + window.scrollY,
+                    });
+                  } : undefined}
                   className={`w-9 py-1 text-center border-b border-r border-gray-200 font-medium ${
-                    isWeekend ? "bg-blue-50 text-blue-700" : "text-gray-600"
+                    isHoliday
+                      ? "bg-red-100 text-red-700 cursor-pointer select-none"
+                      : isWeekend
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-gray-600"
                   }`}
                 >
                   <div>{day}</div>
@@ -127,6 +164,23 @@ export function ScheduleGrid({
           })}
         </tbody>
       </table>
-    </div>
+      </div>
+
+      {/* Popover de info de festivo */}
+      {popup && (
+        <div
+          ref={popupRef}
+          className="fixed z-50 bg-white border border-red-200 shadow-lg rounded-lg px-3 py-2 text-xs text-red-800 max-w-[200px] text-center pointer-events-auto"
+          style={{
+            left: popup.x,
+            top: popup.y + 6,
+            transform: "translateX(-50%)",
+          }}
+        >
+          <div className="font-semibold mb-0.5">🎉 Festivo</div>
+          <div>{holidayDates.get(popup.dateStr)}</div>
+        </div>
+      )}
+    </>
   );
 }

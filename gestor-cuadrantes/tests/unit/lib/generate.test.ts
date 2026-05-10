@@ -146,6 +146,20 @@ describe("shiftForEmployee — festivos", () => {
     const date = new Date("2026-01-01T00:00:00.000Z");
     expect(shiftForEmployee(emp, date)).toBe("M");
   });
+
+  it("convierte N en NF cuando el día SIGUIENTE es festivo", () => {
+    // rotationOrder=0, día 15 (2026-01-15) → índice 14 → BASE_PATTERN[14] = N
+    const date = new Date("2026-01-15T00:00:00.000Z");
+    const holidays = new Set(["2026-01-16"]); // el día siguiente es festivo
+    expect(shiftForEmployee(emp, date, holidays)).toBe("NF");
+  });
+
+  it("N NO se convierte a NF cuando el propio día es festivo pero el siguiente no", () => {
+    // Si el día del turno de noche es festivo pero el siguiente no → sigue siendo N
+    const date = new Date("2026-01-15T00:00:00.000Z");
+    const holidays = new Set(["2026-01-15"]); // solo el propio día es festivo
+    expect(shiftForEmployee(emp, date, holidays)).toBe("N");
+  });
 });
 
 describe("generateMonthSchedule — festivos", () => {
@@ -154,20 +168,37 @@ describe("generateMonthSchedule — festivos", () => {
     { id: "emp-2", rotationOrder: 1 },
   ];
 
-  it("los días festivos generan MF/TF/NF en lugar de M/T/N", () => {
-    // Hallamos qué turno tiene emp-1 el día 1 de enero (M)
-    const date = new Date("2026-01-01T00:00:00.000Z");
-    const baseShift = shiftForEmployee({ rotationOrder: 0 }, date);
-    // Generamos enero con ese día como festivo
+  it("los días festivos generan MF/TF en lugar de M/T (no N)", () => {
+    // Generamos enero con el día 1 como festivo (rotationOrder=0 → M ese día)
     const holidays = new Set(["2026-01-01"]);
     const result = generateMonthSchedule(employees, 2026, 1, new Set(), holidays);
     const day1 = result.find(
       (a) => a.employeeId === "emp-1" && a.date.toISOString().slice(0, 10) === "2026-01-01"
     );
+    const baseShift = shiftForEmployee({ rotationOrder: 0 }, new Date("2026-01-01T00:00:00.000Z"));
     if (baseShift === "M") expect(day1?.shiftType).toBe("MF");
     else if (baseShift === "T") expect(day1?.shiftType).toBe("TF");
-    else if (baseShift === "N") expect(day1?.shiftType).toBe("NF");
-    else expect(day1?.shiftType).toBe(baseShift); // D sigue siendo D
+    else expect(day1?.shiftType).toBe(baseShift); // D o N no cambian con el día actual como festivo
+  });
+
+  it("N en la víspera de un festivo se convierte en NF", () => {
+    // emp-1 (rotationOrder=0): día 15 enero → índice 14 → N; festivo en día 16
+    const holidays = new Set(["2026-01-16"]);
+    const result = generateMonthSchedule(employees, 2026, 1, new Set(), holidays);
+    const day15 = result.find(
+      (a) => a.employeeId === "emp-1" && a.date.toISOString().slice(0, 10) === "2026-01-15"
+    );
+    expect(day15?.shiftType).toBe("NF");
+  });
+
+  it("N en el propio día festivo (siguiente no festivo) no se convierte", () => {
+    // festivo solo en el día 15, no en el 16
+    const holidays = new Set(["2026-01-15"]);
+    const result = generateMonthSchedule(employees, 2026, 1, new Set(), holidays);
+    const day15 = result.find(
+      (a) => a.employeeId === "emp-1" && a.date.toISOString().slice(0, 10) === "2026-01-15"
+    );
+    expect(day15?.shiftType).toBe("N");
   });
 
   it("los días no festivos no cambian su turno", () => {
@@ -176,7 +207,6 @@ describe("generateMonthSchedule — festivos", () => {
     const day2 = result.find(
       (a) => a.employeeId === "emp-1" && a.date.toISOString().slice(0, 10) === "2026-01-02"
     );
-    // El día 2 no es festivo; turno base es M también pero sin festivo → "M"
     expect(day2?.shiftType).not.toBeUndefined();
     expect(["M", "T", "N", "D"]).toContain(day2?.shiftType);
   });

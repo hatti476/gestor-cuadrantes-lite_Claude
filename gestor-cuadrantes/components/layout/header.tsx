@@ -20,6 +20,9 @@ export function Header() {
               Empleados
             </Link>
           )}
+          <Link href="/info" className="text-gray-600 hover:text-gray-900 transition-colors">
+            Ayuda
+          </Link>
         </nav>
       </div>
       <div className="flex items-center gap-4">

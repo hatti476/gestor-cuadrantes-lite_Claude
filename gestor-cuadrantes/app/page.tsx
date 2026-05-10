@@ -26,6 +26,7 @@ export default function HomePage() {
 
   const [employees, setEmployees] = useState<ScheduleEmployee[]>([]);
   const [assignments, setAssignments] = useState<ScheduleAssignment[]>([]);
+  const [holidayDates, setHolidayDates] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
 
   // Editor de turno
@@ -42,9 +43,12 @@ export default function HomePage() {
   const loadSchedule = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/schedules?year=${year}&month=${month}`);
-      if (!res.ok) throw new Error("Error cargando cuadrante");
-      const data: ScheduleAssignment[] = await res.json();
+      const [scheduleRes, holidayRes] = await Promise.all([
+        fetch(`/api/schedules?year=${year}&month=${month}`),
+        fetch(`/api/holidays?year=${year}`),
+      ]);
+      if (!scheduleRes.ok) throw new Error("Error cargando cuadrante");
+      const data: ScheduleAssignment[] = await scheduleRes.json();
 
       // Extraer empleados únicos ordenados por rotationOrder
       const empMap = new Map<string, ScheduleEmployee>();
@@ -59,6 +63,20 @@ export default function HomePage() {
 
       setEmployees(sortedEmployees);
       setAssignments(data);
+
+      // Filtrar festivos del mes actual
+      if (holidayRes.ok) {
+        const allHolidays: { date: string; description: string }[] = await holidayRes.json();
+        const monthStr = String(month).padStart(2, "0");
+        const prefix = `${year}-${monthStr}`;
+        setHolidayDates(
+          new Map(
+            allHolidays
+              .filter((h) => h.date.slice(0, 10).startsWith(prefix))
+              .map((h) => [h.date.slice(0, 10), h.description])
+          )
+        );
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -272,6 +290,7 @@ export default function HomePage() {
             month={month}
             employees={employees}
             assignments={assignments}
+            holidayDates={holidayDates}
             onCellClick={isAdmin ? handleCellClick : undefined}
           />
         )}

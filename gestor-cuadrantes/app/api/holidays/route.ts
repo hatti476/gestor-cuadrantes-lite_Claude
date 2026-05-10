@@ -43,16 +43,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
   }
 
+  let holiday;
   try {
-    const holiday = await prisma.holiday.create({
+    holiday = await prisma.holiday.create({
       data: {
         date: parsed,
         description: description.trim(),
         year: parsed.getUTCFullYear(),
       },
     });
-    return NextResponse.json(holiday, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Ya existe un festivo en esa fecha" }, { status: 409 });
   }
+
+  // Actualizar automáticamente las asignaciones existentes afectadas:
+  // M→MF y T→TF en el día festivo
+  // N→NF en el día ANTERIOR (turno de noche que termina en el festivo)
+  const prevDay = new Date(parsed.getTime() - 86_400_000);
+  await prisma.$transaction([
+    prisma.shiftAssignment.updateMany({
+      where: { date: parsed, shiftType: "M" },
+      data: { shiftType: "MF" },
+    }),
+    prisma.shiftAssignment.updateMany({
+      where: { date: parsed, shiftType: "T" },
+      data: { shiftType: "TF" },
+    }),
+    prisma.shiftAssignment.updateMany({
+      where: { date: prevDay, shiftType: "N" },
+      data: { shiftType: "NF" },
+    }),
+  ]);
+
+  return NextResponse.json(holiday, { status: 201 });
 }

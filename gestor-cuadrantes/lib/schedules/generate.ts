@@ -55,9 +55,17 @@ export function shiftForEmployee(
   const idx = patternIndexForDate(date, offset);
   const baseShift = BASE_PATTERN[idx];
   const dateStr = date.toISOString().slice(0, 10);
-  if (holidayDates.has(dateStr) && FESTIVO_MAP[baseShift]) {
+
+  if (baseShift === "N") {
+    // Turno de noche 23:00-07:00: el tipo festivo lo determina el día SIGUIENTE
+    // (el turno acaba el día siguiente, que es el que puede ser festivo)
+    const nextDay = new Date(date.getTime() + 86_400_000);
+    const nextDateStr = nextDay.toISOString().slice(0, 10);
+    if (holidayDates.has(nextDateStr)) return "NF";
+  } else if (FESTIVO_MAP[baseShift] && holidayDates.has(dateStr)) {
     return FESTIVO_MAP[baseShift];
   }
+
   return baseShift;
 }
 

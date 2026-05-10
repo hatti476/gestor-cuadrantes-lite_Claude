@@ -42,13 +42,8 @@ export async function POST(req: NextRequest) {
   const { start, end } = getMonthRange(year, month);
   const existing = await prisma.shiftAssignment.findMany({
     where: { date: { gte: start, lt: end } },
-    select: { employeeId: true, date: true },
+    select: { employeeId: true, date: true, shiftType: true },
   });
-
-  // Construir el set de celdas ya ocupadas
-  const existingSet = new Set<string>(
-    existing.map((a) => `${a.employeeId}|${a.date.toISOString().slice(0, 10)}`)
-  );
 
   // Obtener festivos del mes
   const holidays = await prisma.holiday.findMany({
@@ -57,6 +52,28 @@ export async function POST(req: NextRequest) {
   });
   const holidaySet = new Set<string>(
     holidays.map((h) => h.date.toISOString().slice(0, 10))
+  );
+
+  // Turnos base: M/T se comparan con el día actual; N con el día siguiente
+  // (lógica centralizada en el filtro de existingSet a continuación)
+
+  // Construir el set de celdas ya ocupadas.
+  // EXCLUIR turnos que deben convertirse por festivo para que se regeneren.
+  const existingSet = new Set<string>(
+    existing
+      .filter((a) => {
+        const dateStr = a.date.toISOString().slice(0, 10);
+        if (a.shiftType === "N") {
+          // N: se regenera como NF si el día SIGUIENTE es festivo
+          const nextDay = new Date(a.date.getTime() + 86_400_000);
+          if (holidaySet.has(nextDay.toISOString().slice(0, 10))) return false;
+        } else if (a.shiftType === "M" || a.shiftType === "T") {
+          // M/T: se regenera como MF/TF si el día actual es festivo
+          if (holidaySet.has(dateStr)) return false;
+        }
+        return true;
+      })
+      .map((a) => `${a.employeeId}|${a.date.toISOString().slice(0, 10)}`)
   );
 
   // Generar nuevas asignaciones
@@ -69,7 +86,7 @@ export async function POST(req: NextRequest) {
         employeeId_date: { employeeId: a.employeeId, date: a.date },
       },
       create: { employeeId: a.employeeId, date: a.date, shiftType: a.shiftType },
-      update: {},
+      update: { shiftType: a.shiftType }, // actualizar si el turno cambia (ej. M→MF por festivo)
     });
   }
 
