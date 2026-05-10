@@ -72,10 +72,33 @@ El fichero se guarda en `docs/qa-results/YYYY-MM-DD_HH-MM_sprint-{N}.md`.
 ...
 
 ## Bugs encontrados
-- [BUG-01] Descripción + pasos para reproducir + captura
+
+<!-- Para cada bug real del producto (no fixes de tests), usar el formato completo: -->
+
+### BUG-{NN} — {Título}
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-{NN} |
+| **Sprint** | Sprint {N} |
+| **Detectado por** | E2E CP-XX \| Test unitario \| Manual |
+| **Fecha detección** | YYYY-MM-DD |
+| **Severidad** | 🔴 Critical \| 🟠 High \| 🟡 Medium \| 🟢 Low |
+| **Estado** | ✅ Fixed \| 🔴 Open |
+| **Commit fix** | `hash` \| — |
+
+**Descripción**: ...  
+**Pasos para reproducir**: 1. ... 2. ...  
+**Resultado esperado**: ...  
+**Resultado obtenido**: ...  
+**Fix aplicado**: ...
+
+> ⚠️ Tras el informe, actualizar `docs/bugs/BUG-REGISTRY.md` con cada nuevo bug.
+> El agente `doc-writer` es el responsable de mantener ese registro actualizado.
 
 ## Fixes aplicados durante la sesión de QA
 Lista de correcciones al spec aplicadas antes de dar el informe final.
+(Los fixes de tests NO son bugs de producto; no van al BUG-REGISTRY.)
 
 ## Notas de entorno
 Stack + versiones relevantes.

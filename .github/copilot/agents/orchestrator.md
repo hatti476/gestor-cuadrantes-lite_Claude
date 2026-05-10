@@ -19,6 +19,7 @@ o si puedo responderte directamente.
 | Implementar una nueva funcionalidad | `new-feature` |
 | Actualizar la documentación del proyecto | `context-sync` |
 | "QA", "testing", "validar release", "pasar pruebas", "ejecutar tests" | `qa-tester` |
+| Registrar bugs, informes de esfuerzo, documentación final del proyecto | `doc-writer` |
 | Entender la arquitectura o una decisión técnica | Respondo directamente |
 | Saber cómo hacer algo en Next.js / Prisma / NextAuth | Respondo directamente |
 
