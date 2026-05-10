@@ -50,8 +50,17 @@ export async function POST(req: NextRequest) {
     existing.map((a) => `${a.employeeId}|${a.date.toISOString().slice(0, 10)}`)
   );
 
+  // Obtener festivos del mes
+  const holidays = await prisma.holiday.findMany({
+    where: { date: { gte: start, lt: end } },
+    select: { date: true },
+  });
+  const holidaySet = new Set<string>(
+    holidays.map((h) => h.date.toISOString().slice(0, 10))
+  );
+
   // Generar nuevas asignaciones
-  const toCreate = generateMonthSchedule(employees, year, month, existingSet);
+  const toCreate = generateMonthSchedule(employees, year, month, existingSet, holidaySet);
 
   // Insertar en BD — usar upsert individual para compatibilidad con SQLite
   for (const a of toCreate) {

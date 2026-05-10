@@ -17,6 +17,13 @@ export const BASE_PATTERN: string[] = [
   "D", "D",
 ];
 
+/** Mapa de turno laboral → turno festivo equivalente */
+const FESTIVO_MAP: Record<string, string> = {
+  M: "MF",
+  T: "TF",
+  N: "NF",
+};
+
 /** Número de días desde la época de referencia (2026-01-01 UTC) */
 export const EPOCH_DATE = new Date("2026-01-01T00:00:00.000Z");
 export const PATTERN_LENGTH = BASE_PATTERN.length; // 21
@@ -37,14 +44,21 @@ export function patternIndexForDate(date: Date, offset: number): number {
 
 /**
  * Tipo de turno que le corresponde a un empleado en una fecha.
+ * Si el día es festivo, M→MF, T→TF, N→NF; D permanece D.
  */
 export function shiftForEmployee(
   employee: Pick<ScheduleEmployee, "rotationOrder">,
-  date: Date
+  date: Date,
+  holidayDates: Set<string> = new Set()
 ): string {
   const offset = (employee.rotationOrder * 3) % PATTERN_LENGTH;
   const idx = patternIndexForDate(date, offset);
-  return BASE_PATTERN[idx];
+  const baseShift = BASE_PATTERN[idx];
+  const dateStr = date.toISOString().slice(0, 10);
+  if (holidayDates.has(dateStr) && FESTIVO_MAP[baseShift]) {
+    return FESTIVO_MAP[baseShift];
+  }
+  return baseShift;
 }
 
 export interface GeneratedAssignment {
@@ -61,12 +75,14 @@ export interface GeneratedAssignment {
  * @param year            Año (ej. 2026)
  * @param month           Mes 1-12
  * @param existingDates   Set de strings "employeeId|YYYY-MM-DD" ya asignadas
+ * @param holidayDates    Set de strings "YYYY-MM-DD" que son festivos
  */
 export function generateMonthSchedule(
   employees: Pick<ScheduleEmployee, "id" | "rotationOrder">[],
   year: number,
   month: number,
-  existingDates: Set<string> = new Set()
+  existingDates: Set<string> = new Set(),
+  holidayDates: Set<string> = new Set()
 ): GeneratedAssignment[] {
   const daysInMonth = new Date(year, month, 0).getDate();
   const assignments: GeneratedAssignment[] = [];
@@ -79,10 +95,11 @@ export function generateMonthSchedule(
 
       if (existingDates.has(key)) continue; // no sobreescribir manuales
 
-      const shiftType = shiftForEmployee(emp, date);
+      const shiftType = shiftForEmployee(emp, date, holidayDates);
       assignments.push({ employeeId: emp.id, date, shiftType });
     }
   }
 
   return assignments;
 }
+

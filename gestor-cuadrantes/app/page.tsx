@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { ScheduleGrid } from "@/components/schedule/schedule-grid";
 import { Header } from "@/components/layout/header";
 import { ShiftEditor } from "@/components/schedule/shift-editor";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleAssignment, ScheduleEmployee } from "@/lib/schedules/types";
+import { useToast } from "@/components/ui/toast-provider";
 
 const MONTH_NAMES = [
   "Enero","Febrero","Marzo","Abril","Mayo","Junio",
@@ -16,6 +18,8 @@ const MONTH_NAMES = [
 export default function HomePage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
+  const router = useRouter();
+  const { showToast } = useToast();
 
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(5);
@@ -96,11 +100,16 @@ export default function HomePage() {
     if (!editingCell) return;
     const { employeeId, date } = editingCell;
 
-    await fetch("/api/schedules", {
+    const res = await fetch("/api/schedules", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ employeeId, date, shiftType }),
     });
+    if (res.ok) {
+      showToast("Turno guardado", "success");
+    } else {
+      showToast("Error al guardar el turno", "error");
+    }
     setEditingCell(null);
     await loadSchedule();
   }
@@ -110,7 +119,12 @@ export default function HomePage() {
   // ---------------------------------------------------------------------------
   async function handleDeleteShift() {
     if (!editingCell?.assignmentId) return;
-    await fetch(`/api/schedules?id=${editingCell.assignmentId}`, { method: "DELETE" });
+    const res = await fetch(`/api/schedules?id=${editingCell.assignmentId}`, { method: "DELETE" });
+    if (res.ok) {
+      showToast("Turno eliminado", "success");
+    } else {
+      showToast("Error al eliminar el turno", "error");
+    }
     setEditingCell(null);
     await loadSchedule();
   }
@@ -128,11 +142,52 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ year, month }),
       });
-      if (!res.ok) throw new Error("Error generando cuadrante");
+      if (!res.ok) throw new Error();
+      const { created } = await res.json();
+      showToast(`Cuadrante generado — ${created} turnos asignados`, "success");
       await loadSchedule();
+    } catch {
+      showToast("Error al generar el cuadrante", "error");
     } finally {
       setGenerating(false);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Exportar CSV
+  // ---------------------------------------------------------------------------
+  function handleExportCSV() {
+    if (employees.length === 0) {
+      showToast("No hay datos que exportar", "info");
+      return;
+    }
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+    // Cabecera
+    const header = ["Empleado", ...days.map((d) => String(d))].join(",");
+
+    // Filas
+    const rows = employees.map((emp) => {
+      const cells = days.map((day) => {
+        const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const a = assignments.find(
+          (x) => x.employeeId === emp.id && x.date.slice(0, 10) === dateStr
+        );
+        return a ? a.shiftType : "";
+      });
+      return [emp.name, ...cells].join(",");
+    });
+
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `cuadrante-${year}-${String(month).padStart(2, "0")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast("CSV exportado", "success");
   }
 
   // ---------------------------------------------------------------------------
@@ -177,12 +232,28 @@ export default function HomePage() {
             </button>
           )}
           <button
+            data-testid="btn-export-csv"
+            onClick={handleExportCSV}
+            className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors print:hidden"
+          >
+            Exportar CSV
+          </button>
+          <button
             data-testid="btn-print"
             onClick={() => window.print()}
             className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors print:hidden"
           >
             Imprimir
           </button>
+          {isAdmin && (
+            <button
+              data-testid="btn-holidays"
+              onClick={() => router.push("/holidays")}
+              className="text-xs px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors print:hidden"
+            >
+              Festivos
+            </button>
+          )}
         </div>
 
         {/* Grid */}

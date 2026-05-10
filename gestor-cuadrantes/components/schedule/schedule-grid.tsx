@@ -33,7 +33,7 @@ export function ScheduleGrid({
     index[a.employeeId][dateStr] = { id: a.id, shiftType: a.shiftType as ShiftType };
   });
 
-  const shiftOrder: ShiftType[] = ["M", "T", "N", "J", "D", "V", "B"];
+  const shiftOrder: ShiftType[] = ["M", "T", "N", "MF", "TF", "NF", "J", "D", "V", "B"];
 
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">

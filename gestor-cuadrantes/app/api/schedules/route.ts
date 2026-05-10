@@ -64,10 +64,27 @@ export async function POST(req: NextRequest) {
 
   const { employeeId, date: parsedDate, shiftType } = validation;
 
+  // Buscar turno previo para el log
+  const previous = await prisma.shiftAssignment.findUnique({
+    where: { employeeId_date: { employeeId: employeeId!, date: parsedDate! } },
+    select: { shiftType: true },
+  });
+
   const assignment = await prisma.shiftAssignment.upsert({
     where: { employeeId_date: { employeeId: employeeId!, date: parsedDate! } },
     update: { shiftType: shiftType! },
     create: { employeeId: employeeId!, date: parsedDate!, shiftType: shiftType! },
+  });
+
+  // Registrar en el historial de cambios
+  await prisma.shiftChangeLog.create({
+    data: {
+      employeeId: employeeId!,
+      date: parsedDate!,
+      oldShift: previous?.shiftType ?? null,
+      newShift: shiftType!,
+      changedBy: session.user.email ?? "unknown",
+    },
   });
 
   return NextResponse.json(assignment, { status: 201 });

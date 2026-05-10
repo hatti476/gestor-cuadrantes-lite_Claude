@@ -2,7 +2,7 @@
 **Proyecto:** Gestor de Cuadrantes  
 **Versión:** 0.3.0  
 **Fecha:** Mayo 2026  
-**Estado:** En desarrollo
+**Estado:** Entregado ✅
 
 ---
 
@@ -17,18 +17,20 @@ Añadir generación automática del cuadrante por rotación, exportación a PDF,
 ### Funcionales
 | ID | Requisito | Estado |
 |----|-----------|--------|
-| RF-20 | Admin puede cambiar la contraseña de un empleado desde `/employees` | ⏳ |
-| RF-21 | El selector de turnos (ShiftEditor) incluye MF, TF y NF | ⏳ |
-| RF-22 | Admin puede generar automáticamente el cuadrante del mes con un click | ⏳ |
-| RF-23 | La generación respeta turnos ya asignados manualmente (no los sobreescribe) | ⏳ |
-| RF-24 | Botón "Exportar PDF" imprime el cuadrante sin los controles de navegación | ⏳ |
+| RF-20 | Admin puede cambiar la contraseña de un empleado desde `/employees` | ✅ |
+| RF-21 | El selector de turnos (ShiftEditor) incluye MF, TF y NF (10 tipos totales) | ✅ |
+| RF-22 | Admin puede generar automáticamente el cuadrante del mes con un click | ✅ |
+| RF-23 | La generación respeta turnos ya asignados manualmente (no los sobreescribe) | ✅ |
+| RF-24 | Botón "Exportar PDF" imprime el cuadrante sin los controles de navegación | ✅ |
+| RF-25 | El contador de turnos por empleado incluye los tipos MF, TF y NF | ✅ |
 
 ### No Funcionales
 | ID | Requisito | Estado |
 |----|-----------|--------|
-| RNF-10 | Tests unitarios Vitest para la lógica de generación automática | ⏳ |
-| RNF-11 | Tests unitarios para validación de cambio de contraseña | ⏳ |
-| RNF-12 | Tests E2E Playwright para los flujos nuevos (CP-23 a CP-30) | ⏳ |
+| RNF-10 | Tests unitarios Vitest para la lógica de generación automática | ✅ |
+| RNF-11 | Tests unitarios para validación de cambio de contraseña | ✅ |
+| RNF-12 | Tests E2E Playwright para los flujos nuevos (CP-23 a CP-28) | ✅ |
+| RNF-13 | El contador del grid refleja todos los tipos de turno incluidos los festivos | ✅ |
 
 ---
 
@@ -41,9 +43,10 @@ Añadir generación automática del cuadrante por rotación, exportación a PDF,
 - Validación: mínimo 8 chars, al menos 1 mayúscula y 1 dígito
 - bcrypt cost 12
 
-### Turnos especiales en el selector
+### Turnos especiales en el selector y contadores
 - `ShiftEditor` muestra ahora 10 tipos: M, T, N, J, D, V, B, MF, TF, NF
 - MF = Mañana Festivo (naranja claro), TF = Tarde Festivo (azul claro), NF = Noche Festivo (verde claro)
+- El contador de turnos al final de cada fila del grid muestra también MF, TF y NF (corrección post-entrega inicial)
 
 ### Generación automática de cuadrante
 - `POST /api/schedules/generate` — body: `{ year, month }` — solo ADMIN
@@ -105,6 +108,10 @@ Añadir generación automática del cuadrante por rotación, exportación a PDF,
 ### CP-28 — Botón "Imprimir" abre el diálogo del navegador
 1. En el cuadrante cargado, pulsar "Imprimir"
 2. **Resultado esperado:** Se abre el diálogo de impresión del sistema (o se llama a `window.print()`)
+
+### CP-29 — El contador muestra MF, TF y NF
+1. Como admin, asignar turnos MF, TF y NF a un empleado en el cuadrante
+2. **Resultado esperado:** La columna "Contadores" al final de la fila muestra las etiquetas MF:n, TF:n, NF:n con sus colores correspondientes
 
 ---
 

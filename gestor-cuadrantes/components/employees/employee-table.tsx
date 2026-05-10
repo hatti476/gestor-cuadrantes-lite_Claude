@@ -1,3 +1,4 @@
+import { useRouter } from "next/navigation";
 import { type EmployeeRecord } from "@/app/employees/page";
 
 interface EmployeeTableProps {
@@ -12,6 +13,7 @@ const ROLE_BADGES: Record<string, { label: string; classes: string }> = {
 };
 
 export function EmployeeTable({ employees, onEdit, onChangePassword }: EmployeeTableProps) {
+  const router = useRouter();
   if (employees.length === 0) {
     return (
       <div className="text-center py-12 text-gray-400 text-sm">
@@ -61,6 +63,13 @@ export function EmployeeTable({ employees, onEdit, onChangePassword }: EmployeeT
                       className="text-xs text-gray-500 hover:text-gray-700 font-medium"
                     >
                       Clave
+                    </button>
+                    <button
+                      onClick={() => router.push(`/employees/${emp.id}/history`)}
+                      data-testid={`btn-history-${emp.id}`}
+                      className="text-xs text-purple-600 hover:text-purple-800 font-medium"
+                    >
+                      Historial
                     </button>
                   </div>
                 </td>
