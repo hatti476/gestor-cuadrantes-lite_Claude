@@ -5,6 +5,8 @@ import {
   getMonthRange,
   countShifts,
   validateScheduleBody,
+  applyHolidayRule,
+  removeHolidayRule,
 } from "@/lib/schedules/business-logic";
 
 describe("isValidShiftType", () => {
@@ -111,4 +113,46 @@ describe("validateScheduleBody", () => {
     });
     expect(result.valid).toBe(false);
   });
+});
+
+describe("applyHolidayRule", () => {
+  it("M → MF cuando el día actual es festivo", () => {
+    expect(applyHolidayRule("M", true, false)).toBe("MF");
+  });
+
+  it("T → TF cuando el día actual es festivo", () => {
+    expect(applyHolidayRule("T", true, false)).toBe("TF");
+  });
+
+  it("N → NF cuando el día SIGUIENTE es festivo", () => {
+    expect(applyHolidayRule("N", false, true)).toBe("NF");
+  });
+
+  it("N NO cambia si solo el día actual es festivo (no el siguiente)", () => {
+    expect(applyHolidayRule("N", true, false)).toBe("N");
+  });
+
+  it("D no cambia aunque el día sea festivo", () => {
+    expect(applyHolidayRule("D", true, true)).toBe("D");
+  });
+
+  it("M no cambia si el día no es festivo", () => {
+    expect(applyHolidayRule("M", false, false)).toBe("M");
+  });
+
+  it("T no cambia si el día no es festivo", () => {
+    expect(applyHolidayRule("T", false, false)).toBe("T");
+  });
+
+  it("N no cambia si ni hoy ni mañana son festivos", () => {
+    expect(applyHolidayRule("N", false, false)).toBe("N");
+  });
+});
+
+describe("removeHolidayRule", () => {
+  it("MF → M", () => expect(removeHolidayRule("MF")).toBe("M"));
+  it("TF → T", () => expect(removeHolidayRule("TF")).toBe("T"));
+  it("NF → N", () => expect(removeHolidayRule("NF")).toBe("N"));
+  it("M no cambia", () => expect(removeHolidayRule("M")).toBe("M"));
+  it("D no cambia", () => expect(removeHolidayRule("D")).toBe("D"));
 });

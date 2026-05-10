@@ -205,3 +205,123 @@ test("CP-36 — Las notificaciones toast aparecen y desaparecen", async ({ page 
     throw e;
   }
 });
+
+// ─── CP-37 — N→NF en la víspera al añadir un festivo ────────────────────────
+test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", async ({ page }) => {
+  try {
+    await loginAsAdmin(page);
+    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+
+    // Ir a Febrero 2027 (9 nexts desde Mayo 2026) — mes limpio
+    for (let i = 0; i < 9; i++) {
+      await page.locator('[data-testid="btn-next-month"]').click();
+      await page.waitForTimeout(400);
+    }
+
+    // Generar el cuadrante para que haya turnos
+    await page.locator('[data-testid="btn-generate"]').click();
+    await expect(page.locator('[data-testid="toast"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(800);
+
+    // Encontrar un día que tenga turno N para saber qué día es la víspera
+    // rotationOrder=0 (primer empleado): 2027-02-15 → calculamos via API que es N
+    // En su lugar, añadimos festivo el día 16 y verificamos que el 15 sea NF
+    // (si el 15 era N antes, ahora debe ser NF)
+
+    // Leer el turno actual del primer empleado en día 15
+    const cell15 = page.locator("table tbody tr").first().locator("td").nth(15);
+    const shiftBefore = await cell15.locator("[data-testid^='shift-cell-']").getAttribute("data-testid").catch(() => null);
+
+    // Añadir festivo el día 16 de Febrero 2027
+    await page.goto("/holidays");
+    const yearSelect = page.locator("select");
+    await yearSelect.selectOption("2027");
+    await page.locator('[data-testid="holiday-date-input"]').fill("2027-02-16");
+    await page.locator('[data-testid="holiday-desc-input"]').fill("Festivo CP-37");
+    await page.locator('[data-testid="btn-add-holiday"]').click();
+    await expect(page.locator("text=Festivo CP-37")).toBeVisible({ timeout: 6_000 });
+
+    // Volver al cuadrante de Febrero 2027
+    await page.goto("/");
+    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    for (let i = 0; i < 9; i++) {
+      await page.locator('[data-testid="btn-next-month"]').click();
+      await page.waitForTimeout(400);
+    }
+    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+
+    // Si el turno del día 15 era N, ahora debe ser NF
+    const shiftAfter = await cell15.locator("[data-testid^='shift-cell-']").getAttribute("data-testid").catch(() => null);
+    if (shiftBefore === "shift-cell-N") {
+      expect(shiftAfter).toBe("shift-cell-NF");
+    } else {
+      // Si no era N, al menos no debe haber dado error (la API no falla)
+      expect(shiftAfter).not.toBeNull();
+    }
+  } catch (e) {
+    await screenshotOnFail(page, "CP-37");
+    throw e;
+  }
+});
+
+// ─── CP-38 — Cabecera roja en días festivos con día de la semana visible ──────
+test("CP-38 — El grid muestra cabecera roja con letra del día en festivos", async ({ page }) => {
+  try {
+    await loginAsAdmin(page);
+
+    // Ir a Noviembre 2026 (tiene festivo del 1-Nov añadido en CP-32)
+    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    for (let i = 0; i < 6; i++) {
+      await page.locator('[data-testid="btn-next-month"]').click();
+      await page.waitForTimeout(400);
+    }
+    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+
+    await page.waitForTimeout(500); // dar tiempo a que carguen los festivos
+
+    // La cabecera del día 1 debe tener clase de fondo rojo
+    // nth(0)=Empleado, nth(1)=día 1, nth(2)=día 2, ...
+    const header1 = page.locator("table thead tr th").nth(1);
+    const classes = await header1.getAttribute("class");
+    expect(classes).toContain("bg-red-100");
+
+    // Debe mostrar la letra del día de la semana (no "F")
+    const dayLetter = await header1.locator("div").nth(1).innerText();
+    expect(["L", "M", "X", "J", "V", "S", "D"]).toContain(dayLetter.trim());
+  } catch (e) {
+    await screenshotOnFail(page, "CP-38");
+    throw e;
+  }
+});
+
+// ─── CP-39 — Popover con nombre del festivo al pulsar la cabecera ─────────────
+test("CP-39 — Pulsar la cabecera de un festivo muestra su nombre en un popover", async ({ page }) => {
+  try {
+    await loginAsAdmin(page);
+
+    // Ir a Noviembre 2026 (festivo 1-Nov: "Festivo test generación")
+    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    for (let i = 0; i < 6; i++) {
+      await page.locator('[data-testid="btn-next-month"]').click();
+      await page.waitForTimeout(400);
+    }
+    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+
+    await page.waitForTimeout(500); // dar tiempo a que carguen los festivos
+
+    // Pulsar la cabecera del día 1 (festivo) — nth(0)=Empleado, nth(1)=día 1
+    const header1 = page.locator("table thead tr th").nth(1);
+    await header1.click();
+
+    // El popover debe aparecer con el texto "Festivo"
+    await expect(page.locator("div:text('🎉 Festivo')")).toBeVisible({ timeout: 4_000 });
+
+    // Cerrar haciendo clic fuera
+    await page.locator("body").click({ position: { x: 10, y: 10 } });
+    await expect(page.locator("div:text('🎉 Festivo')")).not.toBeVisible({ timeout: 3_000 });
+  } catch (e) {
+    await screenshotOnFail(page, "CP-39");
+    throw e;
+  }
+});

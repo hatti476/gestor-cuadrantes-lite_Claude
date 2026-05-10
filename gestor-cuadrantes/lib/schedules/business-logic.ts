@@ -41,6 +41,36 @@ export function countShifts(shiftTypes: string[]): ShiftCounter {
   }, {});
 }
 
+/**
+ * Dado un turno base y si el día propio / el día siguiente es festivo,
+ * devuelve el turno resultante según las reglas de festivos:
+ *   M → MF si festivo mismo día
+ *   T → TF si festivo mismo día
+ *   N → NF si el día SIGUIENTE es festivo (el turno termina en festivo)
+ *   D y resto → sin cambio
+ */
+export function applyHolidayRule(
+  shiftType: string,
+  isTodayHoliday: boolean,
+  isTomorrowHoliday: boolean
+): string {
+  if (shiftType === "M" && isTodayHoliday) return "MF";
+  if (shiftType === "T" && isTodayHoliday) return "TF";
+  if (shiftType === "N" && isTomorrowHoliday) return "NF";
+  return shiftType;
+}
+
+/**
+ * Dado un turno festivo, devuelve el turno base equivalente (MF→M, TF→T, NF→N).
+ * Si no es festivo, devuelve el mismo turno.
+ */
+export function removeHolidayRule(shiftType: string): string {
+  if (shiftType === "MF") return "M";
+  if (shiftType === "TF") return "T";
+  if (shiftType === "NF") return "N";
+  return shiftType;
+}
+
 /** Valida el body de un POST /api/schedules */
 export function validateScheduleBody(body: unknown): {
   valid: boolean;
