@@ -8,9 +8,9 @@ import {
 } from "@/lib/employees/business-logic";
 
 describe("isValidRole", () => {
-  it("acepta ADMIN y EMPLOYEE", () => {
-    expect(isValidRole("ADMIN")).toBe(true);
-    expect(isValidRole("EMPLOYEE")).toBe(true);
+  it("acepta SUPER_ADMIN y USER", () => {
+    expect(isValidRole("SUPER_ADMIN")).toBe(true);
+    expect(isValidRole("USER")).toBe(true);
   });
 
   it("rechaza roles desconocidos", () => {
@@ -51,7 +51,7 @@ describe("validateCreateEmployee", () => {
     name: "Nuevo Técnico",
     email: "nuevo@cuadrantes.local",
     password: "Segura1234!",
-    role: "EMPLOYEE",
+    role: "USER",
   };
 
   it("valida un body correcto", () => {
@@ -99,9 +99,9 @@ describe("validateUpdateEmployee", () => {
   });
 
   it("valida actualización solo de rol", () => {
-    const result = validateUpdateEmployee({ role: "ADMIN" });
+    const result = validateUpdateEmployee({ role: "SUPER_ADMIN" });
     expect(result.valid).toBe(true);
-    expect(result.data?.role).toBe("ADMIN");
+    expect(result.data?.role).toBe("SUPER_ADMIN");
   });
 
   it("rechaza body vacío", () => {

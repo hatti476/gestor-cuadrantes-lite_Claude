@@ -50,25 +50,54 @@ model VerificationToken {
 
 // --- Application models ---
 
-// Role values: ADMIN | EMPLOYEE
+// GlobalRole values: SUPER_ADMIN | USER
+// ProjectRole values (in ProjectMember): PROJECT_ADMIN | EMPLOYEE
+// (stored as String for SQLite compatibility — validated at application layer)
 model User {
   id       String  @id @default(cuid())
   email    String  @unique
   password String?
-  role     String  @default("EMPLOYEE")
+  role     String  @default("USER") // GlobalRole: SUPER_ADMIN | USER
 
-  accounts Account[]
-  sessions Session[]
-  employee Employee?
+  accounts       Account[]
+  sessions       Session[]
+  employee       Employee?
+  projectMembers ProjectMember[]
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  region      String?  // CCAA para festivos automáticos (Sprint 9)
+  createdAt   DateTime @default(now())
+
+  members          ProjectMember[]
+  employees        Employee[]
+}
+
+// ProjectRole values: PROJECT_ADMIN | EMPLOYEE
+model ProjectMember {
+  id        String @id @default(cuid())
+  projectId String
+  userId    String
+  role      String @default("EMPLOYEE") // ProjectRole
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
 }
 
 model Employee {
-  id            String @id @default(cuid())
+  id            String  @id @default(cuid())
   name          String
-  userId        String @unique
+  userId        String  @unique
   rotationOrder Int
+  projectId     String? // nullable for backward compat during migration
 
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project          Project?          @relation(fields: [projectId], references: [id])
   shiftAssignments ShiftAssignment[]
   changeLogs       ShiftChangeLog[]
 }
@@ -95,6 +124,7 @@ model Schedule {
 }
 
 // Días festivos (nacionales)
+// Festivos por proyecto/CCAA se añadirán en Sprint 9 con tabla ProjectHoliday
 model Holiday {
   id          String   @id @default(cuid())
   date        DateTime // UTC midnight del día festivo

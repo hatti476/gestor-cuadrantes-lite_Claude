@@ -8,7 +8,10 @@ interface EmployeeTableProps {
 }
 
 const ROLE_BADGES: Record<string, { label: string; classes: string }> = {
-  ADMIN: { label: "Admin", classes: "bg-blue-100 text-blue-700" },
+  SUPER_ADMIN: { label: "Super Admin", classes: "bg-blue-100 text-blue-700" },
+  ADMIN: { label: "Admin", classes: "bg-blue-100 text-blue-700" }, // legacy compat
+  USER: { label: "Técnico", classes: "bg-gray-100 text-gray-600" },
+  EMPLOYEE: { label: "Técnico", classes: "bg-gray-100 text-gray-600" }, // legacy compat
   EMPLOYEE: { label: "Técnico", classes: "bg-gray-100 text-gray-600" },
 };
 

@@ -114,7 +114,7 @@ export default function InfoPage() {
 
   if (status === "loading") return null;
 
-  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdmin = session?.user?.role === "SUPER_ADMIN";
   const sections = isAdmin ? ADMIN_SECTIONS : EMPLOYEE_SECTIONS;
   const roleLabel = isAdmin ? "Administrador" : "Técnico";
 

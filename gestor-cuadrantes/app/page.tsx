@@ -17,7 +17,7 @@ const MONTH_NAMES = [
 
 export default function HomePage() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdmin = session?.user?.role === "SUPER_ADMIN";
   const router = useRouter();
   const { showToast } = useToast();
 

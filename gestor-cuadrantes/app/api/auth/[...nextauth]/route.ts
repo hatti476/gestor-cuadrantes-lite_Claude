@@ -67,13 +67,26 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.role = (user as unknown as { role: string }).role;
       }
+      // Cargar membresías de proyecto desde BD en cada refresco de token
+      if (token.id) {
+        try {
+          const memberships = await prisma.projectMember.findMany({
+            where: { userId: token.id as string },
+            select: { projectId: true, role: true },
+          });
+          token.projectMemberships = memberships;
+        } catch {
+          token.projectMemberships = [];
+        }
+      }
       return token;
     },
     async session({ session, token }) {
-      // Propagamos id y role al objeto session accesible en los componentes
+      // Propagamos id, role y projectMemberships al objeto session
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as "ADMIN" | "EMPLOYEE";
+        session.user.role = token.role as "SUPER_ADMIN" | "USER";
+        session.user.projectMemberships = (token.projectMemberships ?? []) as import("@/lib/auth/permissions").ProjectMembership[];
       }
       return session;
     },

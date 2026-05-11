@@ -29,7 +29,7 @@ export default function EmployeesPage() {
   // Redirigir si no es ADMIN
   useEffect(() => {
     if (status === "loading") return;
-    if (!session || session.user.role !== "ADMIN") {
+    if (!session || session.user.role !== "SUPER_ADMIN") {
       router.replace("/");
     }
   }, [session, status, router]);
@@ -48,7 +48,7 @@ export default function EmployeesPage() {
   }, []);
 
   useEffect(() => {
-    if (session?.user.role === "ADMIN") loadEmployees();
+    if (session?.user.role === "SUPER_ADMIN") loadEmployees();
   }, [session, loadEmployees]);
 
   async function handleCreate(data: {
@@ -84,7 +84,7 @@ export default function EmployeesPage() {
     await loadEmployees();
   }
 
-  if (status === "loading" || (session?.user.role !== "ADMIN")) {
+  if (status === "loading" || (session?.user.role !== "SUPER_ADMIN")) {
     return null;
   }
 

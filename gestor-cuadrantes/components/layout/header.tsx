@@ -5,7 +5,7 @@ import Link from "next/link";
 
 export function Header() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdmin = session?.user?.role === "SUPER_ADMIN";
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
@@ -32,7 +32,7 @@ export function Header() {
               {session.user.email}
               <span
                 className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                  session.user.role === "ADMIN"
+                  session.user.role === "SUPER_ADMIN"
                     ? "bg-blue-100 text-blue-700"
                     : "bg-gray-100 text-gray-600"
                 }`}

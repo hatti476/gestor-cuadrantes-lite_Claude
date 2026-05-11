@@ -16,7 +16,7 @@ export async function PATCH(
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN") {
+  if (session.user.role !== "SUPER_ADMIN") {
     return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 
@@ -58,7 +58,7 @@ export async function PUT(
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN") {
+  if (session.user.role !== "SUPER_ADMIN") {
     return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 

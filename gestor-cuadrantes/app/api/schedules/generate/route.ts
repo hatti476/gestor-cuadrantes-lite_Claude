@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
-  if (session.user?.role !== "ADMIN") {
+  if (session.user?.role !== "SUPER_ADMIN") {
     return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 

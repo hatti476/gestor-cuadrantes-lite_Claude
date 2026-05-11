@@ -155,7 +155,7 @@ test("CP-17 — Empleado no puede editar turnos", async ({ page }) => {
 });
 
 // ─── CP-18 ───────────────────────────────────────────────────────────────────
-test("CP-18 — API rechaza escritura sin rol ADMIN", async ({ request }) => {
+test("CP-18 — API rechaza escritura sin rol SUPER_ADMIN", async ({ request }) => {
   // POST sin autenticación debe devolver 401 o 403
   const response = await request.post(`${BASE_URL}/api/schedules`, {
     data: {

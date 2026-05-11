@@ -36,7 +36,7 @@ export default function HolidaysPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
-    if (status === "authenticated" && session?.user?.role !== "ADMIN") router.replace("/");
+    if (status === "authenticated" && session?.user?.role !== "SUPER_ADMIN") router.replace("/");
   }, [status, session, router]);
 
   useEffect(() => {

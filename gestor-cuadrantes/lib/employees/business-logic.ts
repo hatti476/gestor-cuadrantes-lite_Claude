@@ -2,7 +2,7 @@
  * Lógica de negocio para empleados — funciones puras y testeables.
  */
 
-export const VALID_ROLES = ["ADMIN", "EMPLOYEE"] as const;
+export const VALID_ROLES = ["SUPER_ADMIN", "USER"] as const;
 export type ValidRole = (typeof VALID_ROLES)[number];
 
 export function isValidRole(value: string): value is ValidRole {

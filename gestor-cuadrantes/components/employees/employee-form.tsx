@@ -26,7 +26,7 @@ export function EmployeeForm(props: EmployeeFormProps | EmployeeFormEditProps) {
   const [name, setName] = useState(mode === "edit" ? props.initial.name : "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState(mode === "edit" ? props.initial.user.role : "EMPLOYEE");
+  const [role, setRole] = useState(mode === "edit" ? props.initial.user.role : "USER");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -126,8 +126,8 @@ export function EmployeeForm(props: EmployeeFormProps | EmployeeFormEditProps) {
               onChange={(e) => setRole(e.target.value)}
               className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
             >
-              <option value="EMPLOYEE">Técnico (EMPLOYEE)</option>
-              <option value="ADMIN">Administrador (ADMIN)</option>
+              <option value="USER">Técnico (USER)</option>
+              <option value="SUPER_ADMIN">Administrador (SUPER_ADMIN)</option>
             </select>
           </div>
 

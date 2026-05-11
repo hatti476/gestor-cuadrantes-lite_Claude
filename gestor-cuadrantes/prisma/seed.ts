@@ -23,19 +23,60 @@ const SHIFT_PATTERNS: string[][] = [
 ];
 
 async function main() {
+  // ─── Proyecto inicial ────────────────────────────────────────────────────
+  const project = await prisma.project.upsert({
+    where: { id: "project-soporte-24h" },
+    update: { name: "Equipo Soporte 24h" },
+    create: {
+      id: "project-soporte-24h",
+      name: "Equipo Soporte 24h",
+      description: "Equipo de soporte técnico con cobertura 24 horas",
+    },
+  });
+  console.log("✓ Proyecto:", project.name);
+
+  // ─── Admin global (SUPER_ADMIN) ──────────────────────────────────────────
   const adminPassword = await bcrypt.hash("Admin1234!", 12);
   const admin = await prisma.user.upsert({
     where: { email: "admin@cuadrantes.local" },
-    update: { password: adminPassword },
+    update: { password: adminPassword, role: "SUPER_ADMIN" },
     create: {
       email: "admin@cuadrantes.local",
       password: adminPassword,
-      role: "ADMIN",
-      employee: { create: { name: "Administrador", rotationOrder: 0 } },
+      role: "SUPER_ADMIN",
+      employee: { create: { name: "Administrador", rotationOrder: 0, projectId: project.id } },
     },
+    include: { employee: true },
   });
   console.log("✓", admin.email);
 
+  // Membresía SUPER_ADMIN en el proyecto
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId: project.id, userId: admin.id } },
+    update: { role: "PROJECT_ADMIN" },
+    create: { projectId: project.id, userId: admin.id, role: "PROJECT_ADMIN" },
+  });
+
+  // ─── Project Admin de ejemplo (pm@cuadrantes.local) ──────────────────────
+  const pmPassword = await bcrypt.hash("PM1234!", 12);
+  const pm = await prisma.user.upsert({
+    where: { email: "pm@cuadrantes.local" },
+    update: { password: pmPassword, role: "USER" },
+    create: {
+      email: "pm@cuadrantes.local",
+      password: pmPassword,
+      role: "USER",
+    },
+  });
+  console.log("✓", pm.email);
+
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId: project.id, userId: pm.id } },
+    update: { role: "PROJECT_ADMIN" },
+    create: { projectId: project.id, userId: pm.id, role: "PROJECT_ADMIN" },
+  });
+
+  // ─── Técnicos (USER con EMPLOYEE en el proyecto) ─────────────────────────
   const techPassword = await bcrypt.hash("Tecnico1234!", 12);
   const employees: { id: string }[] = [];
 
@@ -43,17 +84,23 @@ async function main() {
     const email = `tecnico${i}@cuadrantes.local`;
     const user = await prisma.user.upsert({
       where: { email },
-      update: { password: techPassword },
+      update: { password: techPassword, role: "USER" },
       create: {
         email,
         password: techPassword,
-        role: "EMPLOYEE",
-        employee: { create: { name: `Técnico ${i}`, rotationOrder: i } },
+        role: "USER",
+        employee: { create: { name: `Técnico ${i}`, rotationOrder: i, projectId: project.id } },
       },
       include: { employee: true },
     });
     console.log("✓", user.email);
     if (user.employee) employees.push({ id: user.employee.id });
+
+    await prisma.projectMember.upsert({
+      where: { projectId_userId: { projectId: project.id, userId: user.id } },
+      update: { role: "EMPLOYEE" },
+      create: { projectId: project.id, userId: user.id, role: "EMPLOYEE" },
+    });
   }
 
   // Sembrar turnos de Mayo 2026
