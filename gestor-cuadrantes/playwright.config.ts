@@ -29,6 +29,7 @@ export default defineConfig({
     timeout: 60_000,
     env: {
       DATABASE_URL: "file:./test.db",
+      NEXTAUTH_URL: "http://localhost:3001",
     },
   },
   projects: [

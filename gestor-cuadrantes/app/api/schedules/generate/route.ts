@@ -79,16 +79,18 @@ export async function POST(req: NextRequest) {
   // Generar nuevas asignaciones
   const toCreate = generateMonthSchedule(employees, year, month, existingSet, holidaySet);
 
-  // Insertar en BD — usar upsert individual para compatibilidad con SQLite
-  for (const a of toCreate) {
-    await prisma.shiftAssignment.upsert({
-      where: {
-        employeeId_date: { employeeId: a.employeeId, date: a.date },
-      },
-      create: { employeeId: a.employeeId, date: a.date, shiftType: a.shiftType },
-      update: { shiftType: a.shiftType }, // actualizar si el turno cambia (ej. M→MF por festivo)
-    });
-  }
+  // Insertar en BD — una sola transacción para máximo rendimiento con SQLite
+  await prisma.$transaction(
+    toCreate.map((a) =>
+      prisma.shiftAssignment.upsert({
+        where: {
+          employeeId_date: { employeeId: a.employeeId, date: a.date },
+        },
+        create: { employeeId: a.employeeId, date: a.date, shiftType: a.shiftType },
+        update: { shiftType: a.shiftType },
+      })
+    )
+  );
 
   return NextResponse.json({ created: toCreate.length });
 }

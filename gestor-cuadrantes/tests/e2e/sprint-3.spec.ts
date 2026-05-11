@@ -94,8 +94,10 @@ test("CP-26 — Admin puede generar el cuadrante automáticamente", async ({ pag
     // Pulsar "Generar cuadrante" (funciona tanto si está vacío como si ya tiene datos)
     await page.locator('[data-testid="btn-generate"]').click();
 
+    // Esperar confirmación de generate (toast de éxito) antes de verificar tabla
+    await expect(page.locator('[data-testid="toast"]')).toBeVisible({ timeout: 20_000 });
     // El grid debe mostrar la tabla con empleados
-    await expect(page.locator("table")).toBeVisible({ timeout: 12_000 });
+    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
     const rows = page.locator("table tbody tr");
     expect(await rows.count()).toBeGreaterThan(0);
   } catch (e) {
@@ -118,8 +120,9 @@ test("CP-27 — La generación respeta los turnos manuales", async ({ page }) =>
 
     // Generar primero para que haya tabla con celdas
     await page.locator('[data-testid="btn-generate"]').click();
-    await expect(page.locator("table")).toBeVisible({ timeout: 12_000 });
-    await page.waitForTimeout(1_000);
+    await expect(page.locator('[data-testid="toast"]').first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await page.waitForTimeout(500);
 
     // Asignar manualmente turno V (vacaciones) en día 1 del primer empleado
     const targetCell = page.locator("table tbody tr").first().locator("td").nth(1);
@@ -131,8 +134,9 @@ test("CP-27 — La generación respeta los turnos manuales", async ({ page }) =>
 
     // Generar de nuevo
     await page.locator('[data-testid="btn-generate"]').click();
-    await page.waitForTimeout(2_000);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    // Usar .first() para evitar strict mode si hay varios toasts visibles
+    await expect(page.locator('[data-testid="toast"]').first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
 
     // La celda día 1 primer empleado debe seguir siendo V
     await expect(

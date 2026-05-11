@@ -15,6 +15,15 @@ export interface EmployeeRecord {
   user: { email: string; role: string };
 }
 
+interface HistoryLog {
+  id: string;
+  date: string;
+  oldShift: string | null;
+  newShift: string;
+  changedBy: string;
+  changedAt: string;
+}
+
 export default function EmployeesPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -24,6 +33,9 @@ export default function EmployeesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<EmployeeRecord | null>(null);
   const [passwordEmployee, setPasswordEmployee] = useState<EmployeeRecord | null>(null);
+  const [historyEmployee, setHistoryEmployee] = useState<EmployeeRecord | null>(null);
+  const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Redirigir si no es ADMIN
@@ -84,6 +96,15 @@ export default function EmployeesPage() {
     await loadEmployees();
   }
 
+  async function openHistory(emp: EmployeeRecord) {
+    setHistoryEmployee(emp);
+    setHistoryLoading(true);
+    setHistoryLogs([]);
+    const res = await fetch(`/api/employees/${emp.id}/history`);
+    if (res.ok) setHistoryLogs(await res.json());
+    setHistoryLoading(false);
+  }
+
   if (status === "loading" || (session?.user.role !== "SUPER_ADMIN")) {
     return null;
   }
@@ -117,6 +138,7 @@ export default function EmployeesPage() {
             employees={employees}
             onEdit={(emp) => { setEditingEmployee(emp); setShowForm(false); }}
             onChangePassword={(emp) => setPasswordEmployee(emp)}
+            onHistory={openHistory}
           />
         )}
 
@@ -147,6 +169,55 @@ export default function EmployeesPage() {
             onClose={() => setPasswordEmployee(null)}
             onSuccess={() => setPasswordEmployee(null)}
           />
+        )}
+
+        {/* Modal de historial de cambios */}
+        {historyEmployee && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                <h3 className="text-base font-semibold text-gray-800">
+                  Historial — {historyEmployee.name}
+                </h3>
+                <button
+                  onClick={() => setHistoryEmployee(null)}
+                  className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="overflow-auto flex-1 p-4">
+                {historyLoading ? (
+                  <p className="text-center text-gray-400 py-8">Cargando historial...</p>
+                ) : historyLogs.length === 0 ? (
+                  <p className="text-center text-gray-400 py-8">Sin cambios registrados.</p>
+                ) : (
+                  <table data-testid="history-table" className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600 border-b border-gray-200">Fecha turno</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600 border-b border-gray-200">Anterior</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600 border-b border-gray-200">Nuevo</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600 border-b border-gray-200">Modificado por</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600 border-b border-gray-200">Fecha cambio</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyLogs.map((log) => (
+                        <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="px-3 py-2 text-gray-700">{log.date.slice(0, 10)}</td>
+                          <td className="px-3 py-2 text-gray-500">{log.oldShift ?? "—"}</td>
+                          <td className="px-3 py-2 font-medium text-gray-800">{log.newShift}</td>
+                          <td className="px-3 py-2 text-gray-600">{log.changedBy}</td>
+                          <td className="px-3 py-2 text-gray-500">{new Date(log.changedAt).toLocaleString("es-ES")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>

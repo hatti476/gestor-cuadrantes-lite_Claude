@@ -151,11 +151,15 @@ test("CP-08 — Columnas de fin de semana tienen fondo azul claro", async ({ pag
     await login(page, ADMIN.email, ADMIN.password);
     await expect(page).toHaveURL("/");
 
-    // Mayo 2026: día 2 (sábado) y día 3 (domingo) son fines de semana
-    // Los th de fines de semana tienen clase bg-blue-50
-    const weekendHeaders = page.locator("thead tr th.bg-blue-50, thead tr th[class*='bg-blue']");
+    // Esperar a que la tabla esté renderizada antes de contar
+    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+
+    // Mayo 2026: 10 días de fin de semana (4 sábados + 5 domingos — 31 días)
+    // Los th de días de fin de semana tienen clase bg-blue-50
+    const weekendHeaders = page.locator("thead tr th.bg-blue-50");
+    await expect(weekendHeaders.first()).toBeVisible({ timeout: 5_000 });
     const count = await weekendHeaders.count();
-    // Mayo 2026 tiene 8 fines de semana + 1 = 9 días (4 sábados + 5 domingos = 9, o 5+4=9)
+    // Mayo 2026 tiene 9 fines de semana (sábados y domingos)
     expect(count).toBeGreaterThanOrEqual(8);
   } catch (e) {
     await screenshotOnFail(page, "CP-08");
