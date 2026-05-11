@@ -1,36 +1,12 @@
-import { test, expect, Page } from "@playwright/test";
-import path from "path";
-import fs from "fs";
-
-const BASE_URL = "http://localhost:3000";
-const ADMIN_EMAIL = "admin@cuadrantes.local";
-const ADMIN_PASSWORD = "Admin1234!";
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
-async function screenshotOnFail(page: Page, id: string) {
-  const dir = path.join(__dirname, "../screenshots");
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  try {
-    await page.screenshot({ path: path.join(dir, `${id}-fail.png`) });
-  } catch {
-    // ignore screenshot errors
-  }
-}
-
-async function loginAsAdmin(page: Page) {
-  await page.goto(`${BASE_URL}/login`);
-  await page.fill('input[type="email"]', ADMIN_EMAIL);
-  await page.fill('input[type="password"]', ADMIN_PASSWORD);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(`${BASE_URL}/`, { timeout: 10_000 });
-}
+import { test, expect } from "@playwright/test";
+import { USERS, ROUTES } from "./config";
+import { loginAsAdmin, screenshotOnFail } from "./helpers";
 
 // ─── CP-23 — Admin puede cambiar la contraseña de un empleado ─────────────────
 test("CP-23 — Admin puede cambiar la contraseña de un empleado", async ({ page }) => {
   try {
     await loginAsAdmin(page);
-    await page.goto(`${BASE_URL}/employees`);
+    await page.goto("/employees");
     await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
 
     // Pulsar "Clave" en el ÚLTIMO empleado (técnico, no el admin)
@@ -55,7 +31,7 @@ test("CP-23 — Admin puede cambiar la contraseña de un empleado", async ({ pag
 test("CP-24 — Cambio de contraseña valida requisitos", async ({ page }) => {
   try {
     await loginAsAdmin(page);
-    await page.goto(`${BASE_URL}/employees`);
+    await page.goto("/employees");
     await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
 
     // Abrir modal de contraseña

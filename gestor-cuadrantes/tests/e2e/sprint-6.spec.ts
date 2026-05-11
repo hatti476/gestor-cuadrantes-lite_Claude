@@ -7,34 +7,18 @@
  * CP-46 — SUPER_ADMIN puede crear un empleado con rol SUPER_ADMIN
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { USERS, ROUTES } from "./config";
+import { login, screenshotOnFail } from "./helpers";
 
-const ADMIN_EMAIL = "admin@cuadrantes.local";
-const ADMIN_PASSWORD = "Admin1234!";
-const TECH_EMAIL = "tecnico1@cuadrantes.local";
-const TECH_PASSWORD = "Tecnico1234!";
-
-async function login(page: Page, email: string, password: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Contraseña").fill(password);
-  await page.getByRole("button", { name: "Entrar" }).click();
-  await page.waitForURL(/^\/$|\/$/);
-}
-
-async function screenshotOnFail(page: Page, testId: string) {
-  await page.screenshot({
-    path: `tests/e2e/screenshots/${testId}-fail.png`,
-    fullPage: true,
-  });
-}
+const { admin: ADMIN, tech: TECH } = USERS;
 
 // ===========================================================================
 // CP-43 — SUPER_ADMIN ve su badge con texto "SUPER_ADMIN"
 // ===========================================================================
 test("CP-43 — SUPER_ADMIN ve badge SUPER_ADMIN en header", async ({ page }) => {
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
 
     await expect(page).toHaveURL("/");
     // El badge del header muestra el rol directamente como texto
@@ -52,7 +36,7 @@ test("CP-43 — SUPER_ADMIN ve badge SUPER_ADMIN en header", async ({ page }) =>
 // ===========================================================================
 test("CP-44 — USER ve badge USER en header", async ({ page }) => {
   try {
-    await login(page, TECH_EMAIL, TECH_PASSWORD);
+    await login(page, TECH.email, TECH.password);
 
     await expect(page).toHaveURL("/");
     await expect(
@@ -73,7 +57,7 @@ test("CP-45 — SUPER_ADMIN crea empleado con rol USER", async ({ page }) => {
   const name = `Técnico Sprint6 ${ts}`;
 
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
     await page.goto("/employees");
     await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
 
@@ -105,7 +89,7 @@ test("CP-46 — SUPER_ADMIN crea empleado con rol SUPER_ADMIN", async ({ page })
   const name = `Admin Sprint6 ${ts}`;
 
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
     await page.goto("/employees");
     await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
 

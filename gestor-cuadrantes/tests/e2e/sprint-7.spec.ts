@@ -13,40 +13,19 @@
  * CP-56  Header muestra enlace "Proyectos" solo para SUPER_ADMIN
  */
 
-import { test, expect, Page } from "@playwright/test";
-import path from "path";
-import fs from "fs";
+import { test, expect } from "@playwright/test";
+import { USERS, ROUTES } from "./config";
+import { login, screenshotOnFail } from "./helpers";
 
-const BASE_URL = "http://localhost:3000";
-const ADMIN_EMAIL = "admin@cuadrantes.local";
-const ADMIN_PASSWORD = "Admin1234!";
-const TECH_EMAIL = "tecnico1@cuadrantes.local";
-const TECH_PASSWORD = "Tecnico1234!";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-async function login(page: Page, email: string, password: string) {
-  await page.goto(`${BASE_URL}/login`);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Contraseña").fill(password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(`${BASE_URL}/`, { timeout: 10_000 });
-}
-
-function screenshotOnFail(page: Page, testId: string) {
-  const dir = path.join(__dirname, "../screenshots");
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return page.screenshot({ path: path.join(dir, `${testId}-fail.png`) });
-}
+const { admin: ADMIN, tech: TECH } = USERS;
 
 // ===========================================================================
 // CP-47 — SUPER_ADMIN ve la lista de proyectos
 // ===========================================================================
 test("CP-47 — SUPER_ADMIN ve la lista de proyectos", async ({ page }) => {
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
-    await page.goto(`${BASE_URL}/projects`);
+    await login(page, ADMIN.email, ADMIN.password);
+    await page.goto("/projects");
     await expect(page.locator('[data-testid="projects-table"]')).toBeVisible({
       timeout: 10_000,
     });
@@ -68,8 +47,8 @@ test("CP-48 — SUPER_ADMIN crea un proyecto nuevo", async ({ page }) => {
   const projectName = `Proyecto Sprint7 ${ts}`;
 
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
-    await page.goto(`${BASE_URL}/projects`);
+    await login(page, ADMIN.email, ADMIN.password);
+    await page.goto("/projects");
     await expect(page.locator('[data-testid="btn-new-project"]')).toBeVisible({
       timeout: 10_000,
     });
@@ -99,14 +78,14 @@ test("CP-49 — SUPER_ADMIN edita un proyecto", async ({ page }) => {
   const updatedName = `Editado ${ts}`;
 
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
 
     // Crear proyecto a través de la API para tener uno listo
-    await page.request.post(`${BASE_URL}/api/projects`, {
+    await page.request.post("/api/projects", {
       data: { name: originalName, description: "original" },
     });
 
-    await page.goto(`${BASE_URL}/projects`);
+    await page.goto("/projects");
     await expect(page.locator(`text=${originalName}`)).toBeVisible({ timeout: 10_000 });
 
     // Click en el botón de editar de la fila que contiene el nombre
@@ -132,14 +111,14 @@ test("CP-50 — SUPER_ADMIN elimina un proyecto", async ({ page }) => {
   const projectName = `Borrable ${ts}`;
 
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
 
     // Crear proyecto a través de la API
-    await page.request.post(`${BASE_URL}/api/projects`, {
+    await page.request.post("/api/projects", {
       data: { name: projectName },
     });
 
-    await page.goto(`${BASE_URL}/projects`);
+    await page.goto("/projects");
     await expect(page.locator(`text=${projectName}`)).toBeVisible({ timeout: 10_000 });
 
     // Aceptar el confirm dialog automáticamente
@@ -160,8 +139,8 @@ test("CP-50 — SUPER_ADMIN elimina un proyecto", async ({ page }) => {
 // ===========================================================================
 test("CP-51 — SUPER_ADMIN abre el panel de miembros", async ({ page }) => {
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
-    await page.goto(`${BASE_URL}/projects`);
+    await login(page, ADMIN.email, ADMIN.password);
+    await page.goto("/projects");
 
     // Primer proyecto del seed
     const firstRow = page.locator('[data-testid="project-row"]').first();
@@ -185,14 +164,14 @@ test("CP-52 — SUPER_ADMIN añade miembro al proyecto", async ({ page }) => {
   const projectName = `MembersTest ${ts}`;
 
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
 
     // Crear proyecto nuevo sin miembros (excepto admin via seed que ya está)
-    await page.request.post(`${BASE_URL}/api/projects`, {
+    await page.request.post("/api/projects", {
       data: { name: projectName },
     });
 
-    await page.goto(`${BASE_URL}/projects`);
+    await page.goto("/projects");
     await expect(page.locator(`text=${projectName}`)).toBeVisible({ timeout: 10_000 });
 
     const row = page.locator('[data-testid="project-row"]').filter({ hasText: projectName });
@@ -229,8 +208,8 @@ test("CP-52 — SUPER_ADMIN añade miembro al proyecto", async ({ page }) => {
 // ===========================================================================
 test("CP-53 — SUPER_ADMIN elimina miembro del proyecto", async ({ page }) => {
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
-    await page.goto(`${BASE_URL}/projects`);
+    await login(page, ADMIN.email, ADMIN.password);
+    await page.goto("/projects");
 
     // Abrir el proyecto del seed (tiene al menos 1 miembro: admin)
     const firstRow = page.locator('[data-testid="project-row"]').first();
@@ -266,7 +245,7 @@ test("CP-53 — SUPER_ADMIN elimina miembro del proyecto", async ({ page }) => {
 // ===========================================================================
 test("CP-54 — Selector de proyecto visible en home para SUPER_ADMIN", async ({ page }) => {
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
     // El selector aparece cuando hay proyectos y el usuario tiene acceso a varios
     await expect(
       page.locator('[data-testid="project-selector"]').or(
@@ -284,7 +263,7 @@ test("CP-54 — Selector de proyecto visible en home para SUPER_ADMIN", async ({
 // ===========================================================================
 test("CP-55 — USER ve su proyecto en home", async ({ page }) => {
   try {
-    await login(page, TECH_EMAIL, TECH_PASSWORD);
+    await login(page, TECH.email, TECH.password);
     // Un técnico con un solo proyecto ve el badge o el selector
     await expect(
       page.locator('[data-testid="project-name-badge"]').or(
@@ -303,11 +282,11 @@ test("CP-55 — USER ve su proyecto en home", async ({ page }) => {
 test("CP-56 — Header enlace Proyectos solo visible para SUPER_ADMIN", async ({ page }) => {
   try {
     // SUPER_ADMIN ve el enlace
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
     await expect(page.locator('nav a[href="/projects"]')).toBeVisible({ timeout: 5_000 });
 
     // USER no ve el enlace — usar el helper de login
-    await login(page, TECH_EMAIL, TECH_PASSWORD);
+    await login(page, TECH.email, TECH.password);
     await expect(page.locator('nav a[href="/projects"]')).not.toBeVisible();
   } catch (e) {
     await screenshotOnFail(page, "CP-56");

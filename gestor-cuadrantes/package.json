@@ -10,7 +10,8 @@
     "db:seed": "tsx --env-file .env prisma/seed.ts",
     "test:unit": "vitest run --reporter=verbose",
     "test:unit:watch": "vitest --reporter=verbose",
-    "test:e2e": "playwright test tests/e2e/sprint-1.spec.ts --reporter=list"
+    "test:e2e": "playwright test --reporter=list",
+    "test:e2e:sprint": "playwright test --reporter=list"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",

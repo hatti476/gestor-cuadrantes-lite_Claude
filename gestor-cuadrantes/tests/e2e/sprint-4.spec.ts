@@ -1,21 +1,8 @@
-import { test, expect, Page } from "@playwright/test";
-import path from "path";
-import fs from "fs";
+import { test, expect } from "@playwright/test";
+import { USERS, ROUTES } from "./config";
+import { loginAsAdmin, login, screenshotOnFail } from "./helpers";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-async function loginAsAdmin(page: Page) {
-  await page.goto("/login");
-  await page.locator('input[type="email"]').fill("admin@cuadrantes.local");
-  await page.locator('input[type="password"]').fill("Admin1234!");
-  await page.locator('button[type="submit"]').click();
-  await page.waitForURL("/", { timeout: 10_000 });
-}
-
-async function screenshotOnFail(page: Page, testId: string) {
-  const dir = path.join(process.cwd(), "tests/screenshots");
-  fs.mkdirSync(dir, { recursive: true });
-  await page.screenshot({ path: path.join(dir, `${testId}-fail.png`) });
-}
+const { tech: TECH } = USERS;
 
 // ─── CP-30 — Admin puede añadir un festivo ───────────────────────────────────
 test("CP-30 — Admin puede añadir un festivo", async ({ page }) => {
@@ -165,11 +152,11 @@ test("CP-34 — Historial registra cambios de turno", async ({ page }) => {
 // ─── CP-35 — Solo el admin puede ver el historial ────────────────────────────
 test("CP-35 — Solo el admin ve el historial", async ({ page }) => {
   try {
-    await page.goto("/login");
-    await page.locator('input[type="email"]').fill("tecnico1@cuadrantes.local");
-    await page.locator('input[type="password"]').fill("Tecnico1234!");
+    await page.goto(ROUTES.login);
+    await page.locator('input[type="email"]').fill(TECH.email);
+    await page.locator('input[type="password"]').fill(TECH.password);
     await page.locator('button[type="submit"]').click();
-    await page.waitForURL("/", { timeout: 10_000 });
+    await page.waitForURL(ROUTES.home, { timeout: 10_000 });
 
     // Intentar acceder directamente a la API de historial con cualquier ID
     const res = await page.request.get("/api/employees/fake-id/history");

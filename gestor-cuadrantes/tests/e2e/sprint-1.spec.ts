@@ -1,45 +1,8 @@
-import { test, expect, Page } from "@playwright/test";
-import * as path from "path";
+import { test, expect } from "@playwright/test";
+import { USERS, SHIFT_COLORS, ROUTES } from "./config";
+import { login, screenshotOnFail } from "./helpers";
 
-// ---------------------------------------------------------------------------
-// Credenciales leídas de .env.test — nunca hardcodeadas
-// ---------------------------------------------------------------------------
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "";
-const TECH_EMAIL = process.env.TECH_EMAIL ?? "";
-const TECH_PASSWORD = process.env.TECH_PASSWORD ?? "";
-
-// Colores de turno exactos definidos en lib/constants/shift-colors.ts
-const SHIFT_COLORS = {
-  M: "rgb(255, 152, 0)",   // #FF9800 — Mañana (naranja)
-  T: "rgb(33, 150, 243)",  // #2196F3 — Tarde (azul)
-  N: "rgb(76, 175, 80)",   // #4CAF50 — Noche (verde)
-  J: "rgb(255, 193, 7)",   // #FFC107 — Jornada normal (amarillo)
-  D: "rgb(245, 245, 245)", // #F5F5F5 — Descanso (gris claro)
-  V: "rgb(33, 33, 33)",    // #212121 — Vacaciones (negro)
-  B: "rgb(55, 71, 79)",    // #37474F — Baja (negro oscuro)
-};
-
-// ---------------------------------------------------------------------------
-// Helper: hace login y espera redirección a /
-// ---------------------------------------------------------------------------
-async function login(page: Page, email: string, password: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Contraseña").fill(password);
-  await page.getByRole("button", { name: "Entrar" }).click();
-}
-
-// ---------------------------------------------------------------------------
-// Helper: captura screenshot en caso de fallo
-// ---------------------------------------------------------------------------
-async function screenshotOnFail(page: Page, cpId: string) {
-  const screenshotsDir = path.resolve("tests/screenshots");
-  await page.screenshot({
-    path: path.join(screenshotsDir, `${cpId}-fail.png`),
-    fullPage: true,
-  });
-}
+const { admin: ADMIN, tech: TECH } = USERS;
 
 // ===========================================================================
 // CP-01 — Acceso sin sesión
@@ -79,10 +42,10 @@ test("CP-02 — Login con credenciales incorrectas muestra error", async ({ page
 // ===========================================================================
 test("CP-03 — Login admin correcto redirige a / con badge SUPER_ADMIN", async ({ page }) => {
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
 
     await expect(page).toHaveURL("/");
-    await expect(page.getByText(ADMIN_EMAIL)).toBeVisible();
+    await expect(page.getByText(ADMIN.email)).toBeVisible();
     // Buscamos el badge exacto del header (span con texto "SUPER_ADMIN" en mayúsculas)
     await expect(page.locator("header span").filter({ hasText: /^SUPER_ADMIN$/ })).toBeVisible();
   } catch (e) {
@@ -96,7 +59,7 @@ test("CP-03 — Login admin correcto redirige a / con badge SUPER_ADMIN", async 
 // ===========================================================================
 test("CP-04 — Login técnico correcto muestra badge USER", async ({ page }) => {
   try {
-    await login(page, TECH_EMAIL, TECH_PASSWORD);
+    await login(page, TECH.email, TECH.password);
 
     await expect(page).toHaveURL("/");
     await expect(page.getByText("USER")).toBeVisible();
@@ -111,7 +74,7 @@ test("CP-04 — Login técnico correcto muestra badge USER", async ({ page }) =>
 // ===========================================================================
 test("CP-05 — Vista del cuadrante muestra grid de 8 empleados y 31 días", async ({ page }) => {
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
     await expect(page).toHaveURL("/");
 
     const table = page.locator("table");
@@ -136,7 +99,7 @@ test("CP-05 — Vista del cuadrante muestra grid de 8 empleados y 31 días", asy
 // ===========================================================================
 test("CP-06 — Colores de turno coinciden con la paleta definida", async ({ page }) => {
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
     await expect(page).toHaveURL("/");
 
     // Verificamos cada color buscando una celda con ese código en la leyenda
@@ -160,7 +123,7 @@ test("CP-06 — Colores de turno coinciden con la paleta definida", async ({ pag
 // ===========================================================================
 test("CP-07 — Contadores de turno visibles en formato Turno:N", async ({ page }) => {
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
     await expect(page).toHaveURL("/");
 
     // La primera fila de datos (Admin) debe tener contadores J: (jornada normal)
@@ -185,7 +148,7 @@ test("CP-07 — Contadores de turno visibles en formato Turno:N", async ({ page 
 // ===========================================================================
 test("CP-08 — Columnas de fin de semana tienen fondo azul claro", async ({ page }) => {
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
     await expect(page).toHaveURL("/");
 
     // Mayo 2026: día 2 (sábado) y día 3 (domingo) son fines de semana
@@ -205,7 +168,7 @@ test("CP-08 — Columnas de fin de semana tienen fondo azul claro", async ({ pag
 // ===========================================================================
 test("CP-09 — Navegación de meses cambia el título correctamente", async ({ page }) => {
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
     await expect(page).toHaveURL("/");
 
     // Título inicial: Mayo 2026
@@ -229,7 +192,7 @@ test("CP-09 — Navegación de meses cambia el título correctamente", async ({ 
 // ===========================================================================
 test("CP-10 — Cierre de sesión redirige a /login", async ({ page }) => {
   try {
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
     await expect(page).toHaveURL("/");
 
     await page.getByRole("button", { name: "Cerrar sesión" }).click();
@@ -246,7 +209,7 @@ test("CP-10 — Cierre de sesión redirige a /login", async ({ page }) => {
 test("CP-11 — Acceso a / tras logout redirige a /login", async ({ page }) => {
   try {
     // Hacer login y logout primero
-    await login(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await login(page, ADMIN.email, ADMIN.password);
     await expect(page).toHaveURL("/");
     await page.getByRole("button", { name: "Cerrar sesión" }).click();
     await expect(page).toHaveURL(/\/login/);
