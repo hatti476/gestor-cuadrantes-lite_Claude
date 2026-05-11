@@ -64,8 +64,14 @@ Proyecto inicial: **"Equipo Soporte 24h"**
 
 | Tipo | Total | Resultado |
 |------|-------|-----------|
-| Unit | 83 | ✅ 83/83 |
+| Unit | 108 | ✅ 108/108 |
 | E2E | 45 | ✅ 43/45 (2 flaky pre-existentes) |
+
+### Nuevos tests unitarios (Sprint 6)
+
+| Módulo | Tests añadidos |
+|--------|---------------|
+| `lib/auth/permissions.ts` | 25 tests — `isSuperAdmin`, `isProjectAdmin`, `canViewProject`, `hasAdminAccess`, constantes `GLOBAL_ROLES` / `PROJECT_ROLES` |
 
 ### Nuevos tests E2E (Sprint 6)
 

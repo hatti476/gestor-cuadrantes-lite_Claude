@@ -17,8 +17,9 @@
 | NextAuth session (projectMemberships) | 0.5 h |
 | Seed + Docker + deployment.md | 1.5 h |
 | Tests E2E CP-43..46 + fixes | 1.5 h |
+| Tests unitarios permissions.ts (25 tests) | 0.5 h |
 | Documentación (release notes, esfuerzo) | 0.5 h |
-| **Total** | **9.0 h** |
+| **Total** | **9.5 h** |
 
 ---
 
@@ -26,7 +27,7 @@
 
 | Métrica | Antes | Después |
 |---------|-------|---------|
-| Unit tests | 83/83 ✅ | 83/83 ✅ |
+| Unit tests | 83/83 ✅ | 108/108 ✅ |
 | E2E tests | 41/41 ✅ | 43/45 ✅* |
 | Bugs introducidos | — | 0 |
 
