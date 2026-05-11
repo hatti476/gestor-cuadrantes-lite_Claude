@@ -3,10 +3,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { validateScheduleBody, getMonthRange } from "@/lib/schedules/business-logic";
+import { canViewProject, isSuperAdmin } from "@/lib/auth/permissions";
 
 // ---------------------------------------------------------------------------
-// GET /api/schedules?year=YYYY&month=M
-// Devuelve los turnos del mes para todos los empleados
+// GET /api/schedules?year=YYYY&month=M[&projectId=xxx]
+// Devuelve los turnos del mes. Si projectId se pasa, filtra por proyecto.
 // ---------------------------------------------------------------------------
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const year = Number(searchParams.get("year"));
   const month = Number(searchParams.get("month")); // 1-12
+  const projectId = searchParams.get("projectId") || null;
 
   if (!year || !month || month < 1 || month > 12) {
     return NextResponse.json(
@@ -25,15 +27,36 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Verificar acceso al proyecto si se especifica
+  if (projectId && !canViewProject(session, projectId)) {
+    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
+  }
+
   const { start, end } = getMonthRange(year, month);
+
+  // Filtro de empleados: si hay projectId, solo empleados de ese proyecto
+  // Si no hay projectId: SUPER_ADMIN ve todos; USER ve su propio proyecto
+  let employeeFilter: { projectId?: string | null } = {};
+  if (projectId) {
+    employeeFilter = { projectId };
+  } else if (!isSuperAdmin(session)) {
+    // USER sin projectId: ver solo empleados de sus proyectos
+    const memberProjectIds = session.user.projectMemberships.map((m) => m.projectId);
+    if (memberProjectIds.length > 0) {
+      employeeFilter = { projectId: memberProjectIds[0] };
+    }
+  }
 
   const assignments = await prisma.shiftAssignment.findMany({
     where: {
       date: { gte: start, lt: end },
+      ...(Object.keys(employeeFilter).length > 0
+        ? { employee: employeeFilter }
+        : {}),
     },
     include: {
       employee: {
-        select: { id: true, name: true, rotationOrder: true },
+        select: { id: true, name: true, rotationOrder: true, projectId: true },
       },
     },
     orderBy: [{ employee: { rotationOrder: "asc" } }, { date: "asc" }],

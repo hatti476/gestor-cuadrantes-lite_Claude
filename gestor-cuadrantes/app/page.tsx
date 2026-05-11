@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ScheduleGrid } from "@/components/schedule/schedule-grid";
 import { Header } from "@/components/layout/header";
 import { ShiftEditor } from "@/components/schedule/shift-editor";
+import { ProjectSelector } from "@/components/projects/project-selector";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleAssignment, ScheduleEmployee } from "@/lib/schedules/types";
 import { useToast } from "@/components/ui/toast-provider";
@@ -23,6 +24,7 @@ export default function HomePage() {
 
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(5);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
   const [employees, setEmployees] = useState<ScheduleEmployee[]>([]);
   const [assignments, setAssignments] = useState<ScheduleAssignment[]>([]);
@@ -43,8 +45,9 @@ export default function HomePage() {
   const loadSchedule = useCallback(async () => {
     setLoading(true);
     try {
+      const projectParam = activeProjectId ? `&projectId=${activeProjectId}` : "";
       const [scheduleRes, holidayRes] = await Promise.all([
-        fetch(`/api/schedules?year=${year}&month=${month}`),
+        fetch(`/api/schedules?year=${year}&month=${month}${projectParam}`),
         fetch(`/api/holidays?year=${year}`),
       ]);
       if (!scheduleRes.ok) throw new Error("Error cargando cuadrante");
@@ -82,7 +85,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [year, month]);
+  }, [year, month, activeProjectId]);
 
   useEffect(() => {
     loadSchedule();
@@ -234,6 +237,11 @@ export default function HomePage() {
           >
             ›
           </button>
+          <ProjectSelector
+            activeProjectId={activeProjectId}
+            onChange={setActiveProjectId}
+            isSuperAdmin={isAdmin}
+          />
           {isAdmin && (
             <span className="ml-2 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1 print:hidden">
               Modo edición — clic en celda para asignar turno

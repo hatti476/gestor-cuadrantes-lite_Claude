@@ -1,6 +1,6 @@
 # Documento de Requisitos — Gestor de Cuadrantes
 
-**Versión**: 1.6 (Sprint 6)  
+**Versión**: 1.7 (Sprint 7)  
 **Última actualización**: 11/05/2026  
 **Estado**: Vivo — se actualiza al cierre de cada sprint
 
@@ -198,9 +198,15 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-13.2 | Un usuario puede ser miembro de varios proyectos con distintos roles | 6 | ✅ |
 | RF-13.3 | Los roles dentro de un proyecto son `PROJECT_ADMIN` y `EMPLOYEE` | 6 | ✅ |
 | RF-13.4 | Un `SUPER_ADMIN` tiene acceso de administrador en todos los proyectos sin necesidad de membresía explícita | 6 | ✅ |
-| RF-13.5 | Un `PROJECT_ADMIN` gestiona solo su proyecto; no puede acceder a proyectos de terceros | 6 | ⏳ API pendiente |
+| RF-13.5 | Un `PROJECT_ADMIN` gestiona solo su proyecto; no puede acceder a proyectos de terceros | 7 | ✅ API |
 | RF-13.6 | Las membresías de proyecto se incluyen en el token JWT y son accesibles en todos los componentes | 6 | ✅ |
 | RF-13.7 | El seed crea automáticamente el proyecto "Equipo Soporte 24h" con todos los usuarios de prueba asignados | 6 | ✅ |
+| RF-13.8 | El SUPER_ADMIN puede crear, editar y eliminar proyectos | 7 | ✅ |
+| RF-13.9 | El SUPER_ADMIN o PROJECT_ADMIN puede añadir y eliminar miembros de un proyecto | 7 | ✅ |
+| RF-13.10 | Solo el SUPER_ADMIN puede asignar el rol `PROJECT_ADMIN` a un miembro | 7 | ✅ |
+| RF-13.11 | El cuadrante puede filtrarse por proyecto mediante `?projectId=` | 7 | ✅ |
+| RF-13.12 | La UI muestra un selector de proyecto activo para SUPER_ADMIN y un badge de proyecto para USER | 7 | ✅ |
+| RF-13.13 | El enlace "Proyectos" en el header es visible únicamente para SUPER_ADMIN | 7 | ✅ |
 
 ---
 
@@ -281,11 +287,11 @@ Schedule        — id, month, year (registro de última generación)
 
 | Método | Ruta | Acceso | Descripción |
 |--------|------|--------|-------------|
-| GET | `/api/schedules?year&month` | Autenticado | Lista de turnos del mes |
+| GET | `/api/schedules?year&month[&projectId]` | Autenticado | Lista de turnos del mes (filtrable por proyecto) |
 | POST | `/api/schedules` | SUPER_ADMIN | Crear/actualizar turno individual |
 | DELETE | `/api/schedules` | SUPER_ADMIN | Eliminar turno |
 | POST | `/api/schedules/generate` | SUPER_ADMIN | Generar cuadrante automático |
-| GET | `/api/employees` | Autenticado | Lista de empleados |
+| GET | `/api/employees[?projectId]` | Autenticado | Lista de empleados (filtrable por proyecto) |
 | POST | `/api/employees` | SUPER_ADMIN | Crear empleado |
 | PUT | `/api/employees/[id]` | SUPER_ADMIN | Editar empleado |
 | DELETE | `/api/employees/[id]` | SUPER_ADMIN | Eliminar empleado |
@@ -293,6 +299,14 @@ Schedule        — id, month, year (registro de última generación)
 | GET | `/api/holidays?year` | Autenticado | Lista de festivos del año |
 | POST | `/api/holidays` | SUPER_ADMIN | Añadir festivo |
 | DELETE | `/api/holidays/[id]` | SUPER_ADMIN | Eliminar festivo |
+| GET | `/api/projects` | Autenticado | Lista proyectos accesibles |
+| POST | `/api/projects` | SUPER_ADMIN | Crear proyecto |
+| GET | `/api/projects/[id]` | Miembro | Detalle + miembros |
+| PUT | `/api/projects/[id]` | PROJECT_ADMIN / SUPER_ADMIN | Editar proyecto |
+| DELETE | `/api/projects/[id]` | SUPER_ADMIN | Eliminar proyecto |
+| GET | `/api/projects/[id]/members` | Miembro | Listar miembros |
+| POST | `/api/projects/[id]/members` | PROJECT_ADMIN / SUPER_ADMIN | Añadir miembro |
+| DELETE | `/api/projects/[id]/members/[userId]` | PROJECT_ADMIN / SUPER_ADMIN | Eliminar miembro |
 
 ---
 
@@ -324,7 +338,8 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | E2E Sprint 4 | CP-30..CP-42 | 10 | ✅ (2 flaky) |
 | E2E Sprint 5 | CP-40..CP-42 | 3 | ✅ |
 | E2E Sprint 6 | CP-43..CP-46 | 4 | ✅ |
-| **Total E2E** | | **45** | ✅ |
+| E2E Sprint 7 | CP-47..CP-56 | 10 | ✅ |
+| **Total E2E** | | **55** | ✅ |
 
 ---
 
@@ -332,8 +347,7 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 
 | Sprint | Funcionalidad | Requisitos asociados |
 |--------|--------------|----------------------|
-| 7 | CRUD de proyectos, asignación de miembros, scoping de cuadrante por proyecto | RF-13.5 |
-| 8 | Roles de proyecto en UI, panel multi-proyecto, permisos granulares | RF-13 |
+| 8 | Roles de proyecto en UI, panel multi-proyecto para PROJECT_ADMIN, permisos granulares en escritura | RF-13 |
 | 9 | Festivos por CCAA/proyecto (`ProjectHoliday`), integración con API pública de festivos | RF-07 ampliado |
 | 10 | Notificaciones email, dashboard de métricas, exportación avanzada | Nuevos RF |
 
@@ -349,3 +363,4 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | 0.4 | 4 | Festivos, exportación CSV/PDF, historial de cambios, toasts |
 | 0.5 | 5 | Página de ayuda contextual por rol |
 | 0.6 | 6 | Roles SUPER_ADMIN/USER, arquitectura multiproyecto, Docker producción |
+| 0.7 | 7 | API proyectos (CRUD), gestión de miembros, scoping cuadrante por proyecto, UI /projects |

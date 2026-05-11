@@ -4,18 +4,42 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { validateCreateEmployee } from "@/lib/employees/business-logic";
+import { canViewProject, isSuperAdmin } from "@/lib/auth/permissions";
 
 // ---------------------------------------------------------------------------
-// GET /api/employees — lista todos los empleados (cualquier usuario autenticado)
+// GET /api/employees[?projectId=xxx] — lista empleados
+// Sin projectId: SUPER_ADMIN ve todos; USER ve los de sus proyectos
+// Con projectId: filtra por proyecto (verificando acceso)
 // ---------------------------------------------------------------------------
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
+  const { searchParams } = req.nextUrl;
+  const projectId = searchParams.get("projectId") || null;
+
+  if (projectId && !canViewProject(session, projectId)) {
+    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
+  }
+
+  let where: { projectId?: string | null } = {};
+  if (projectId) {
+    where = { projectId };
+  } else if (!isSuperAdmin(session)) {
+    const memberProjectIds = session.user.projectMemberships.map((m) => m.projectId);
+    if (memberProjectIds.length > 0) {
+      where = { projectId: memberProjectIds[0] };
+    }
+  }
+
   const employees = await prisma.employee.findMany({
-    include: { user: { select: { email: true, role: true } } },
+    where,
+    include: {
+      user: { select: { email: true, role: true } },
+      project: { select: { id: true, name: true } },
+    },
     orderBy: { rotationOrder: "asc" },
   });
 
