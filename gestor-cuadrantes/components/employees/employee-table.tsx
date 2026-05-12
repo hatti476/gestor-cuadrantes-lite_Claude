@@ -48,7 +48,7 @@ export function EmployeeTable({ employees, onEdit, onChangePassword, onHistory }
                 <td className="px-4 py-3 font-medium text-gray-800 border-b border-gray-100">{emp.name}</td>
                 <td className="px-4 py-3 text-gray-600 border-b border-gray-100">{emp.user.email}</td>
                 <td className="px-4 py-3 border-b border-gray-100">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge.classes}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${badge.classes}`}>
                     {badge.label}
                   </span>
                 </td>
