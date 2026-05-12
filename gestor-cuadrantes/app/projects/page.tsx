@@ -279,6 +279,23 @@ export default function ProjectsPage() {
   // Panel de miembros
   const [memberProject, setMemberProject] = useState<ProjectDetail | null>(null);
 
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  // Leer proyecto activo desde localStorage al montar
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("activeProject");
+      if (stored) setSelectedProjectId((JSON.parse(stored) as { id: string }).id ?? null);
+    } catch {}
+  }, []);
+
+  function handleSelectProject(p: Project) {
+    localStorage.setItem("activeProject", JSON.stringify({ id: p.id, name: p.name }));
+    window.dispatchEvent(new Event("activeProjectChanged"));
+    setSelectedProjectId(p.id);
+    router.push("/");
+  }
+
   // Redirigir si no tiene acceso de gestión
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
@@ -365,7 +382,7 @@ export default function ProjectsPage() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
-      <main className="flex-1 p-6 max-w-4xl mx-auto w-full">
+      <main className="flex-1 p-6 w-full">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-gray-800">Proyectos</h2>
           {isSuperAdmin && formMode === "none" && (
@@ -394,71 +411,84 @@ export default function ProjectsPage() {
         )}
 
         {/* Tabla de proyectos */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
           {projects.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
               <span className="text-4xl">📁</span>
               <p className="text-sm">No hay proyectos creados</p>
             </div>
           ) : (
-            <table className="w-full text-sm" data-testid="projects-table">
-              <thead>
-                <tr className="border-b border-gray-100 text-xs text-gray-500 uppercase">
-                  <th className="px-4 py-3 text-left font-medium">Nombre</th>
-                  <th className="px-4 py-3 text-left font-medium">Descripción</th>
-                  <th className="px-4 py-3 text-left font-medium">Región</th>
-                  <th className="px-4 py-3 text-center font-medium">Miembros</th>
-                  <th className="px-4 py-3 text-center font-medium">Empleados</th>
-                  <th className="px-4 py-3 text-right font-medium">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {projects.map((p) => (
-                  <tr key={p.id} data-testid="project-row">
-                    <td className="px-4 py-3 font-medium text-gray-800">{p.name}</td>
-                    <td className="px-4 py-3 text-gray-500 max-w-xs truncate">
-                      {p.description ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500">{p.region ?? "—"}</td>
-                    <td className="px-4 py-3 text-center text-gray-600">
-                      {p._count?.members ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-center text-gray-600">
-                      {p._count?.employees ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          data-testid="btn-manage-members"
-                          onClick={() => handleOpenMembers(p)}
-                          className="text-xs px-2 py-1 rounded border border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                        >
-                          Miembros
-                        </button>
-                        {isSuperAdmin && (
-                          <>
-                            <button
-                              data-testid="btn-edit-project"
-                              onClick={() => { setEditingProject(p); setFormMode("edit"); }}
-                              className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50"
-                            >
-                              Editar
-                            </button>
-                            <button
-                              data-testid="btn-delete-project"
-                              onClick={() => handleDelete(p)}
-                              className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50"
-                            >
-                              Eliminar
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="projects-table">
+                <thead>
+                  <tr className="border-b border-gray-100 text-xs text-gray-500 uppercase">
+                    <th className="px-4 py-3 text-left font-medium">Nombre</th>
+                    <th className="px-4 py-3 text-left font-medium">Descripción</th>
+                    <th className="px-4 py-3 text-left font-medium">Región</th>
+                    <th className="px-4 py-3 text-center font-medium">Miembros</th>
+                    <th className="px-4 py-3 text-center font-medium">Empleados</th>
+                    <th className="px-4 py-3 text-right font-medium">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {projects.map((p) => (
+                    <tr key={p.id} data-testid="project-row" className={selectedProjectId === p.id ? "bg-green-50" : ""}>
+                      <td className="px-4 py-3 font-medium text-gray-800">{p.name}</td>
+                      <td className="px-4 py-3 text-gray-500">
+                        {p.description ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500">{p.region ?? "—"}</td>
+                      <td className="px-4 py-3 text-center text-gray-600">
+                        {p._count?.members ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-center text-gray-600">
+                        {p._count?.employees ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex gap-2 justify-end flex-wrap">
+                          <button
+                            data-testid="btn-select-project"
+                            onClick={() => handleSelectProject(p)}
+                            className={`text-xs px-2 py-1 rounded border font-medium ${
+                              selectedProjectId === p.id
+                                ? "border-green-600 bg-green-600 text-white"
+                                : "border-green-300 text-green-700 hover:bg-green-50"
+                            }`}
+                          >
+                            {selectedProjectId === p.id ? "✓ Activo" : "Seleccionar"}
+                          </button>
+                          <button
+                            data-testid="btn-manage-members"
+                            onClick={() => handleOpenMembers(p)}
+                            className="text-xs px-2 py-1 rounded border border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                          >
+                            Miembros
+                          </button>
+                          {isSuperAdmin && (
+                            <>
+                              <button
+                                data-testid="btn-edit-project"
+                                onClick={() => { setEditingProject(p); setFormMode("edit"); }}
+                                className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50"
+                              >
+                                Editar
+                              </button>
+                              <button
+                                data-testid="btn-delete-project"
+                                onClick={() => handleDelete(p)}
+                                className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50"
+                              >
+                                Eliminar
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </main>

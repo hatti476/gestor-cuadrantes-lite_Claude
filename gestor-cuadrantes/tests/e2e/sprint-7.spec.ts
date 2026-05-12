@@ -257,17 +257,22 @@ test("CP-53 — SUPER_ADMIN elimina miembro del proyecto", async ({ page }) => {
 });
 
 // ===========================================================================
-// CP-54 — Selector de proyecto visible en home para SUPER_ADMIN
+// CP-54 — Proyecto activo visible en el header tras seleccionar desde /projects
 // ===========================================================================
-test("CP-54 — Selector de proyecto visible en home para SUPER_ADMIN", async ({ page }) => {
+test("CP-54 — Proyecto activo visible en header para SUPER_ADMIN", async ({ page }) => {
   try {
     await login(page, ADMIN.email, ADMIN.password);
-    // El selector aparece cuando hay proyectos y el usuario tiene acceso a varios
-    await expect(
-      page.locator('[data-testid="project-selector"]').or(
-        page.locator('[data-testid="project-name-badge"]')
-      )
-    ).toBeVisible({ timeout: 10_000 });
+    // Seleccionar el primer proyecto desde la página de proyectos
+    await page.goto("/projects");
+    const firstRow = page.locator('[data-testid="project-row"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 10_000 });
+    await firstRow.locator('[data-testid="btn-select-project"]').click();
+    // Debe navegar automáticamente a la home
+    await page.waitForURL("/", { timeout: 8_000 });
+    // El badge del proyecto activo aparece en el header
+    await expect(page.locator('[data-testid="active-project-badge"]')).toBeVisible({
+      timeout: 8_000,
+    });
   } catch (e) {
     await screenshotOnFail(page, "CP-54");
     throw e;
@@ -275,17 +280,16 @@ test("CP-54 — Selector de proyecto visible en home para SUPER_ADMIN", async ({
 });
 
 // ===========================================================================
-// CP-55 — USER ve badge de proyecto (no selector completo si solo tiene uno)
+// CP-55 — Proyecto auto-seleccionado visible en header para USER
 // ===========================================================================
-test("CP-55 — USER ve su proyecto en home", async ({ page }) => {
+test("CP-55 — Proyecto activo visible en header para USER", async ({ page }) => {
   try {
     await login(page, TECH.email, TECH.password);
-    // Un técnico con un solo proyecto ve el badge o el selector
-    await expect(
-      page.locator('[data-testid="project-name-badge"]').or(
-        page.locator('[data-testid="project-selector"]')
-      )
-    ).toBeVisible({ timeout: 10_000 });
+    await page.goto("/");
+    // El sistema auto-selecciona el único proyecto del técnico al cargar la home
+    await expect(page.locator('[data-testid="active-project-badge"]')).toBeVisible({
+      timeout: 12_000,
+    });
   } catch (e) {
     await screenshotOnFail(page, "CP-55");
     throw e;

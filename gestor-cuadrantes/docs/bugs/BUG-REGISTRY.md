@@ -10,7 +10,7 @@
 
 | Total bugs | Críticos | Altos | Medios | Bajos | Abiertos | Resueltos |
 |-----------|----------|-------|--------|-------|----------|-----------|
-| 20 | 0 | 8 | 8 | 4 | 1 | 19 |
+| 26 | 0 | 10 | 10 | 6 | 1 | 25 |
 
 ---
 
@@ -38,6 +38,12 @@
 | [BUG-18](#bug-18) | Sprint 9 | 🟠 High | ✅ Fixed | `_pickWeekendShift` no recibía el parámetro `wKey` → asignación incorrecta |
 | [BUG-19](#bug-19) | Sprint 9 | 🟢 Low | ✅ Fixed | TypeScript TS1117: clave `EMPLOYEE` duplicada en `ROLE_BADGES` |
 | [BUG-20](#bug-20) | Sprint 9 | 🟡 Medium | ⚠️ Mitigated | Servidor E2E con estado obsoleto — CP-69 no puede verificar celdas N/NF por DOM |
+| [BUG-21](#bug-21) | Sprint 9-PO | 🟡 Medium | ✅ Fixed | Pestañas del header sin indicación visual de cuál está activa |
+| [BUG-22](#bug-22) | Sprint 9-PO | 🟢 Low | ✅ Fixed | Orden incorrecto de las pestañas de navegación |
+| [BUG-23](#bug-23) | Sprint 9-PO | 🟡 Medium | ✅ Fixed | El proyecto activo no es visible desde ninguna página del header |
+| [BUG-24](#bug-24) | Sprint 9-PO | 🟢 Low | ✅ Fixed | Información de la parte derecha de la tabla de proyectos cortada (max-width) |
+| [BUG-25](#bug-25) | Sprint 9-PO | 🟠 High | ✅ Fixed | El cuadrante tiene un desplegable de proyectos confuso; debe elegirse desde Proyectos |
+| [BUG-26](#bug-26) | Sprint 9-PO | 🟠 High | ✅ Fixed | Regresión de timing: cuadrante tardía en cargar por estado `undefined` de proyecto activo |
 
 ---
 
@@ -746,3 +752,187 @@ CP-69 realiza la verificación llamando directamente a `/api/schedules?year=2026
 
 **Solución definitiva pendiente**  
 Forzar el cierre y reinicio del servidor E2E entre ejecuciones parciales (p.ej. con `reuseExistingServer: false` y un mecanismo de señal de cierre). Pendiente para Sprint 10.
+
+---
+
+### BUG-21
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-21 |
+| **Sprint** | Sprint 9 — Correcciones Product Owner |
+| **Detectado por** | Product Owner — revisión manual |
+| **Fecha detección** | 2026-05-12 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+Las pestañas del header (Proyectos, Cuadrante, Empleados, Ayuda) no tenían ningún indicador visual de cuál era la página activa. Al navegar entre páginas, todas las pestañas tenían el mismo aspecto en gris.
+
+**Resultado esperado**  
+La pestaña correspondiente a la página actual se muestra resaltada (texto azul índigo + subrayado inferior).
+
+**Resultado obtenido**  
+Todas las pestañas tenían el mismo estilo gris independientemente de la página activa.
+
+**Ficheros afectados**  
+- `components/layout/header.tsx`
+
+**Fix aplicado**  
+Añadida función `navClass(href)` que usa `usePathname()` de Next.js para comparar la ruta actual. La pestaña activa recibe las clases `text-indigo-600 font-semibold border-b-2 border-indigo-500`. Las inactivas mantienen `text-gray-500 hover:text-gray-900`.
+
+---
+
+### BUG-22
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-22 |
+| **Sprint** | Sprint 9 — Correcciones Product Owner |
+| **Detectado por** | Product Owner — revisión manual |
+| **Fecha detección** | 2026-05-12 |
+| **Severidad** | 🟢 Low |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+El orden de las pestañas de navegación era: Cuadrante, Empleados, Proyectos, Ayuda. El Product Owner solicitó el orden: Proyectos, Cuadrante, Empleados, Ayuda.
+
+**Resultado esperado**  
+Orden: Proyectos → Cuadrante → Empleados → Ayuda.
+
+**Resultado obtenido**  
+Orden: Cuadrante → Empleados → Proyectos → Ayuda.
+
+**Ficheros afectados**  
+- `components/layout/header.tsx`
+
+**Fix aplicado**  
+Reordenados los `<Link>` en el `<nav>`: primero `Proyectos` (visible para SUPER_ADMIN y PROJECT_ADMIN), luego `Cuadrante`, `Empleados` (solo SUPER_ADMIN) y `Ayuda`.
+
+---
+
+### BUG-23
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-23 |
+| **Sprint** | Sprint 9 — Correcciones Product Owner |
+| **Detectado por** | Product Owner — revisión manual |
+| **Fecha detección** | 2026-05-12 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+No existía ninguna indicación persistente de qué proyecto estaba activo. Al navegar entre páginas, el usuario no sabía en qué proyecto estaba trabajando. El badge de proyecto solo era visible dentro del `ProjectSelector` en la home.
+
+**Resultado esperado**  
+El nombre del proyecto activo aparece como badge (`data-testid="active-project-badge"`) en el header en todas las páginas.
+
+**Resultado obtenido**  
+No había indicación del proyecto activo en el header.
+
+**Ficheros afectados**  
+- `components/layout/header.tsx`
+
+**Fix aplicado**  
+El header lee el proyecto activo de `localStorage.getItem("activeProject")` al montar. Escucha el evento `window.activeProjectChanged` para actualizar el badge cuando el proyecto cambia. Muestra `📁 {nombre}` con estilo indigo en la barra superior.
+
+---
+
+### BUG-24
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-24 |
+| **Sprint** | Sprint 9 — Correcciones Product Owner |
+| **Detectado por** | Product Owner — revisión manual |
+| **Fecha detección** | 2026-05-12 |
+| **Severidad** | 🟢 Low |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+La tabla de proyectos en `/projects` tenía `max-w-4xl` y `truncate` en la columna de descripción, lo que cortaba la información visible. Los botones de acción también quedaban fuera de pantalla en resoluciones medias.
+
+**Resultado esperado**  
+La tabla usa todo el ancho disponible; la descripción se muestra completa; los botones son accesibles. En caso de desbordamiento, aparece scroll horizontal.
+
+**Resultado obtenido**  
+La tabla estaba limitada a 56rem de ancho; la descripción se truncaba con `…`; los botones de acción de la derecha podían quedar ocultos.
+
+**Ficheros afectados**  
+- `app/projects/page.tsx`
+
+**Fix aplicado**  
+Eliminado `max-w-4xl mx-auto` del `<main>` → ahora usa `w-full`. Eliminado `truncate max-w-xs` de la celda de descripción. Envuelta la tabla en un `div overflow-x-auto` para scroll horizontal si es necesario.
+
+---
+
+### BUG-25
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-25 |
+| **Sprint** | Sprint 9 — Correcciones Product Owner |
+| **Detectado por** | Product Owner — revisión manual |
+| **Fecha detección** | 2026-05-12 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+La pantalla del cuadrante tenía un desplegable (`<select>`) de selección de proyecto integrado directamente en la barra de herramientas del cuadrante. El Product Owner lo consideró confuso y solicitó que la selección de proyecto se realizase exclusivamente desde la pestaña de Proyectos.
+
+**Resultado esperado**  
+- La página del cuadrante no contiene selector de proyecto.
+- En `/projects`, cada fila tiene un botón **Seleccionar** que marca el proyecto como activo (resaltado en verde con `✓ Activo`) y navega automáticamente a la home.
+- El proyecto activo se persiste en `localStorage` y se sincroniza con el badge del header.
+
+**Resultado obtenido**  
+- La home mostraba un `<select>` de proyecto en la barra de herramientas.
+- No había forma de seleccionar el proyecto desde `/projects`.
+
+**Ficheros afectados**  
+- `app/page.tsx` — eliminado `ProjectSelector`
+- `app/projects/page.tsx` — añadido `btn-select-project` + lógica `handleSelectProject`
+- `components/layout/header.tsx` — sincronización con localStorage
+
+**Fix aplicado**  
+Eliminado `ProjectSelector` de la home. En `app/projects/page.tsx`: nuevo estado `selectedProjectId` (leído de localStorage), función `handleSelectProject` que persiste el proyecto en localStorage, emite el evento `activeProjectChanged` y navega a `/`. Botón `btn-select-project` con estilo verde / `✓ Activo` en cada fila. CP-54 y CP-55 actualizados para reflejar el nuevo flujo.
+
+---
+
+### BUG-26
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-26 |
+| **Sprint** | Sprint 9 — Correcciones Product Owner |
+| **Detectado por** | Regresión E2E — CP-38 (al implementar BUG-25) |
+| **Fecha detección** | 2026-05-12 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+Al implementar BUG-25, la inicialización de `activeProjectId` pasó de `null` a `undefined` para evitar cargar el cuadrante antes de conocer el proyecto. Esto introdujo una regresión: la función `loadSchedule` tenía un guard `if (activeProjectId === undefined) return` que retrasaba la primera carga hasta que un `useEffect` asíncrono completase la lectura de localStorage y la petición a `/api/projects`. En el E2E, el test CP-38 fallaba porque navegaba a Noviembre y comprobaba los festivos antes de que el cuadrante hubiese terminado de cargar.
+
+**Pasos para reproducir**
+1. Abrir la home por primera vez (sin `activeProject` en localStorage).
+2. Navegar a Noviembre con los botones de mes.
+3. El grid tarda más de lo esperado en mostrar los datos de Noviembre con los festivos.
+
+**Resultado esperado**  
+El cuadrante carga inmediatamente con el proyecto que haya en localStorage (o sin filtro si no hay ninguno), sin retrasos por esperar a peticiones asíncronas de inicialización.
+
+**Resultado obtenido**  
+El cuadrante no cargaba en la primera visita hasta que el `useEffect` completaba la petición a `/api/projects` (~200-400ms extra). CP-38 fallaba por este retardo.
+
+**Ficheros afectados**  
+- `app/page.tsx`
+
+**Fix aplicado**  
+Sustituido el `useState(undefined)` + `useEffect` por un inicializador lazy `useState(() => { localStorage.getItem... })`. La lectura de localStorage es síncrona en el primer render, por lo que `activeProjectId` tiene su valor correcto desde el inicio y `loadSchedule` puede correr sin guard. El `useEffect` secundario solo busca el primer proyecto en API cuando `activeProjectId === null` (primera visita sin localStorage previo).

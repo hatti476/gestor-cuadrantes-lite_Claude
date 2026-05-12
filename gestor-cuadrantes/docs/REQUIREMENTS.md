@@ -1,6 +1,6 @@
 # Documento de Requisitos — Gestor de Cuadrantes
 
-**Versión**: 1.9 (Sprint 9)  
+**Versión**: 1.9.1 (Sprint 9 — correcciones PO)  
 **Última actualización**: 12/05/2026  
 **Estado**: Vivo — se actualiza al cierre de cada sprint
 
@@ -229,6 +229,20 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-14.9 | Ningún empleado supera 5 días consecutivos con el mismo turno de trabajo | 9 | ✅ |
 | RF-14.10 | La generación consulta los últimos 7 días del mes anterior (`prevMonthTail`) para aplicar la regla de máximo consecutivo en el inicio del mes | 9 | ✅ |
 | RF-14.11 | Los turnos V/B/J existentes bloquean la celda; los turnos M/T/N/D de generaciones anteriores se regeneran | 9 | ✅ |
+
+---
+
+### RF-15 — Navegación y UX del header
+
+| ID | Descripción | Sprint | Estado |
+|----|-------------|--------|--------|
+| RF-15.1 | Las pestañas de navegación muestran cuál está activa mediante subrayado azul y texto en negrita | 9-PO | ✅ |
+| RF-15.2 | El orden de las pestañas es: Proyectos → Cuadrante → Empleados → Ayuda | 9-PO | ✅ |
+| RF-15.3 | El nombre del proyecto activo se muestra como badge en el header en todas las páginas | 9-PO | ✅ |
+| RF-15.4 | La selección de proyecto se realiza exclusivamente desde la pestaña de Proyectos (no desde el cuadrante) | 9-PO | ✅ |
+| RF-15.5 | Cada proyecto en `/projects` tiene un botón Seleccionar que lo activa y navega a la home | 9-PO | ✅ |
+| RF-15.6 | El proyecto activo se persiste en `localStorage` y se sincroniza entre pestañas mediante un evento `activeProjectChanged` | 9-PO | ✅ |
+| RF-15.7 | La tabla de proyectos muestra la información completa sin truncar; soporta scroll horizontal | 9-PO | ✅ |
 
 ---
 

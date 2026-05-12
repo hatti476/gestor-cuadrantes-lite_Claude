@@ -2,7 +2,7 @@
 
 **Fecha**: 12/05/2026  
 **Versión**: 0.9  
-**Commit**: `db53644`  
+**Commits**: `db53644` (algoritmo Fase 2) + correcciones PO  
 **Estado**: ✅ Completado
 
 ---
@@ -102,7 +102,39 @@ Migración: `20260512093747_sprint9_shift_preference`
 | [BUG-18](bugs/BUG-REGISTRY.md#bug-18) | `_pickWeekendShift` no recibía el parámetro `wKey` → asignación de fin de semana incorrecta | 🟠 High | `db53644` |
 | [BUG-19](bugs/BUG-REGISTRY.md#bug-19) | TypeScript TS1117: clave `EMPLOYEE` duplicada en `ROLE_BADGES` de `employee-table.tsx` | 🟢 Low | `db53644` |
 | [BUG-20](bugs/BUG-REGISTRY.md#bug-20) | Servidor E2E conservaba estado obsoleto al reutilizarse — CP-69 no podía verificar celdas N/NF por DOM | 🟡 Medium | `db53644` (mitigado) |
+---
 
+## Correcciones Product Owner (revisión manual post-sprint)
+
+Tras la revisión manual de la aplicación, el Product Owner detectó 5 mejoras de UX que se corrigieron en el mismo sprint antes del cierre.
+
+| BUG | Descripción | Severidad | Estado |
+|-----|-------------|-----------|--------|
+| [BUG-21](bugs/BUG-REGISTRY.md#bug-21) | Pestañas del header sin indicación visual de cuál está activa | 🟡 Medium | ✅ Fixed |
+| [BUG-22](bugs/BUG-REGISTRY.md#bug-22) | Orden incorrecto de las pestañas de navegación | 🟢 Low | ✅ Fixed |
+| [BUG-23](bugs/BUG-REGISTRY.md#bug-23) | El proyecto activo no era visible desde el header | 🟡 Medium | ✅ Fixed |
+| [BUG-24](bugs/BUG-REGISTRY.md#bug-24) | Información de la tabla de proyectos cortada por `max-width` | 🟢 Low | ✅ Fixed |
+| [BUG-25](bugs/BUG-REGISTRY.md#bug-25) | Selector de proyecto en el cuadrante — debe elegirse desde /projects | 🟠 High | ✅ Fixed |
+| [BUG-26](bugs/BUG-REGISTRY.md#bug-26) | Regresión de timing al cargar cuadrante (estado `undefined`) | 🟠 High | ✅ Fixed |
+
+### Cambios de UX implementados
+
+**Header** (`components/layout/header.tsx`):
+- **Pestaña activa resaltada**: `usePathname()` + clases `text-indigo-600 font-semibold border-b-2 border-indigo-500`
+- **Nuevo orden de pestañas**: Proyectos → Cuadrante → Empleados → Ayuda
+- **Badge de proyecto activo**: lee `localStorage("activeProject")`, escucha evento `activeProjectChanged`, muestra `📁 {nombre}` en todas las páginas
+- **Acceso a Proyectos**: visible para SUPER_ADMIN y PROJECT_ADMIN
+
+**Cuadrante** (`app/page.tsx`):
+- Eliminado el `ProjectSelector` (`<select>`) de la barra de herramientas
+- `activeProjectId` se inicializa con `useState(() => localStorage...)` (lectura síncrona, sin parpadeo)
+- Auto-selección del primer proyecto solo cuando localStorage está vacío
+
+**Proyectos** (`app/projects/page.tsx`):
+- Nuevo botón `Seleccionar` / `✓ Activo` por fila (data-testid `btn-select-project`)
+- Click → persiste en localStorage + emite `activeProjectChanged` + navega a home
+- Fila resaltada en verde cuando el proyecto está activo
+- Eliminado `max-w-4xl`, columna descripción sin `truncate`, `overflow-x-auto` en la tabla
 ---
 
 ## Tests

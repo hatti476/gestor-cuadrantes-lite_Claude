@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { ScheduleGrid } from "@/components/schedule/schedule-grid";
 import { Header } from "@/components/layout/header";
 import { ShiftEditor } from "@/components/schedule/shift-editor";
-import { ProjectSelector } from "@/components/projects/project-selector";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleAssignment, ScheduleEmployee } from "@/lib/schedules/types";
 import { useToast } from "@/components/ui/toast-provider";
@@ -24,7 +23,32 @@ export default function HomePage() {
 
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(5);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = localStorage.getItem("activeProject");
+      return stored ? (JSON.parse(stored) as { id: string; name: string }).id : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Auto-seleccionar primer proyecto si no hay ninguno en localStorage
+  useEffect(() => {
+    if (activeProjectId !== null) return;
+    fetch("/api/projects")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((projects: { id: string; name: string }[]) => {
+        if (projects.length > 0) {
+          const { id, name } = projects[0];
+          localStorage.setItem("activeProject", JSON.stringify({ id, name }));
+          window.dispatchEvent(new Event("activeProjectChanged"));
+          setActiveProjectId(id);
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Solo al montar
 
   const [employees, setEmployees] = useState<ScheduleEmployee[]>([]);
   const [assignments, setAssignments] = useState<ScheduleAssignment[]>([]);
@@ -237,11 +261,6 @@ export default function HomePage() {
           >
             ›
           </button>
-          <ProjectSelector
-            activeProjectId={activeProjectId}
-            onChange={setActiveProjectId}
-            isSuperAdmin={isAdmin}
-          />
           {isAdmin && (
             <span className="ml-2 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1 print:hidden">
               Modo edición — clic en celda para asignar turno
