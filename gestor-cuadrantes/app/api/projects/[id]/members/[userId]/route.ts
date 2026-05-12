@@ -35,5 +35,11 @@ export async function DELETE(
     where: { projectId_userId: { projectId: id, userId } },
   });
 
+  // If employee's projectId was this project, clear it
+  await prisma.employee.updateMany({
+    where: { userId, projectId: id },
+    data: { projectId: null },
+  });
+
   return NextResponse.json({ ok: true });
 }

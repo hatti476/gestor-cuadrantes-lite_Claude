@@ -24,8 +24,8 @@ export function EmployeeTable({ employees, onEdit, onChangePassword, onHistory }
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+      <table className="w-full text-sm min-w-[700px]">
         <thead className="bg-gray-50">
           <tr>
             <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200">#</th>

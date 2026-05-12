@@ -92,5 +92,11 @@ export async function POST(
     include: { user: { select: { id: true, email: true, role: true } } },
   });
 
+  // Sync Employee.projectId so the employees table reflects the assignment
+  await prisma.employee.updateMany({
+    where: { userId: user.id },
+    data: { projectId: id },
+  });
+
   return NextResponse.json(member, { status: 201 });
 }

@@ -135,12 +135,14 @@ export default function EmployeesPage() {
             Cargando empleados...
           </div>
         ) : (
-          <EmployeeTable
-            employees={employees}
-            onEdit={(emp) => { setEditingEmployee(emp); setShowForm(false); }}
-            onChangePassword={(emp) => setPasswordEmployee(emp)}
-            onHistory={openHistory}
-          />
+          <div className="overflow-x-auto">
+            <EmployeeTable
+              employees={employees}
+              onEdit={(emp) => { setEditingEmployee(emp); setShowForm(false); }}
+              onChangePassword={(emp) => setPasswordEmployee(emp)}
+              onHistory={openHistory}
+            />
+          </div>
         )}
 
         {/* Formulario de creación */}
