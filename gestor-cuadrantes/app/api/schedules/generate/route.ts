@@ -54,8 +54,10 @@ export async function POST(req: NextRequest) {
     holidays.map((h) => h.date.toISOString().slice(0, 10))
   );
 
-  // Construir el set de celdas bloqueadas (manual / V / B — no regenerar)
-  const LOCKED_TYPES = new Set(["V", "B", "J"]);
+  // Construir el set de celdas bloqueadas (V / B — no regenerar)
+  // J (Jornada normal) NO se bloquea: puede ser un turno residual de un proyecto
+  // anterior y bloquearía la rotación nocturna. V y B son datos de RRHH explícitos.
+  const LOCKED_TYPES = new Set(["V", "B"]);
   const existingSet = new Set<string>(
     existing
       .filter((a) => LOCKED_TYPES.has(a.shiftType))
