@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { generateMonthSchedule, isWeekend } from "@/lib/schedules/generate";
+import { generateMonthSchedule, PrevMonthTail } from "@/lib/schedules/generate";
 import { getMonthRange } from "@/lib/schedules/business-logic";
 
 // POST /api/schedules/generate
@@ -32,13 +32,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Obtener todos los empleados
+  // Obtener todos los empleados (con shiftPreference)
   const employees = await prisma.employee.findMany({
-    select: { id: true, rotationOrder: true },
+    select: { id: true, rotationOrder: true, shiftPreference: true },
     orderBy: { rotationOrder: "asc" },
   });
 
-  // Obtener asignaciones ya existentes en el mes
+  // Obtener asignaciones ya existentes en el mes (para bloquear manuales/V/B)
   const { start, end } = getMonthRange(year, month);
   const existing = await prisma.shiftAssignment.findMany({
     where: { date: { gte: start, lt: end } },
@@ -54,30 +54,51 @@ export async function POST(req: NextRequest) {
     holidays.map((h) => h.date.toISOString().slice(0, 10))
   );
 
-  // Turnos base: M/T se comparan con el día actual; N con el día siguiente
-  // (lógica centralizada en el filtro de existingSet a continuación)
-
-  // Construir el set de celdas ya ocupadas.
-  // EXCLUIR turnos que deben convertirse por festivo o fin de semana para que se regeneren.
+  // Construir el set de celdas bloqueadas (manual / V / B — no regenerar)
+  const LOCKED_TYPES = new Set(["V", "B", "J"]);
   const existingSet = new Set<string>(
     existing
-      .filter((a) => {
-        const dateStr = a.date.toISOString().slice(0, 10);
-        if (a.shiftType === "N") {
-          // N: se regenera como NF si el día SIGUIENTE es festivo o fin de semana
-          const nextDay = new Date(a.date.getTime() + 86_400_000);
-          if (holidaySet.has(nextDay.toISOString().slice(0, 10)) || isWeekend(nextDay)) return false;
-        } else if (a.shiftType === "M" || a.shiftType === "T") {
-          // M/T: se regenera como MF/TF si el día actual es festivo o fin de semana
-          if (holidaySet.has(dateStr) || isWeekend(a.date)) return false;
-        }
-        return true;
-      })
+      .filter((a) => LOCKED_TYPES.has(a.shiftType))
       .map((a) => `${a.employeeId}|${a.date.toISOString().slice(0, 10)}`)
   );
 
-  // Generar nuevas asignaciones
-  const toCreate = generateMonthSchedule(employees, year, month, existingSet, holidaySet);
+  // Obtener los últimos 7 días del mes anterior para continuidad
+  const prevMonthEnd = new Date(start.getTime() - 1); // last ms of prev month
+  const prevMonthStart = new Date(Date.UTC(prevMonthEnd.getUTCFullYear(), prevMonthEnd.getUTCMonth(), prevMonthEnd.getUTCDate() - 6));
+  const prevTailRaw = await prisma.shiftAssignment.findMany({
+    where: { date: { gte: prevMonthStart, lte: prevMonthEnd } },
+    select: { employeeId: true, date: true, shiftType: true },
+  });
+  const prevMonthTail: PrevMonthTail[] = prevTailRaw.map((a) => ({
+    employeeId: a.employeeId,
+    date: a.date.toISOString().slice(0, 10),
+    shiftType: a.shiftType,
+  }));
+
+  // Orden de rotación nocturna (de Project.nightRotationOrder si existe)
+  let nightRotationIds: string[] | undefined;
+  const projectWithRotation = await prisma.project.findFirst({
+    where: { employees: { some: { id: { in: employees.map((e) => e.id) } } } },
+    select: { nightRotationOrder: true },
+  });
+  if (projectWithRotation?.nightRotationOrder) {
+    try {
+      nightRotationIds = JSON.parse(projectWithRotation.nightRotationOrder) as string[];
+    } catch {
+      // ignore parse error, fall back to rotationOrder
+    }
+  }
+
+  // Generar nuevas asignaciones con el algoritmo Phase 2
+  const toCreate = generateMonthSchedule(
+    employees,
+    year,
+    month,
+    existingSet,
+    holidaySet,
+    prevMonthTail,
+    nightRotationIds
+  );
 
   // Insertar en BD — una sola transacción para máximo rendimiento con SQLite
   await prisma.$transaction(

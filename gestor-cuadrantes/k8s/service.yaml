@@ -1,0 +1,14 @@
+# k8s/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: gestor-cuadrantes
+  namespace: gestor-cuadrantes
+spec:
+  selector:
+    app: gestor-cuadrantes
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: ClusterIP

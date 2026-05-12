@@ -4,6 +4,7 @@ export interface ScheduleEmployee {
   id: string;
   name: string;
   rotationOrder: number;
+  shiftPreference?: string | null;
 }
 
 export interface ScheduleAssignment {

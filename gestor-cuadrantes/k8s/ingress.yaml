@@ -1,0 +1,29 @@
+# k8s/ingress.yaml
+# Requiere un Ingress Controller instalado (nginx-ingress, Traefik, etc.)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gestor-cuadrantes
+  namespace: gestor-cuadrantes
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: gestor-cuadrantes.local
+      # Cambiar por el dominio real (ej: cuadrantes.miempresa.com)
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gestor-cuadrantes
+                port:
+                  number: 80
+  # TLS — descomentar con cert-manager o certificado propio:
+  # tls:
+  #   - hosts:
+  #       - gestor-cuadrantes.local
+  #     secretName: gestor-cuadrantes-tls

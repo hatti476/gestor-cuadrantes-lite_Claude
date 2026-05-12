@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+node_modules
+.next
+prisma/dev.db
+prisma/test.db
+tests/screenshots
+tests/report
+*.log
+Dockerfile*
+docker-compose*
+k8s/
+README.md
+docs/

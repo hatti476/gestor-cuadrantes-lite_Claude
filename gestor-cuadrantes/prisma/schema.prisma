@@ -66,11 +66,12 @@ model User {
 }
 
 model Project {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  region      String?  // CCAA para festivos automáticos (Sprint 9)
-  createdAt   DateTime @default(now())
+  id                 String   @id @default(cuid())
+  name               String
+  description        String?
+  region             String?  // CCAA para festivos automáticos
+  nightRotationOrder String?  // JSON: ["empId1","empId2",...] orden de rotación nocturna; null → rotationOrder de Employee
+  createdAt          DateTime @default(now())
 
   members          ProjectMember[]
   employees        Employee[]
@@ -90,11 +91,12 @@ model ProjectMember {
 }
 
 model Employee {
-  id            String  @id @default(cuid())
-  name          String
-  userId        String  @unique
-  rotationOrder Int
-  projectId     String? // nullable for backward compat during migration
+  id              String  @id @default(cuid())
+  name            String
+  userId          String  @unique
+  rotationOrder   Int
+  shiftPreference String? // "M" | "T" | null — preferencia de turno (puede ignorarse si hay restricciones)
+  projectId       String? // nullable for backward compat during migration
 
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   project          Project?          @relation(fields: [projectId], references: [id])

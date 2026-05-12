@@ -1,0 +1,71 @@
+# k8s/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gestor-cuadrantes
+  namespace: gestor-cuadrantes
+  labels:
+    app: gestor-cuadrantes
+spec:
+  replicas: 1
+  # NOTA: SQLite con ReadWriteOnce no admite más de 1 réplica.
+  # Con PostgreSQL cambiar a replicas: 2+ y eliminar el volumen SQLite.
+  selector:
+    matchLabels:
+      app: gestor-cuadrantes
+  template:
+    metadata:
+      labels:
+        app: gestor-cuadrantes
+    spec:
+      containers:
+        - name: app
+          image: gestor-cuadrantes:latest
+          # En un cluster real: image: tu-registry.io/gestor-cuadrantes:v0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+            - name: NEXTAUTH_URL
+              value: "http://gestor-cuadrantes.local"
+              # Cambiar por la URL real del Ingress
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gestor-cuadrantes-secret
+                  key: DATABASE_URL
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gestor-cuadrantes-secret
+                  key: NEXTAUTH_SECRET
+          volumeMounts:
+            - name: db-storage
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /api/auth/session
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/auth/session
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: db-storage
+          persistentVolumeClaim:
+            claimName: gestor-cuadrantes-db

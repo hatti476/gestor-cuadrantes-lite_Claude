@@ -1,0 +1,14 @@
+# k8s/pvc.yaml — PersistentVolumeClaim para la base de datos SQLite
+# Solo necesario para pruebas con SQLite.
+# En producción usar PostgreSQL (StatefulSet o RDS/CloudSQL).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gestor-cuadrantes-db
+  namespace: gestor-cuadrantes
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
