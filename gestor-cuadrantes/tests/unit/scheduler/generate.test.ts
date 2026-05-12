@@ -294,10 +294,110 @@ describe("generateMonthSchedule — cobertura mínima M/T en laborables", () => 
   });
 });
 
-// ─── Regla: ningún técnico cambia de M a T dentro de la semana ───────────────
+// ─── RF-16: Cobertura mínima garantizada ─────────────────────────────────────
+
+describe("generateMonthSchedule — RF-16 cobertura mínima garantizada", () => {
+  it("laborable con todos pref M garantiza ≥1M y ≥1T cada día laborable", () => {
+    // 4 employees all preferring M — algo must force ≥1T each workday
+    const emps = Array.from({ length: 4 }, (_, i) => ({
+      id: `emp-${i + 1}`,
+      rotationOrder: i,
+      shiftPreference: "M" as const,
+    }));
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], []);
+
+    const byDate = new Map<string, string[]>();
+    for (const a of result) {
+      const dateStr = toDateStr(a.date);
+      if (!byDate.has(dateStr)) byDate.set(dateStr, []);
+      byDate.get(dateStr)!.push(a.shiftType);
+    }
+
+    for (const [dateStr, shifts] of byDate) {
+      const d = fromDateStr(dateStr);
+      if (isWeekend(d)) continue;
+
+      // Only check when enough active employees are available (not in D or N block)
+      const nonRest = shifts.filter((s) => s !== "D" && normalizeShift(s) !== "N").length;
+      if (nonRest < 2) continue;
+
+      const mCount = shifts.filter((s) => normalizeShift(s) === "M").length;
+      const tCount = shifts.filter((s) => normalizeShift(s) === "T").length;
+      expect(mCount).toBeGreaterThanOrEqual(1);
+      expect(tCount).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("fin de semana garantiza ≥1MF y ≥1TF en cada día de fin de semana", () => {
+    // All employees pref M — algo must force ≥1TF on weekends
+    const emps = Array.from({ length: 4 }, (_, i) => ({
+      id: `emp-${i + 1}`,
+      rotationOrder: i,
+      shiftPreference: "M" as const,
+    }));
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], []);
+
+    const byDate = new Map<string, string[]>();
+    for (const a of result) {
+      const dateStr = toDateStr(a.date);
+      if (!byDate.has(dateStr)) byDate.set(dateStr, []);
+      byDate.get(dateStr)!.push(a.shiftType);
+    }
+
+    for (const [dateStr, shifts] of byDate) {
+      const d = fromDateStr(dateStr);
+      if (!isWeekend(d)) continue;
+
+      // Only check when enough active (non-D, non-N) employees are available
+      const nonRest = shifts.filter((s) => s !== "D" && normalizeShift(s) !== "N").length;
+      if (nonRest < 2) continue;
+
+      const mfCount = shifts.filter((s) => s === "MF").length;
+      const tfCount = shifts.filter((s) => s === "TF").length;
+      expect(mfCount).toBeGreaterThanOrEqual(1);
+      expect(tfCount).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("con todos pref T garantiza ≥1M y ≥1T cada día laborable (cuando hay ≥2 disponibles)", () => {
+    const emps = Array.from({ length: 4 }, (_, i) => ({
+      id: `emp-${i + 1}`,
+      rotationOrder: i,
+      shiftPreference: "T" as const,
+    }));
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], []);
+
+    const byDate = new Map<string, string[]>();
+    for (const a of result) {
+      const dateStr = toDateStr(a.date);
+      if (!byDate.has(dateStr)) byDate.set(dateStr, []);
+      byDate.get(dateStr)!.push(a.shiftType);
+    }
+
+    for (const [dateStr, shifts] of byDate) {
+      const d = fromDateStr(dateStr);
+      if (isWeekend(d)) continue;
+
+      // Only check when enough active (non-D, non-N) employees are available
+      const nonRest = shifts.filter((s) => s !== "D" && normalizeShift(s) !== "N").length;
+      if (nonRest < 2) continue;
+
+      const mCount = shifts.filter((s) => normalizeShift(s) === "M").length;
+      const tCount = shifts.filter((s) => normalizeShift(s) === "T").length;
+      expect(mCount).toBeGreaterThanOrEqual(1);
+      expect(tCount).toBeGreaterThanOrEqual(1);
+    }
+  });
+});
+
+// ─── Regla: ningún técnico cambia de M a T dentro de la semana (best effort) ─
 
 describe("generateMonthSchedule — consistencia semanal M/T", () => {
-  it("ningún técnico tiene M y T en la misma semana laborable", () => {
+  it("ningún técnico tiene M y T en la misma semana laborable (con holgura suficiente)", () => {
+    // With 7 employees there is always enough slack that no employee should
+    // need to flip M↔T within the same week for coverage purposes.
+    // RF-16 only forces a flip when cov.M<1 or cov.T<1, which with 7 employees
+    // is resolved by some OTHER employee — not by changing an existing assignment.
     const emps = make7Employees();
     const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], []);
 

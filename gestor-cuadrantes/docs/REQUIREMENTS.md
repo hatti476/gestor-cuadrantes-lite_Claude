@@ -1,6 +1,6 @@
 # Documento de Requisitos — Gestor de Cuadrantes
 
-**Versión**: 1.9.1 (Sprint 9 — correcciones PO)  
+**Versión**: 1.9.2 (Sprint 9 — RF-16 cobertura mínima garantizada)  
 **Última actualización**: 12/05/2026  
 **Estado**: Vivo — se actualiza al cierre de cada sprint
 
@@ -224,8 +224,8 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-14.4 | Nunca coinciden dos técnicos en turno N el mismo día | 9 | ✅ |
 | RF-14.5 | El orden de rotación nocturna se configura mediante `nightRotationOrder` (JSON) en el proyecto; fallback a `rotationOrder` | 9 | ✅ |
 | RF-14.6 | Cada empleado puede tener `shiftPreference` (`"M"`, `"T"` o `null`) que orienta su asignación en días laborables | 9 | ✅ |
-| RF-14.7 | En días laborables, el algoritmo garantiza cobertura mínima de ≥ 2 empleados en M y ≥ 2 en T | 9 | ✅ |
-| RF-14.8 | Ningún empleado cambia entre turno M y T dentro de la misma semana ISO | 9 | ✅ |
+| RF-14.7 | En días laborables, el algoritmo aplica un objetivo soft de ≥ 2 empleados en M y ≥ 2 en T (cuando hay suficientes técnicos disponibles) | 9 | ✅ |
+| RF-14.8 | Ningún empleado cambia entre turno M y T dentro de la misma semana ISO (best effort: puede ocurrir excepcionalmente si RF-16 lo requiere) | 9 | ✅ |
 | RF-14.9 | Ningún empleado supera 5 días consecutivos con el mismo turno de trabajo | 9 | ✅ |
 | RF-14.10 | La generación consulta los últimos 7 días del mes anterior (`prevMonthTail`) para aplicar la regla de máximo consecutivo en el inicio del mes | 9 | ✅ |
 | RF-14.11 | Los turnos V/B/J existentes bloquean la celda; los turnos M/T/N/D de generaciones anteriores se regeneran | 9 | ✅ |
@@ -243,6 +243,18 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-15.5 | Cada proyecto en `/projects` tiene un botón Seleccionar que lo activa y navega a la home | 9-PO | ✅ |
 | RF-15.6 | El proyecto activo se persiste en `localStorage` y se sincroniza entre pestañas mediante un evento `activeProjectChanged` | 9-PO | ✅ |
 | RF-15.7 | La tabla de proyectos muestra la información completa sin truncar; soporta scroll horizontal | 9-PO | ✅ |
+
+---
+
+### RF-16 — Cobertura mínima garantizada por turno
+
+| ID | Descripción | Sprint | Estado |
+|----|-------------|--------|--------|
+| RF-16.1 | Cada día laborable (L-V no festivo) tiene **como mínimo 1 empleado en M y 1 en T** (hard requirement) | 9-PO | ✅ |
+| RF-16.2 | La garantía de cobertura mínima tiene prioridad sobre la consistencia semanal M/T del empleado | 9-PO | ✅ |
+| RF-16.3 | En días laborables se intenta que sean ≥ 2 en M y ≥ 2 en T cuando hay técnicos suficientes disponibles (soft target) | 9-PO | ✅ |
+| RF-16.4 | Cada día de fin de semana o festivo tiene **como mínimo 1 empleado en MF y 1 en TF** cuando hay ≥ 2 técnicos disponibles (no en D ni N) | 9-PO | ✅ |
+| RF-16.5 | Las noches solo tienen 1 técnico por día (ya garantizado por el bloque de rotación nocturna) | 9 | ✅ |
 
 ---
 

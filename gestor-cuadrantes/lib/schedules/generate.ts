@@ -7,9 +7,13 @@
  *  2. Vacaciones / bajas ya introducidas  →  nunca se sobreescriben
  *  3. Bloque de noches del técnico en turno de rotación
  *  4. Continuidad con el mes anterior (≤5 días consecutivos del mismo turno)
- *  5. Preferencia de turno del empleado (shiftPreference)
- *  6. Cobertura mínima (≥2M + ≥2T en días laborables)
- *  7. Equidad de distribución M/T
+ *  5. Cobertura mínima hard (RF-16):
+ *       • ≥1M y ≥1T en cada día laborable (L-V no festivo) — overrides consistencia semanal
+ *       • ≥1MF y ≥1TF en cada día de fin de semana o festivo
+ *       • Soft target ≥2M + ≥2T en laborables (si hay suficientes técnicos disponibles)
+ *  6. Consistencia semanal M/T (una vez satisfecho el mínimo hard)
+ *  7. Preferencia de turno del empleado (shiftPreference)
+ *  8. Equidad de distribución M/T
  *
  * Sin dependencias de BD ni HTTP — completamente testeable con Vitest.
  */
@@ -405,17 +409,19 @@ function _pickWeekendShift(
   wKey: string
 ): string {
   const pref = emp.shiftPreference ?? null;
-
-  // Weekly consistency: if already assigned M or T this week, keep same type
-  const weeklyShift = state.weekShift.get(wKey) ?? null;
   const mOpen = cov.M < 1;
   const tOpen = cov.T < 1;
 
-  if (weeklyShift === "M") return mOpen ? "MF" : "D";
-  if (weeklyShift === "T") return tOpen ? "TF" : "D";
-
+  // Hard minimum: both slots filled → rest
   if (!mOpen && !tOpen) return "D";
 
+  // Weekly consistency with coverage fallback:
+  // if preferred slot already covered, fill the other open slot instead of resting
+  const weeklyShift = state.weekShift.get(wKey) ?? null;
+  if (weeklyShift === "M") return mOpen ? "MF" : "TF";
+  if (weeklyShift === "T") return tOpen ? "TF" : "MF";
+
+  // No weekly constraint — preference then balance
   if (pref === "M" && mOpen) return "MF";
   if (pref === "T" && tOpen) return "TF";
 
@@ -445,22 +451,28 @@ function _pickWorkdayShift(
 ): string {
   const pref = emp.shiftPreference ?? null;
 
-  // Weekly consistency: if already assigned M or T this week, lock to same
+  // Weekly consistency: if already assigned M or T this week, prefer keeping same
   const weeklyShift = state.weekShift.get(wKey) ?? null;
+
+  // Hard minimum (RF-16): ≥1M and ≥1T — override only for employees without weekly commitment
+  const urgentM = cov.M < 1;
+  const urgentT = cov.T < 1;
+  if (urgentM && !urgentT && weeklyShift === null) return "M";
+  if (urgentT && !urgentM && weeklyShift === null) return "T";
+  // If all employees with remaining capacity already have a weeklyShift, force coverage anyway
+  if (urgentM && !urgentT && weeklyShift !== "M") return "M";
+  if (urgentT && !urgentM && weeklyShift !== "T") return "T";
+
+  // Weekly consistency: maintain same shift type all week
   if (weeklyShift === "M") return "M";
   if (weeklyShift === "T") return "T";
 
-  // Coverage priority
+  // Soft target ≥2M and ≥2T
   const needM = cov.M < 2;
   const needT = cov.T < 2;
 
   if (needM && !needT) return "M";
   if (needT && !needM) return "T";
-  if (needM && needT) {
-    if (pref === "M") return "M";
-    if (pref === "T") return "T";
-    return state.mCount <= state.tCount ? "M" : "T";
-  }
 
   // Coverage met — preference then equitable
   if (pref === "M") return "M";

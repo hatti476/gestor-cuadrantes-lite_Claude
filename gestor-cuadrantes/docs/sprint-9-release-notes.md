@@ -2,7 +2,7 @@
 
 **Fecha**: 12/05/2026  
 **Versión**: 0.9  
-**Commits**: `db53644` (algoritmo Fase 2) + correcciones PO  
+**Commits**: `db53644` (algoritmo Fase 2) + `55133a3` (correcciones PO) + correcciones RF-16  
 **Estado**: ✅ Completado
 
 ---
@@ -195,6 +195,58 @@ tests/unit/lib/generate.test.ts                   DELETED — reemplazado por sc
 tests/e2e/sprint-9.spec.ts                        NEW — CP-67..CP-70
 components/employees/employee-table.tsx           FIXED — clave EMPLOYEE duplicada
 ```
+
+---
+
+---
+
+## RF-16 — Cobertura mínima garantizada por turno (post-sprint)
+
+Requisito añadido tras revisión adicional del Product Owner: el cuadrante generado **siempre debe cubrir todos los turnos con al menos una persona**.
+
+### Especificación
+
+| Tipo de día | Turno | Mínimo hard | Objetivo soft |
+|-------------|-------|-------------|---------------|
+| Laborable (L-V no festivo) | M | **1** | 2 |
+| Laborable (L-V no festivo) | T | **1** | 2 |
+| Fin de semana o festivo | MF | **1** | 1 |
+| Fin de semana o festivo | TF | **1** | 1 |
+| Cualquier día | N | 1 | 1 (ya garantizado por bloque) |
+
+> Los mínimos hard solo se garantizan cuando hay ≥ 2 empleados disponibles (no en D ni N) ese día.
+
+### Cambios en el algoritmo (`lib/schedules/generate.ts`)
+
+**`_pickWorkdayShift`** — nueva prioridad por encima de la consistencia semanal:
+
+```
+1. urgentM = cov.M < 1 → si empleado sin weeklyShift, forzar M
+2. urgentT = cov.T < 1 → si empleado sin weeklyShift, forzar T
+3. Si todos tienen weeklyShift y sigue sin cobertura → forzar al que no tiene el turno urgente
+4. Consistencia semanal (weeklyShift) — solo si ya hay ≥1M y ≥1T
+5. Soft target ≥2M y ≥2T
+6. Preferencia del empleado
+7. Equidad de distribución
+```
+
+**`_pickWeekendShift`** — corrección de "retorno D en lugar de cubrir TF":
+
+```
+Antes: weeklyShift="M" → mOpen ? "MF" : "D"   ← BUG: TF queda sin cubrir
+Ahora: weeklyShift="M" → mOpen ? "MF" : "TF"  ← cubre el turno abierto
+       weeklyShift="T" → tOpen ? "TF" : "MF"  ← ídem
+```
+
+### Nuevos tests unitarios (3 tests)
+
+| Test | Qué verifica |
+|------|-------------|
+| `laborable con todos pref M garantiza ≥1M y ≥1T` | Con 4 emps pref M, todo día laborable con ≥2 disponibles tiene ≥1M y ≥1T |
+| `fin de semana garantiza ≥1MF y ≥1TF` | Con 4 emps pref M, todo fin de semana con ≥2 disponibles tiene ≥1MF y ≥1TF |
+| `con todos pref T garantiza ≥1M y ≥1T` | Con 4 emps pref T, todo día laborable con ≥2 disponibles tiene ≥1M y ≥1T |
+
+**Total unit tras RF-16**: 117/117 ✅
 
 ---
 
