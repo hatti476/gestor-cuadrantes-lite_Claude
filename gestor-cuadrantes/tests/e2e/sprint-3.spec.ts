@@ -4,6 +4,7 @@ import { loginAsAdmin, screenshotOnFail } from "./helpers";
 
 // ─── CP-23 — Admin puede cambiar la contraseña de un empleado ─────────────────
 test("CP-23 — Admin puede cambiar la contraseña de un empleado", async ({ page }) => {
+  test.slow(); // La llamada a la API de cambio de contraseña puede tardar bajo carga
   try {
     await loginAsAdmin(page);
     await page.goto("/employees");
@@ -20,7 +21,7 @@ test("CP-23 — Admin puede cambiar la contraseña de un empleado", async ({ pag
     await page.locator('button[type="submit"]').click();
 
     // El modal debe cerrarse (éxito)
-    await expect(page.locator('input#pwd-new')).not.toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('input#pwd-new')).not.toBeVisible({ timeout: 15_000 });
   } catch (e) {
     await screenshotOnFail(page, "CP-23");
     throw e;

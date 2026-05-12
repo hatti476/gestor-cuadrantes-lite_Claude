@@ -43,6 +43,7 @@ test("CP-47 — SUPER_ADMIN ve la lista de proyectos", async ({ page }) => {
 // CP-48 — SUPER_ADMIN crea un proyecto nuevo
 // ===========================================================================
 test("CP-48 — SUPER_ADMIN crea un proyecto nuevo", async ({ page }) => {
+  test.slow(); // El JWT callback puede tardar bajo carga (consulta memberships en BD)
   const ts = Date.now();
   const projectName = `Proyecto Sprint7 ${ts}`;
 

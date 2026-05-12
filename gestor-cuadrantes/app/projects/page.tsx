@@ -263,6 +263,11 @@ export default function ProjectsPage() {
   const { showToast } = useToast();
 
   const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+  // PROJECT_ADMIN en al menos un proyecto también puede acceder a /projects
+  const isProjectAdmin = session?.user?.projectMemberships?.some(
+    (m) => m.role === "PROJECT_ADMIN"
+  ) ?? false;
+  const canAccess = isSuperAdmin || isProjectAdmin;
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -274,11 +279,11 @@ export default function ProjectsPage() {
   // Panel de miembros
   const [memberProject, setMemberProject] = useState<ProjectDetail | null>(null);
 
-  // Redirigir si no es SUPER_ADMIN
+  // Redirigir si no tiene acceso de gestión
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
-    if (status === "authenticated" && !isSuperAdmin) router.push("/");
-  }, [status, isSuperAdmin, router]);
+    if (status === "authenticated" && !canAccess) router.push("/");
+  }, [status, canAccess, router]);
 
   const loadProjects = useCallback(async () => {
     setLoading(true);

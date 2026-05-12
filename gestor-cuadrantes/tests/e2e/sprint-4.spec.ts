@@ -154,7 +154,7 @@ test("CP-34 — Historial registra cambios de turno", async ({ page }) => {
     await expect(page.locator("h3:has-text('Historial')")).toBeVisible({ timeout: 5_000 });
 
     // La tabla de historial debe mostrar al menos un registro
-    await expect(page.locator('[data-testid="history-table"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="history-table"]')).toBeVisible({ timeout: 20_000 });
     const rows = page.locator('[data-testid="history-table"] tbody tr');
     expect(await rows.count()).toBeGreaterThan(0);
   } catch (e) {

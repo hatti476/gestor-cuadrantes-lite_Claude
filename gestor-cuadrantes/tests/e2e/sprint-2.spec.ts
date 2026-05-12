@@ -170,7 +170,8 @@ test("CP-20 — Empleado no puede acceder a /employees", async ({ page }) => {
   try {
     await loginAs(page, TECH.email, TECH.password);
     await page.goto(ROUTES.employees);
-    await page.waitForTimeout(2_000);
+    // Esperar el redirect cliente-side (router.replace("/")) hasta 8s
+    await page.waitForURL((u) => !u.toString().includes("/employees"), { timeout: 8_000 }).catch(() => {});
 
     // Debe redirigir a / o mostrar acceso denegado
     const url = page.url();
