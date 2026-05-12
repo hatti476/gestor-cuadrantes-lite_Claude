@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { ShiftCell } from "@/components/schedule/shift-cell";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleEmployee, ScheduleAssignment } from "@/lib/schedules/types";
-import { countShifts } from "@/lib/schedules/business-logic";
+
 
 interface ScheduleGridProps {
   year: number;
@@ -54,8 +54,6 @@ export function ScheduleGrid({
     index[a.employeeId][dateStr] = { id: a.id, shiftType: a.shiftType as ShiftType };
   });
 
-  const shiftOrder: ShiftType[] = ["M", "T", "N", "MF", "TF", "NF", "J", "D", "V", "B"];
-
   return (
     <>
       <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
@@ -99,17 +97,11 @@ export function ScheduleGrid({
                 </th>
               );
             })}
-            <th className="px-2 py-2 text-center font-semibold text-gray-600 border-b border-gray-200 bg-gray-50 min-w-[180px]">
-              Contadores
-            </th>
+
           </tr>
         </thead>
         <tbody>
           {employees.map((emp, rowIndex) => {
-            const empShifts = assignments
-              .filter((a) => a.employeeId === emp.id)
-              .map((a) => a.shiftType);
-            const counters = countShifts(empShifts);
             const rowBg = rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/50";
 
             return (
@@ -139,26 +131,6 @@ export function ScheduleGrid({
                     </td>
                   );
                 })}
-
-                {/* Fila de contadores */}
-                <td className="px-2 py-1 border-b border-gray-200">
-                  <div className="flex flex-wrap gap-1">
-                    {shiftOrder
-                      .filter((s) => (counters[s] ?? 0) > 0)
-                      .map((s) => (
-                        <span
-                          key={s}
-                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold"
-                          style={{
-                            backgroundColor: SHIFT_COLORS[s].color,
-                            color: SHIFT_COLORS[s].textColor,
-                          }}
-                        >
-                          {s}:{counters[s]}
-                        </span>
-                      ))}
-                  </div>
-                </td>
               </tr>
             );
           })}

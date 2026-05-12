@@ -12,6 +12,8 @@ export interface EmployeeRecord {
   id: string;
   name: string;
   rotationOrder: number;
+  shiftPreference: string | null;
+  active: boolean;
   user: { email: string; role: string };
   project: { id: string; name: string } | null;
 }
@@ -37,6 +39,7 @@ export default function EmployeesPage() {
   const [historyEmployee, setHistoryEmployee] = useState<EmployeeRecord | null>(null);
   const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [confirmDeactivate, setConfirmDeactivate] = useState<EmployeeRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Redirigir si no es ADMIN
@@ -50,7 +53,7 @@ export default function EmployeesPage() {
   const loadEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/employees");
+      const res = await fetch("/api/employees?includeInactive=true");
       if (!res.ok) throw new Error("Error cargando empleados");
       setEmployees(await res.json());
     } catch (err) {
@@ -83,7 +86,7 @@ export default function EmployeesPage() {
     await loadEmployees();
   }
 
-  async function handleUpdate(id: string, data: { name?: string; role?: string }) {
+  async function handleUpdate(id: string, data: { name?: string; role?: string; shiftPreference?: string | null }) {
     const res = await fetch(`/api/employees/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -94,6 +97,29 @@ export default function EmployeesPage() {
       throw new Error(body.error ?? "Error actualizando empleado");
     }
     setEditingEmployee(null);
+    await loadEmployees();
+  }
+
+  async function handleDeactivate(emp: EmployeeRecord) {
+    const res = await fetch(`/api/employees/${emp.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.error ?? "Error desactivando empleado");
+    }
+    setConfirmDeactivate(null);
+    await loadEmployees();
+  }
+
+  async function handleReactivate(id: string) {
+    const res = await fetch(`/api/employees/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: true }),
+    });
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body.error ?? "Error reactivando empleado");
+    }
     await loadEmployees();
   }
 
@@ -141,6 +167,8 @@ export default function EmployeesPage() {
               onEdit={(emp) => { setEditingEmployee(emp); setShowForm(false); }}
               onChangePassword={(emp) => setPasswordEmployee(emp)}
               onHistory={openHistory}
+              onDeactivate={(emp) => setConfirmDeactivate(emp)}
+              onReactivate={(id) => handleReactivate(id)}
             />
           </div>
         )}
@@ -162,6 +190,35 @@ export default function EmployeesPage() {
             onSubmit={(data) => handleUpdate(editingEmployee.id, data)}
             onClose={() => setEditingEmployee(null)}
           />
+        )}
+
+        {/* Modal confirmación desactivar */}
+        {confirmDeactivate && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl shadow-xl p-6 w-96 flex flex-col gap-4">
+              <h3 className="font-semibold text-gray-800">Desactivar empleado</h3>
+              <p className="text-sm text-gray-600">
+                ¿Seguro que quieres desactivar a <strong>{confirmDeactivate.name}</strong>?
+                <br />Sus datos y historial se conservarán.
+                <br />Podrá reactivarse si es necesario.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setConfirmDeactivate(null)}
+                  className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  data-testid="btn-confirm-deactivate"
+                  onClick={() => handleDeactivate(confirmDeactivate)}
+                  className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700"
+                >
+                  Desactivar
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Modal de cambio de contraseña */}

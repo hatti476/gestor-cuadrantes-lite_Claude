@@ -4,7 +4,7 @@ import { useState } from "react";
 import { type EmployeeRecord } from "@/app/employees/page";
 
 type CreateData = { name: string; email: string; password: string; role: string };
-type EditData = { name?: string; role?: string };
+type EditData = { name?: string; role?: string; shiftPreference?: string | null };
 
 interface EmployeeFormProps {
   mode: "create";
@@ -27,6 +27,9 @@ export function EmployeeForm(props: EmployeeFormProps | EmployeeFormEditProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState(mode === "edit" ? props.initial.user.role : "USER");
+  const [shiftPreference, setShiftPreference] = useState<string>(
+    mode === "edit" ? (props.initial.shiftPreference ?? "ANY") : "ANY"
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +41,8 @@ export function EmployeeForm(props: EmployeeFormProps | EmployeeFormEditProps) {
       if (mode === "create") {
         await (props as EmployeeFormProps).onSubmit({ name, email, password, role });
       } else {
-        await (props as EmployeeFormEditProps).onSubmit({ name, role });
+        const prefValue = shiftPreference === "ANY" ? null : shiftPreference;
+        await (props as EmployeeFormEditProps).onSubmit({ name, role, shiftPreference: prefValue });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
@@ -130,6 +134,24 @@ export function EmployeeForm(props: EmployeeFormProps | EmployeeFormEditProps) {
               <option value="SUPER_ADMIN">Administrador (SUPER_ADMIN)</option>
             </select>
           </div>
+
+          {/* Preferencia de turno — solo en edición */}
+          {mode === "edit" && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-600" htmlFor="emp-pref">Preferencia de turno</label>
+              <select
+                id="emp-pref"
+                data-testid="select-shift-preference"
+                value={shiftPreference}
+                onChange={(e) => setShiftPreference(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+              >
+                <option value="ANY">Sin preferencia</option>
+                <option value="M">Solo mañanas</option>
+                <option value="T">Solo tardes</option>
+              </select>
+            </div>
+          )}
 
           <div className="flex gap-2 pt-1">
             <button

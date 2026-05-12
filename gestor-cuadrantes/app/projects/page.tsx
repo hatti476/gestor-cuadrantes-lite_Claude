@@ -257,6 +257,173 @@ function MembersPanel({
 }
 
 // ---------------------------------------------------------------------------
+// Panel de orden de rotación nocturna
+// ---------------------------------------------------------------------------
+interface EmployeeBasic {
+  id: string;
+  name: string;
+  rotationOrder: number;
+}
+
+function NightRotationPanel({
+  project,
+  onClose,
+  onSaved,
+}: {
+  project: ProjectDetail;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [employees, setEmployees] = useState<EmployeeBasic[]>([]);
+  const [order, setOrder] = useState<EmployeeBasic[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    fetch(`/api/employees?projectId=${project.id}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((emps: EmployeeBasic[]) => {
+        setEmployees(emps);
+        // Aplicar nightRotationOrder existente si hay
+        if (project.nightRotationOrder) {
+          try {
+            const ids: string[] = JSON.parse(project.nightRotationOrder);
+            const sorted: EmployeeBasic[] = [];
+            for (const id of ids) {
+              const e = emps.find((x) => x.id === id);
+              if (e) sorted.push(e);
+            }
+            // Añadir al final los que no estaban en el orden guardado
+            for (const e of emps) {
+              if (!sorted.some((s) => s.id === e.id)) sorted.push(e);
+            }
+            setOrder(sorted);
+          } catch {
+            setOrder([...emps].sort((a, b) => a.rotationOrder - b.rotationOrder));
+          }
+        } else {
+          setOrder([...emps].sort((a, b) => a.rotationOrder - b.rotationOrder));
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [project.id, project.nightRotationOrder]);
+
+  function move(idx: number, dir: -1 | 1) {
+    const newOrder = [...order];
+    const target = idx + dir;
+    if (target < 0 || target >= newOrder.length) return;
+    [newOrder[idx], newOrder[target]] = [newOrder[target], newOrder[idx]];
+    setOrder(newOrder);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const res = await fetch(`/api/projects/${project.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nightRotationOrder: JSON.stringify(order.map((e) => e.id)),
+      }),
+    });
+    if (res.ok) {
+      showToast("Orden de rotación guardado", "success");
+      onSaved();
+      onClose();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.error ?? "Error al guardar", "error");
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div
+      data-testid="night-rotation-panel"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">
+            Rotación nocturna — {project.name}
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+            aria-label="Cerrar"
+          >
+            ×
+          </button>
+        </div>
+
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+          ⚠️ Cambiar el orden afectará a la generación de cuadrantes futuros.
+        </p>
+
+        {loading ? (
+          <p className="text-sm text-gray-400 py-4 text-center">Cargando empleados...</p>
+        ) : order.length === 0 ? (
+          <p className="text-sm text-gray-400 py-4 text-center">Sin empleados activos en este proyecto</p>
+        ) : (
+          <ol className="divide-y divide-gray-100 mb-4" data-testid="rotation-order-list">
+            {order.map((emp, idx) => (
+              <li
+                key={emp.id}
+                data-testid={`rotation-item-${emp.id}`}
+                className="flex items-center justify-between py-2"
+              >
+                <span className="text-sm text-gray-700">
+                  <span className="text-gray-400 mr-2 font-mono">{idx + 1}.</span>
+                  {emp.name}
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    data-testid={`btn-rotation-up-${emp.id}`}
+                    onClick={() => move(idx, -1)}
+                    disabled={idx === 0}
+                    className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-25 rounded hover:bg-gray-100"
+                    title="Subir"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    data-testid={`btn-rotation-down-${emp.id}`}
+                    onClick={() => move(idx, 1)}
+                    disabled={idx === order.length - 1}
+                    className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-25 rounded hover:bg-gray-100"
+                    title="Bajar"
+                  >
+                    ↓
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        <div className="flex gap-2 justify-end border-t border-gray-100 pt-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
+          <button
+            data-testid="btn-save-rotation-order"
+            onClick={handleSave}
+            disabled={saving || loading || order.length === 0}
+            className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {saving ? "Guardando..." : "Guardar orden"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Página principal /projects
 // ---------------------------------------------------------------------------
 export default function ProjectsPage() {
@@ -280,6 +447,9 @@ export default function ProjectsPage() {
 
   // Panel de miembros
   const [memberProject, setMemberProject] = useState<ProjectDetail | null>(null);
+
+  // Panel de rotación nocturna
+  const [rotationProject, setRotationProject] = useState<ProjectDetail | null>(null);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
@@ -367,6 +537,16 @@ export default function ProjectsPage() {
       setMemberProject(detail);
     } else {
       showToast("Error al cargar miembros", "error");
+    }
+  }
+
+  async function handleOpenRotation(project: Project) {
+    const res = await fetch(`/api/projects/${project.id}`);
+    if (res.ok) {
+      const detail: ProjectDetail = await res.json();
+      setRotationProject(detail);
+    } else {
+      showToast("Error al cargar proyecto", "error");
     }
   }
 
@@ -466,6 +646,13 @@ export default function ProjectsPage() {
                           >
                             Miembros
                           </button>
+                          <button
+                            data-testid="btn-rotation-order"
+                            onClick={() => handleOpenRotation(p)}
+                            className="text-xs px-2 py-1 rounded border border-violet-200 text-violet-700 hover:bg-violet-50"
+                          >
+                            Rotación
+                          </button>
                           {isSuperAdmin && (
                             <>
                               <button
@@ -500,6 +687,15 @@ export default function ProjectsPage() {
         <MembersPanel
           project={memberProject}
           onClose={() => setMemberProject(null)}
+        />
+      )}
+
+      {/* Panel de rotación nocturna */}
+      {rotationProject && (
+        <NightRotationPanel
+          project={rotationProject}
+          onClose={() => setRotationProject(null)}
+          onSaved={loadProjects}
         />
       )}
     </div>

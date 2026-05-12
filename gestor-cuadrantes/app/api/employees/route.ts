@@ -19,18 +19,20 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = req.nextUrl;
   const projectId = searchParams.get("projectId") || null;
+  // includeInactive=true solo para la página de gestión de empleados (SUPER_ADMIN)
+  const includeInactive = isSuperAdmin(session) && searchParams.get("includeInactive") === "true";
 
   if (projectId && !canViewProject(session, projectId)) {
     return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 
-  let where: { projectId?: string | null } = {};
+  let where: { projectId?: string | null; active?: boolean } = includeInactive ? {} : { active: true };
   if (projectId) {
-    where = { projectId };
+    where = includeInactive ? { projectId } : { projectId, active: true };
   } else if (!isSuperAdmin(session)) {
     const memberProjectIds = session.user.projectMemberships.map((m) => m.projectId);
     if (memberProjectIds.length > 0) {
-      where = { projectId: memberProjectIds[0] };
+      where = { projectId: memberProjectIds[0], active: true };
     }
   }
 

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { validateScheduleBody, getMonthRange } from "@/lib/schedules/business-logic";
-import { canViewProject, isSuperAdmin } from "@/lib/auth/permissions";
+import { canViewProject, isSuperAdmin, isProjectAdmin } from "@/lib/auth/permissions";
 
 // ---------------------------------------------------------------------------
 // GET /api/schedules?year=YYYY&month=M[&projectId=xxx]
@@ -68,15 +68,12 @@ export async function GET(req: NextRequest) {
 // ---------------------------------------------------------------------------
 // POST /api/schedules
 // Body: { employeeId: string, date: string (ISO), shiftType: string }
-// Solo ADMIN. Crea o actualiza (upsert) la asignación.
+// SUPER_ADMIN o PROJECT_ADMIN del proyecto del empleado.
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-  if (session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 
   const body = await req.json().catch(() => null);
@@ -86,6 +83,18 @@ export async function POST(req: NextRequest) {
   }
 
   const { employeeId, date: parsedDate, shiftType } = validation;
+
+  // Verificar que tiene permisos de edición para este empleado
+  // SUPER_ADMIN puede editar cualquiera; PROJECT_ADMIN solo los de su proyecto
+  if (!isSuperAdmin(session)) {
+    const emp = await prisma.employee.findUnique({
+      where: { id: employeeId! },
+      select: { projectId: true },
+    });
+    if (!emp?.projectId || !isProjectAdmin(session, emp.projectId)) {
+      return NextResponse.json({ error: "Prohibido" }, { status: 403 });
+    }
+  }
 
   // Buscar turno previo para el log
   const previous = await prisma.shiftAssignment.findUnique({
@@ -122,13 +131,25 @@ export async function DELETE(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
-  if (session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
-  }
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) {
     return NextResponse.json({ error: "Parámetro id requerido" }, { status: 400 });
+  }
+
+  // PROJECT_ADMIN puede eliminar turnos de su proyecto
+  if (!isSuperAdmin(session)) {
+    const assignment = await prisma.shiftAssignment.findUnique({
+      where: { id },
+      include: { employee: { select: { projectId: true } } },
+    });
+    if (!assignment) {
+      return NextResponse.json({ error: "Asignación no encontrada" }, { status: 404 });
+    }
+    const projectId = assignment.employee.projectId;
+    if (!projectId || !isProjectAdmin(session, projectId)) {
+      return NextResponse.json({ error: "Prohibido" }, { status: 403 });
+    }
   }
 
   try {

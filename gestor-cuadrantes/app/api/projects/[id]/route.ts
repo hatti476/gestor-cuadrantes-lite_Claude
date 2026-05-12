@@ -40,7 +40,10 @@ export async function GET(
     return NextResponse.json({ error: "Proyecto no encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json(project);
+  return NextResponse.json({
+    ...project,
+    nightRotationOrder: (project as unknown as { nightRotationOrder?: string | null }).nightRotationOrder ?? null,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +70,12 @@ export async function PUT(
     return NextResponse.json({ error: "Body requerido" }, { status: 400 });
   }
 
-  const data: { name?: string; description?: string | null; region?: string | null } = {};
+  const data: {
+    name?: string;
+    description?: string | null;
+    region?: string | null;
+    nightRotationOrder?: string | null;
+  } = {};
   if (typeof body.name === "string") {
     if (body.name.trim().length < 2) {
       return NextResponse.json(
@@ -79,6 +87,21 @@ export async function PUT(
   }
   if ("description" in body) data.description = body.description?.trim() || null;
   if ("region" in body) data.region = body.region?.trim() || null;
+  if ("nightRotationOrder" in body) {
+    if (body.nightRotationOrder === null || body.nightRotationOrder === "") {
+      data.nightRotationOrder = null;
+    } else if (typeof body.nightRotationOrder === "string") {
+      try {
+        const parsed = JSON.parse(body.nightRotationOrder);
+        if (!Array.isArray(parsed) || parsed.some((x) => typeof x !== "string")) {
+          return NextResponse.json({ error: "nightRotationOrder debe ser un array de IDs" }, { status: 400 });
+        }
+        data.nightRotationOrder = body.nightRotationOrder;
+      } catch {
+        return NextResponse.json({ error: "nightRotationOrder JSON inválido" }, { status: 400 });
+      }
+    }
+  }
 
   const project = await prisma.project.update({ where: { id }, data });
   return NextResponse.json(project);

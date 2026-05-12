@@ -25,4 +25,5 @@ export interface ProjectMember {
 
 export interface ProjectDetail extends Project {
   members: ProjectMember[];
+  nightRotationOrder?: string | null;
 }

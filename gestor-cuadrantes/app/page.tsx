@@ -8,6 +8,7 @@ import { Header } from "@/components/layout/header";
 import { ShiftEditor } from "@/components/schedule/shift-editor";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleAssignment, ScheduleEmployee } from "@/lib/schedules/types";
+import { countShifts } from "@/lib/schedules/business-logic";
 import { useToast } from "@/components/ui/toast-provider";
 
 const MONTH_NAMES = [
@@ -15,9 +16,82 @@ const MONTH_NAMES = [
   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
 ];
 
+const COUNTER_SHIFTS: ShiftType[] = ["M", "T", "N", "MF", "TF", "NF", "J", "D", "V", "B"];
+
+function CountersTable({
+  employees,
+  assignments,
+}: {
+  employees: ScheduleEmployee[];
+  assignments: ScheduleAssignment[];
+}) {
+  return (
+    <div
+      className="overflow-x-auto mt-3 rounded-lg border border-gray-200 shadow-sm"
+      data-testid="counters-table"
+    >
+      <table className="border-collapse text-xs min-w-max w-full">
+        <thead>
+          <tr className="bg-gray-50">
+            <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-b border-r border-gray-200 min-w-[140px]">
+              Empleado
+            </th>
+            {COUNTER_SHIFTS.map((s) => (
+              <th
+                key={s}
+                className="w-10 py-2 text-center border-b border-r border-gray-200 font-semibold"
+                style={{
+                  backgroundColor: SHIFT_COLORS[s].color,
+                  color: SHIFT_COLORS[s].textColor,
+                }}
+              >
+                {s}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {employees.map((emp, rowIndex) => {
+            const empShifts = assignments
+              .filter((a) => a.employeeId === emp.id)
+              .map((a) => a.shiftType);
+            const counters = countShifts(empShifts);
+            const rowBg = rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/50";
+            return (
+              <tr key={emp.id} className={rowBg}>
+                <td className={`sticky left-0 z-10 ${rowBg} px-3 py-1 font-medium text-gray-700 border-r border-b border-gray-200 whitespace-nowrap`}>
+                  {emp.name}
+                </td>
+                {COUNTER_SHIFTS.map((s) => {
+                  const count = counters[s] ?? 0;
+                  return (
+                    <td
+                      key={s}
+                      className="w-10 py-1 text-center border-r border-b border-gray-200 font-mono tabular-nums"
+                      style={{ color: count === 0 ? "#9E9E9E" : undefined }}
+                      data-testid={`counter-${emp.id}-${s}`}
+                    >
+                      {count}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "SUPER_ADMIN";
+  // PROJECT_ADMIN también puede editar celdas de su proyecto
+  const canEdit = isAdmin || (session?.user?.projectMemberships ?? []).some(
+    (m: { projectId: string; role: string }) =>
+      m.projectId === activeProjectId && m.role === "PROJECT_ADMIN"
+  );
   const router = useRouter();
   const { showToast } = useToast();
 
@@ -261,7 +335,7 @@ export default function HomePage() {
           >
             ›
           </button>
-          {isAdmin && (
+          {canEdit && (
             <span className="ml-2 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1 print:hidden">
               Modo edición — clic en celda para asignar turno
             </span>
@@ -312,14 +386,19 @@ export default function HomePage() {
             <p className="text-sm">Sin turnos asignados este mes</p>
           </div>
         ) : (
-          <ScheduleGrid
-            year={year}
-            month={month}
-            employees={employees}
-            assignments={assignments}
-            holidayDates={holidayDates}
-            onCellClick={isAdmin ? handleCellClick : undefined}
-          />
+          <>
+            <ScheduleGrid
+              year={year}
+              month={month}
+              employees={employees}
+              assignments={assignments}
+              holidayDates={holidayDates}
+              onCellClick={canEdit ? handleCellClick : undefined}
+            />
+
+            {/* Tabla de contadores debajo del grid */}
+            <CountersTable employees={employees} assignments={assignments} />
+          </>
         )}
 
         {/* Leyenda */}

@@ -97,6 +97,7 @@ model Employee {
   rotationOrder   Int
   shiftPreference String? // "M" | "T" | null — preferencia de turno (puede ignorarse si hay restricciones)
   projectId       String? // nullable for backward compat during migration
+  active          Boolean @default(true) // soft-delete: false = desactivado (datos e historial conservados)
 
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   project          Project?          @relation(fields: [projectId], references: [id])
