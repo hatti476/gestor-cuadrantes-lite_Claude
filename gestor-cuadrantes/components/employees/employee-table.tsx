@@ -32,6 +32,7 @@ export function EmployeeTable({ employees, onEdit, onChangePassword, onHistory }
             <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200">Nombre</th>
             <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200">Email</th>
             <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200">Rol</th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200">Proyecto</th>
             <th className="px-4 py-3 border-b border-gray-200" />
           </tr>
         </thead>
@@ -50,6 +51,16 @@ export function EmployeeTable({ employees, onEdit, onChangePassword, onHistory }
                   <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge.classes}`}>
                     {badge.label}
                   </span>
+                </td>
+                <td className="px-4 py-3 border-b border-gray-100 text-gray-600 text-sm">
+                  {emp.project ? (
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-indigo-400 inline-block" />
+                      {emp.project.name}
+                    </span>
+                  ) : (
+                    <span className="text-gray-300 text-xs">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 border-b border-gray-100 text-right">
                   <div className="flex justify-end gap-3">

@@ -217,36 +217,38 @@ function MembersPanel({
         </div>
 
         {/* Añadir miembro */}
-        <div className="flex gap-2">
-          <select
-            data-testid="member-user-select"
-            value={selectedUserId}
-            onChange={(e) => setSelectedUserId(e.target.value)}
-            className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none"
-          >
-            <option value="">Seleccionar usuario...</option>
-            {nonMembers.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.email}
-              </option>
-            ))}
-          </select>
-          <select
-            data-testid="member-role-select"
-            value={selectedRole}
-            onChange={(e) => setSelectedRole(e.target.value as "PROJECT_ADMIN" | "EMPLOYEE")}
-            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none"
-          >
-            <option value="EMPLOYEE">EMPLOYEE</option>
-            <option value="PROJECT_ADMIN">PROJECT_ADMIN</option>
-          </select>
+        <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
+          <div className="flex gap-2">
+            <select
+              data-testid="member-user-select"
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none"
+            >
+              <option value="">Seleccionar usuario...</option>
+              {nonMembers.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.email}
+                </option>
+              ))}
+            </select>
+            <select
+              data-testid="member-role-select"
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value as "PROJECT_ADMIN" | "EMPLOYEE")}
+              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none"
+            >
+              <option value="EMPLOYEE">EMPLOYEE</option>
+              <option value="PROJECT_ADMIN">PROJECT_ADMIN</option>
+            </select>
+          </div>
           <button
             data-testid="btn-add-member"
             onClick={handleAdd}
             disabled={!selectedUserId || adding}
-            className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            className="w-full px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
           >
-            {adding ? "..." : "Añadir"}
+            {adding ? "Añadiendo..." : "Añadir miembro"}
           </button>
         </div>
       </div>

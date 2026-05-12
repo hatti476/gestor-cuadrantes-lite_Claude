@@ -13,6 +13,7 @@ export interface EmployeeRecord {
   name: string;
   rotationOrder: number;
   user: { email: string; role: string };
+  project: { id: string; name: string } | null;
 }
 
 interface HistoryLog {
