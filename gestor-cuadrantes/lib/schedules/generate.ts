@@ -136,13 +136,20 @@ export function nightBlockDays(block: NightBlock): Map<string, string> {
  */
 export const NIGHT_EPOCH_FRIDAY = new Date("2026-01-02T00:00:00.000Z");
 export const BLOCK_DAYS = 12; // 2 + 7 + 3
+/** Days of actual night shifts per block (and offset between consecutive employees) */
+export const NIGHT_DAYS = 7;
 
 /**
  * Given a year/month and an ordered list of employee IDs (night rotation),
  * returns all NightBlocks whose days overlap with that month.
  *
  * Blocks cycle: emp[0] block 0, emp[1] block 1, …, emp[n-1] block n-1,
- * emp[0] block n, emp[1] block n+1, …  — each block offset by BLOCK_DAYS.
+ * emp[0] block n, …  — each employee's nights start NIGHT_DAYS (7) after the
+ * previous employee's nights started, guaranteeing continuous night coverage
+ * with no gaps. Pre/post-rest days (D) overlap with adjacent employees' blocks
+ * but that is correct — the resting employee is not on night shift.
+ *
+ * With N employees, the cycle length is N × 7 days.
  */
 export function computeNightBlocks(
   year: number,
@@ -160,9 +167,9 @@ export function computeNightBlocks(
     (monthStart.getTime() - NIGHT_EPOCH_FRIDAY.getTime()) / msPerDay
   );
 
-  // Each round (all employees once) = employeeIds.length * BLOCK_DAYS days
-  // Find the round that starts just before the month
-  const roundLength = employeeIds.length * BLOCK_DAYS;
+  // Each employee's night block starts NIGHT_DAYS after the previous employee,
+  // so consecutive blocks are adjacent with no gap in night coverage.
+  const roundLength = employeeIds.length * NIGHT_DAYS;
   const roundStart = Math.floor((daysToMonthStart - BLOCK_DAYS) / roundLength) * roundLength;
 
   const blocks: NightBlock[] = [];
@@ -172,8 +179,8 @@ export function computeNightBlocks(
 
   for (let r = 0; r < searchRounds; r++) {
     for (let empIdx = 0; empIdx < employeeIds.length; empIdx++) {
-      const blockIndex = (roundStart / BLOCK_DAYS + r * employeeIds.length + empIdx);
-      const startFriday = addDays(NIGHT_EPOCH_FRIDAY, blockIndex * BLOCK_DAYS);
+      const daysFromEpoch = roundStart + r * roundLength + empIdx * NIGHT_DAYS;
+      const startFriday = addDays(NIGHT_EPOCH_FRIDAY, daysFromEpoch);
 
       // Block spans from startFriday-2 to startFriday+9
       const blockFirst = addDays(startFriday, -2);

@@ -17,6 +17,7 @@ import {
   fromDateStr,
   NIGHT_EPOCH_FRIDAY,
   BLOCK_DAYS,
+  NIGHT_DAYS,
   type ScheduleEmployee,
   type PrevMonthTail,
 } from "@/lib/schedules/generate";
@@ -66,7 +67,7 @@ describe("nightBlockDays — estructura 2D+7N+3D", () => {
 
   it("el bloque de época (referencia) comienza en viernes", () => {
     // NIGHT_EPOCH_FRIDAY es 2026-01-02 (viernes).
-    // Con ciclo de 84 días (7 emps × 12 días), los bloques del primer empleado
+    // Con ciclo de 49 días (7 emps × 7 días), los bloques del primer empleado
     // siempre caen en el mismo día de la semana que el epoch (viernes).
     const ids = make7Employees().map((e) => e.id);
     // El primer bloque del primer empleado en cualquier mes debe ser viernes
@@ -75,7 +76,7 @@ describe("nightBlockDays — estructura 2D+7N+3D", () => {
     expect(blocks.length).toBeGreaterThan(0);
     for (const block of blocks) {
       // Los bloques del empleado 0 siempre caen en el mismo dow que el epoch (viernes)
-      // porque el ciclo = 7 × 12 = 84 días = 12 semanas exactas
+      // porque el ciclo = 7 × NIGHT_DAYS = 7 × 7 = 49 días = 7 semanas exactas
       expect(block.startFriday.getUTCDay()).toBe(5);
     }
   });
@@ -86,14 +87,14 @@ describe("nightBlockDays — estructura 2D+7N+3D", () => {
 describe("computeNightBlocks — asignación cíclica", () => {
   it("cada técnico tiene como máximo 1 bloque de noches por ciclo", () => {
     const ids = ["a", "b", "c", "d", "e", "f", "g"];
-    // Un ciclo completo = 7 empleados × 12 días = 84 días
+    // Un ciclo completo = 7 empleados × 7 días = 49 días (7 semanas)
     // En un mes de 31 días no pueden solaparse bloques del mismo empleado
     const blocks = computeNightBlocks(2026, 3, ids); // Marzo
     const countById = new Map<string, number>();
     for (const b of blocks) {
       countById.set(b.employeeId, (countById.get(b.employeeId) ?? 0) + 1);
     }
-    // Ningún empleado tiene más de 1 bloque activo en un mes (con 7 emps × 12d = 84d ciclo)
+    // Ningún empleado tiene más de 1 bloque activo en un mes (con 7 emps × 7d = 49d ciclo)
     for (const [, count] of countById) {
       expect(count).toBeLessThanOrEqual(1);
     }
@@ -259,6 +260,28 @@ describe("generateMonthSchedule — máximo 1 técnico en noche por día", () =>
     }
     for (const [, count] of nightsByDate) {
       expect(count).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("todos los días del mes tienen exactamente 1 turno N (cobertura nocturna continua)", () => {
+    // Con 7 empleados y offset de 7 días, no hay huecos nocturnos.
+    // Cada día debe tener exactamente 1 empleado en N o NF.
+    const emps = make7Employees();
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], emps.map((e) => e.id));
+
+    const nightsByDate = new Map<string, number>();
+    for (const a of result) {
+      const base = normalizeShift(a.shiftType);
+      if (base === "N") {
+        const dateStr = toDateStr(a.date);
+        nightsByDate.set(dateStr, (nightsByDate.get(dateStr) ?? 0) + 1);
+      }
+    }
+
+    // Every day in June must have exactly 1 N/NF
+    for (let d = 1; d <= 30; d++) {
+      const dateStr = `2026-06-${String(d).padStart(2, "0")}`;
+      expect(nightsByDate.get(dateStr) ?? 0).toBe(1);
     }
   });
 });
