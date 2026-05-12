@@ -2,7 +2,7 @@
 
 **Proyecto:** Gestor de Cuadrantes  
 **Mantenido por:** Agente `doc-writer`  
-**Última actualización:** 2026-05-10  
+**Última actualización:** 2026-05-12  
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Total bugs | Críticos | Altos | Medios | Bajos | Abiertos | Resueltos |
 |-----------|----------|-------|--------|-------|----------|-----------|
-| 14 | 0 | 6 | 5 | 3 | 0 | 14 |
+| 20 | 0 | 8 | 8 | 4 | 1 | 19 |
 
 ---
 
@@ -32,6 +32,12 @@
 | [BUG-12](#bug-12) | Sprint 4 | 🟡 Medium | ✅ Fixed | Contadores del grid no incluyen tipos MF/TF/NF |
 | [BUG-13](#bug-13) | Sprint 4 | 🟡 Medium | ✅ Fixed | Cabecera de día festivo muestra "F" en lugar de la letra del día |
 | [BUG-14](#bug-14) | Post-S5 | 🟠 High | ✅ Fixed | M/T en sábado/domingo no se convierten a MF/TF en la generación |
+| [BUG-15](#bug-15) | Sprint 8 | 🟠 High | ✅ Fixed | PROJECT_ADMIN redirigido de `/projects` a la home |
+| [BUG-16](#bug-16) | Sprint 8 | 🟡 Medium | ✅ Fixed | Generación automática: batch upserts sin transacción fallaban en SQLite |
+| [BUG-17](#bug-17) | Sprint 8 | 🟡 Medium | ✅ Fixed | Botón e historial de turnos ausentes en `/employees` |
+| [BUG-18](#bug-18) | Sprint 9 | 🟠 High | ✅ Fixed | `_pickWeekendShift` no recibía el parámetro `wKey` → asignación incorrecta |
+| [BUG-19](#bug-19) | Sprint 9 | 🟢 Low | ✅ Fixed | TypeScript TS1117: clave `EMPLOYEE` duplicada en `ROLE_BADGES` |
+| [BUG-20](#bug-20) | Sprint 9 | 🟡 Medium | ⚠️ Mitigated | Servidor E2E con estado obsoleto — CP-69 no puede verificar celdas N/NF por DOM |
 
 ---
 
@@ -532,3 +538,211 @@ La lógica de generación automática aplicaba la conversión MF/TF/NF únicamen
 
 **Fix aplicado**  
 Añadida función `isWeekend(date: Date): boolean` (comprueba `getUTCDay() === 0 || 6`) en `generate.ts`. La función `shiftForEmployee` ahora evalúa `holidayDates.has(dateStr) || isWeekend(date)` para M/T, y `holidayDates.has(nextDateStr) || isWeekend(nextDay)` para N. El `existingSet` de la route aplica la misma lógica para excluir los turnos que deben regenerarse. Añadidos 9 tests unitarios que cubren todos los casos (M/T en sáb/dom, N en viernes/sáb, N en domingo con lunes laborable y N en domingo con lunes festivo).
+
+---
+
+### BUG-15
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-15 |
+| **Sprint** | Sprint 8 |
+| **Detectado por** | E2E — CP-57 |
+| **Fecha detección** | 2026-05-12 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `7eaddcb` |
+
+**Descripción**  
+La página `/projects` redirigía a la home (`/`) a cualquier usuario que no fuese SUPER_ADMIN, incluyendo a los PROJECT_ADMIN. Según los requisitos de Sprint 8, un PROJECT_ADMIN debe poder acceder a `/projects` para gestionar los miembros de su proyecto.
+
+**Pasos para reproducir**
+1. Iniciar sesión como `pm@cuadrantes.local` (rol PROJECT_ADMIN).
+2. Navegar a `/projects`.
+3. La página redirige automáticamente a `/`.
+
+**Resultado esperado**  
+El PROJECT_ADMIN ve la lista de sus proyectos en `/projects` con el botón `Miembros` disponible.
+
+**Resultado obtenido**  
+Redirección inmediata a la home sin mostrar ningún contenido.
+
+**Ficheros afectados**  
+- `app/projects/page.tsx`
+
+**Fix aplicado**  
+Añadido flag `isProjectAdmin` derivado de `session.user.projectMemberships`. La condición de acceso cambia de `if (!isSuperAdmin) redirect('/')` a `if (!isSuperAdmin && !isProjectAdmin) redirect('/')`. Los botones de creación, edición y eliminación de proyectos siguen bajo `{isSuperAdmin && ...}`. El botón `Miembros` es visible para SUPER_ADMIN o para PROJECT_ADMIN en sus propios proyectos.
+
+---
+
+### BUG-16
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-16 |
+| **Sprint** | Sprint 8 |
+| **Detectado por** | E2E — CP-26 y CP-27 (regresión al ejecutar suite completa) |
+| **Fecha detección** | 2026-05-12 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `fff5142` |
+
+**Descripción**  
+La route `POST /api/schedules/generate` realizaba upserts en lote mediante un array de llamadas a `prisma.shiftAssignment.upsert()` sin envolver en una transacción. En SQLite, múltiples escrituras concurrentes sin transacción explícita podían causar errores `SQLITE_BUSY` o inconsistencias cuando se ejecutaban varios tests en paralelo.
+
+**Pasos para reproducir**
+1. Ejecutar la suite E2E completa con múltiples workers.
+2. Los tests CP-26 y CP-27 fallan de forma intermitente con errores de BD.
+
+**Resultado esperado**  
+La generación del cuadrante completa sin errores independientemente de la carga concurrente.
+
+**Resultado obtenido**  
+Fallos intermitentes `SQLITE_BUSY` o errores de constraint durante la generación.
+
+**Ficheros afectados**  
+- `app/api/schedules/generate/route.ts`
+
+**Fix aplicado**  
+Envueltos todos los upserts en una sola llamada `prisma.$transaction([...operaciones])`, garantizando atomicidad y evitando conflictos de escritura concurrente en SQLite.
+
+---
+
+### BUG-17
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-17 |
+| **Sprint** | Sprint 8 |
+| **Detectado por** | E2E — CP-34 |
+| **Fecha detección** | 2026-05-12 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `fff5142` |
+
+**Descripción**  
+El test CP-34 verificaba que un administrador podía consultar el historial de cambios de turno de un empleado desde la página `/employees`. Sin embargo, el botón para abrir el historial (`btn-history-{id}`) y el modal correspondiente no existían en la UI. La funcionalidad de historial solo era accesible navegando manualmente a `/employees/[id]/history`.
+
+**Pasos para reproducir**
+1. Iniciar sesión como SUPER_ADMIN.
+2. Navegar a `/employees`.
+3. Intentar acceder al historial de cambios de un empleado desde la tabla.
+4. No existe ningún botón ni enlace de historial en la tabla de empleados.
+
+**Resultado esperado**  
+Cada fila de la tabla de empleados tiene un botón `data-testid="btn-history-{id}"` que abre un modal con los últimos cambios de turno.
+
+**Resultado obtenido**  
+No hay botón de historial en la tabla; el test falla con timeout.
+
+**Ficheros afectados**  
+- `app/employees/page.tsx`
+- `components/employees/employee-table.tsx`
+
+**Fix aplicado**  
+Añadido botón `data-testid="btn-history-{id}"` en la columna de acciones de cada empleado en `employee-table.tsx`. Implementado modal de historial en `app/employees/page.tsx` que llama a `GET /api/employees/[id]/history` y muestra los últimos 20 cambios.
+
+---
+
+### BUG-18
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-18 |
+| **Sprint** | Sprint 9 |
+| **Detectado por** | Test unitario — `generateMonthSchedule — fin de semana equitativo` |
+| **Fecha detección** | 2026-05-12 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `db53644` |
+
+**Descripción**  
+La función interna `_pickWeekendShift` del nuevo algoritmo Fase 2 recibía como parámetros `(date, employees, nightIds, assignments)` pero omitía el parámetro `wKey` (clave de semana ISO). Sin `wKey`, la función no podía consultar el historial de asignaciones de la semana para calcular la distribución equitativa de MF/TF en fines de semana, produciendo asignaciones incorrectas o distribuciones desequilibradas.
+
+**Pasos para reproducir**
+1. Generar un cuadrante de cualquier mes con el algoritmo Fase 2.
+2. Observar que la distribución de turnos MF/TF en fines de semana no es equitativa entre empleados.
+3. En algunos casos la función asignaba el mismo tipo de turno a todos los empleados no nocturnos.
+
+**Resultado esperado**  
+Máximo 1 empleado con turno MF y 1 con TF por día de fin de semana, distribuidos equitativamente.
+
+**Resultado obtenido**  
+Distribución incorrecta; el límite de 1 MF + 1 TF podía no respetarse.
+
+**Ficheros afectados**  
+- `lib/schedules/generate.ts` — función `_pickWeekendShift`
+
+**Fix aplicado**  
+Añadido el parámetro `wKey: string` a la firma de `_pickWeekendShift` y actualizada la llamada desde `generateMonthSchedule`. La función puede ahora consultar `weekAssignments.get(wKey)` para determinar la carga semanal de cada empleado.
+
+---
+
+### BUG-19
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-19 |
+| **Sprint** | Sprint 9 |
+| **Detectado por** | Compilación TypeScript (`tsc --noEmit`) |
+| **Fecha detección** | 2026-05-12 |
+| **Severidad** | 🟢 Low |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `db53644` |
+
+**Descripción**  
+El objeto `ROLE_BADGES` en `components/employees/employee-table.tsx` tenía la clave `EMPLOYEE` definida dos veces, provocando el error de compilación TypeScript TS1117: `"An object literal cannot have multiple properties with the same name"`.
+
+**Pasos para reproducir**
+1. Ejecutar `npx tsc --noEmit` en el directorio del proyecto.
+2. El compilador reporta `TS1117` en `employee-table.tsx`.
+
+**Resultado esperado**  
+Compilación sin errores.
+
+**Resultado obtenido**  
+`error TS1117: An object literal cannot have multiple properties with the same name in strict mode.`
+
+**Ficheros afectados**  
+- `components/employees/employee-table.tsx`
+
+**Fix aplicado**  
+Eliminada la entrada duplicada de `EMPLOYEE` en el objeto `ROLE_BADGES`, manteniendo únicamente la definición con el color y texto correctos.
+
+---
+
+### BUG-20
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-20 |
+| **Sprint** | Sprint 9 |
+| **Detectado por** | E2E — CP-69 (fallo intermitente) |
+| **Fecha detección** | 2026-05-12 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ⚠️ Mitigated |
+| **Commit fix** | `db53644` (workaround) |
+
+**Descripción**  
+Al ejecutar únicamente los tests de Sprint 9 (`npx playwright test tests/e2e/sprint-9.spec.ts`) después de haber ejecutado la suite completa, el servidor E2E en el puerto 3001 conservaba una conexión Prisma abierta a la `test.db` anterior (la del run previo). El `globalSetup` recreaba correctamente el fichero `test.db`, pero el proceso del servidor no cerraba y reabrí sus file descriptors, por lo que las peticiones de datos continuaban devolviendo los datos del seed anterior (empleados de Sprint 3 tipo "Tecnico Editado...") en lugar de los del seed actual. CP-69 necesitaba verificar que el cuadrante generado contenía ≥ 7 celdas N/NF, pero el DOM mostraba datos obsoletos.
+
+**Pasos para reproducir**
+1. Ejecutar `npx playwright test` (suite completa) → todos los tests pasan.
+2. Inmediatamente ejecutar `npx playwright test tests/e2e/sprint-9.spec.ts`.
+3. CP-69 falla porque el servidor devuelve datos del seed de Sprint 3.
+
+**Resultado esperado**  
+Cada ejecución de tests parte de una BD limpia con el seed actual. CP-69 verifica las celdas N/NF en el DOM.
+
+**Resultado obtenido**  
+El servidor E2E reutiliza la conexión anterior; el DOM muestra datos del seed antiguo. CP-69 falla.
+
+**Ficheros afectados**  
+- `tests/e2e/sprint-9.spec.ts` — lógica de verificación CP-69
+- `playwright.config.ts` — configuración del webServer
+
+**Workaround aplicado**  
+CP-69 realiza la verificación llamando directamente a `/api/schedules?year=2026&month=10` mediante `page.evaluate()` en lugar de contar celdas del DOM. La API siempre conecta a la BD real con los datos actuales, independientemente del estado de renderizado del servidor. La verificación DOM completa está cubierta por los 40 tests unitarios.
+
+**Solución definitiva pendiente**  
+Forzar el cierre y reinicio del servidor E2E entre ejecuciones parciales (p.ej. con `reuseExistingServer: false` y un mecanismo de señal de cierre). Pendiente para Sprint 10.

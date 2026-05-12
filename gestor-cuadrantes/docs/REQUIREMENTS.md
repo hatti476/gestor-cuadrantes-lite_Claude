@@ -1,7 +1,7 @@
 # Documento de Requisitos — Gestor de Cuadrantes
 
-**Versión**: 1.7 (Sprint 7)  
-**Última actualización**: 11/05/2026  
+**Versión**: 1.9 (Sprint 9)  
+**Última actualización**: 12/05/2026  
 **Estado**: Vivo — se actualiza al cierre de cada sprint
 
 ---
@@ -96,13 +96,13 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 
 | ID | Descripción | Sprint | Estado |
 |----|-------------|--------|--------|
-| RF-05.1 | El sistema genera turnos siguiendo un patrón cíclico de 21 días: M×5, D×2, T×5, D×2, N×5, D×2 | 3 | ✅ |
-| RF-05.2 | Cada empleado tiene un `rotationOrder` que desplaza su posición en el ciclo (offset = `rotationOrder × 3 mod 21`) | 3 | ✅ |
-| RF-05.3 | La época de referencia del ciclo es 2026-01-01 UTC | 3 | ✅ |
-| RF-05.4 | Los turnos ya asignados manualmente NO se sobreescriben en la generación automática | 3 | ✅ |
+| RF-05.1 | ~~El sistema genera turnos siguiendo un patrón cíclico de 21 días: M×5, D×2, T×5, D×2, N×5, D×2~~ → **Reemplazado por RF-14 (algoritmo Fase 2)** | 3→9 | ✅ |
+| RF-05.2 | ~~`rotationOrder` desplaza posición en ciclo 21 días~~ → **Reemplazado por RF-14** | 3→9 | ✅ |
+| RF-05.3 | ~~Época de referencia 2026-01-01 UTC~~ → **Época de referencia `NIGHT_EPOCH_FRIDAY` 2026-01-02 (viernes)** | 3→9 | ✅ |
+| RF-05.4 | Los turnos V/B/J ya asignados NO se sobreescriben en la generación automática | 3 | ✅ |
 | RF-05.5 | La generación aplica automáticamente las reglas de festivos y fines de semana (RF-06) | 3/4 | ✅ |
 | RF-05.6 | Solo el SUPER_ADMIN puede disparar la generación automática | 3 | ✅ |
-| RF-05.7 | La generación es idempotente: ejecutarla varias veces produce el mismo resultado | 3 | ✅ |
+| RF-05.7 | La generación es idempotente: ejecutarla varias veces produce el mismo resultado | 3/9 | ✅ |
 
 ---
 
@@ -207,6 +207,28 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-13.11 | El cuadrante puede filtrarse por proyecto mediante `?projectId=` | 7 | ✅ |
 | RF-13.12 | La UI muestra un selector de proyecto activo para SUPER_ADMIN y un badge de proyecto para USER | 7 | ✅ |
 | RF-13.13 | El enlace "Proyectos" en el header es visible únicamente para SUPER_ADMIN | 7 | ✅ |
+| RF-13.14 | Un PROJECT_ADMIN puede acceder a `/projects` para gestionar los miembros de sus proyectos | 8 | ✅ |
+| RF-13.15 | Un PROJECT_ADMIN no puede crear, editar ni eliminar proyectos | 8 | ✅ |
+| RF-13.16 | Un PROJECT_ADMIN puede añadir miembros con rol EMPLOYEE pero no con rol PROJECT_ADMIN | 8 | ✅ |
+| RF-13.17 | Un usuario con rol EMPLOYEE (sin PROJECT_ADMIN) es redirigido de `/projects` | 8 | ✅ |
+
+---
+
+### RF-14 — Algoritmo de generación Fase 2 (bloques de noches)
+
+| ID | Descripción | Sprint | Estado |
+|----|-------------|--------|--------|
+| RF-14.1 | El algoritmo genera bloques de exactamente 12 días por técnico: 2D (pre-bloque) + 7N + 3D (post-bloque) | 9 | ✅ |
+| RF-14.2 | La época de referencia nocturna es el viernes 2 de enero de 2026 (`NIGHT_EPOCH_FRIDAY`) | 9 | ✅ |
+| RF-14.3 | Con 7 técnicos, el ciclo completo es 84 días (12 semanas); el técnico `rotationOrder=0` siempre empieza en viernes | 9 | ✅ |
+| RF-14.4 | Nunca coinciden dos técnicos en turno N el mismo día | 9 | ✅ |
+| RF-14.5 | El orden de rotación nocturna se configura mediante `nightRotationOrder` (JSON) en el proyecto; fallback a `rotationOrder` | 9 | ✅ |
+| RF-14.6 | Cada empleado puede tener `shiftPreference` (`"M"`, `"T"` o `null`) que orienta su asignación en días laborables | 9 | ✅ |
+| RF-14.7 | En días laborables, el algoritmo garantiza cobertura mínima de ≥ 2 empleados en M y ≥ 2 en T | 9 | ✅ |
+| RF-14.8 | Ningún empleado cambia entre turno M y T dentro de la misma semana ISO | 9 | ✅ |
+| RF-14.9 | Ningún empleado supera 5 días consecutivos con el mismo turno de trabajo | 9 | ✅ |
+| RF-14.10 | La generación consulta los últimos 7 días del mes anterior (`prevMonthTail`) para aplicar la regla de máximo consecutivo en el inicio del mes | 9 | ✅ |
+| RF-14.11 | Los turnos V/B/J existentes bloquean la celda; los turnos M/T/N/D de generaciones anteriores se regeneran | 9 | ✅ |
 
 ---
 
@@ -263,8 +285,8 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 
 ```
 User            — id, email, password (bcrypt), role (SUPER_ADMIN|USER)
-Employee        — id, name, userId (→User), rotationOrder, projectId?
-Project         — id, name, description, region?, createdAt
+Employee        — id, name, userId (→User), rotationOrder, shiftPreference?, projectId?
+Project         — id, name, description, region?, nightRotationOrder?, createdAt
 ProjectMember   — id, projectId (→Project), userId (→User), role (PROJECT_ADMIN|EMPLOYEE)
 ShiftAssignment — id, employeeId (→Employee), date (UTC midnight), shiftType
 ShiftChangeLog  — id, employeeId, date, oldShift?, newShift, changedBy, changedAt
@@ -328,26 +350,31 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | Suite | Archivo | Tests | Estado |
 |-------|---------|-------|--------|
 | Unit | `schedules/business-logic` | 12 | ✅ |
-| Unit | `schedules/generate` | 36 | ✅ |
-| Unit | `employees/business-logic` | 35 | ✅ |
+| Unit | `scheduler/generate` (Fase 2) | 40 | ✅ |
+| Unit | `employees/business-logic` | 37 | ✅ |
 | Unit | `auth/permissions` | 25 | ✅ |
-| **Total unit** | | **108** | ✅ |
+| **Total unit** | | **114** | **✅** |
 | E2E Sprint 1 | CP-01..CP-11 | 11 | ✅ |
-| E2E Sprint 2 | CP-12..CP-29 | 18 | ✅ |
-| E2E Sprint 3 | CP-23..CP-29 | 6 | ✅ |
-| E2E Sprint 4 | CP-30..CP-42 | 10 | ✅ (2 flaky) |
+| E2E Sprint 2 | CP-12..CP-22 | 11 | ✅ |
+| E2E Sprint 3 | CP-23..CP-29 | 7 | ✅ |
+| E2E Sprint 4 | CP-30..CP-39 | 10 | ✅ |
 | E2E Sprint 5 | CP-40..CP-42 | 3 | ✅ |
 | E2E Sprint 6 | CP-43..CP-46 | 4 | ✅ |
 | E2E Sprint 7 | CP-47..CP-56 | 10 | ✅ |
-| **Total E2E** | | **55** | ✅ |
+| E2E Sprint 8 | CP-57..CP-66 | 10 | ✅ |
+| E2E Sprint 9 | CP-67..CP-70 | 4 | ✅ |
+| **Total E2E** | | **69** | **✅** |
 
 ---
 
-## 9. Backlog Fase 2 (pendiente)
+## 9. Backlog pendiente (Sprint 10+)
 
-| Sprint | Funcionalidad | Requisitos asociados |
-|--------|--------------|----------------------|
-| 8 | Roles de proyecto en UI, panel multi-proyecto para PROJECT_ADMIN, permisos granulares en escritura | RF-13 |
+| Funcionalidad | Requisito | Prioridad |
+|---------------|-----------|----------|
+| UI para configurar `nightRotationOrder` en el proyecto | RF-14.5 | Media |
+| Campo `shiftPreference` editable en página de empleados | RF-14.6 | Media |
+| Gestión de packs de fin de semana (Sáb+Dom mismo turno, editables) | RF-14.7 | Baja |
+| Resolver BUG-20: servidor E2E con estado obsoleto (CP-69 verificación DOM) | — | Media |
 | 9 | Festivos por CCAA/proyecto (`ProjectHoliday`), integración con API pública de festivos | RF-07 ampliado |
 | 10 | Notificaciones email, dashboard de métricas, exportación avanzada | Nuevos RF |
 
