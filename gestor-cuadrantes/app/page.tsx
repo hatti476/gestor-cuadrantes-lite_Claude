@@ -185,7 +185,7 @@ export default function HomePage() {
       const res = await fetch("/api/schedules/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ year, month }),
+        body: JSON.stringify({ year, month, projectId: activeProjectId }),
       });
       if (!res.ok) throw new Error();
       const { created } = await res.json();

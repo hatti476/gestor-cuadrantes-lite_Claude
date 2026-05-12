@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  const { year, month } = body as { year?: number; month?: number };
+  const { year, month, projectId } = body as { year?: number; month?: number; projectId?: string | null };
   if (!year || !month || month < 1 || month > 12) {
     return NextResponse.json(
       { error: "year y month requeridos (month: 1-12)" },
@@ -32,16 +32,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Obtener todos los empleados (con shiftPreference)
+  // Obtener empleados del proyecto activo (o todos si no hay projectId)
+  // IMPORTANTE: filtrar por proyecto evita que datos residuales de otros proyectos
+  // contaminen la generación (rotación nocturna, bloqueos, continuidad)
+  const employeeWhere = projectId ? { projectId } : {};
   const employees = await prisma.employee.findMany({
+    where: employeeWhere,
     select: { id: true, rotationOrder: true, shiftPreference: true },
     orderBy: { rotationOrder: "asc" },
   });
 
-  // Obtener asignaciones ya existentes en el mes (para bloquear manuales/V/B)
+  if (employees.length === 0) {
+    return NextResponse.json({ error: "No hay empleados en el proyecto" }, { status: 400 });
+  }
+
+  // Obtener asignaciones ya existentes en el mes — solo de los empleados del proyecto
+  const employeeIds = employees.map((e) => e.id);
   const { start, end } = getMonthRange(year, month);
   const existing = await prisma.shiftAssignment.findMany({
-    where: { date: { gte: start, lt: end } },
+    where: { employeeId: { in: employeeIds }, date: { gte: start, lt: end } },
     select: { employeeId: true, date: true, shiftType: true },
   });
 
@@ -64,11 +73,11 @@ export async function POST(req: NextRequest) {
       .map((a) => `${a.employeeId}|${a.date.toISOString().slice(0, 10)}`)
   );
 
-  // Obtener los últimos 7 días del mes anterior para continuidad
+  // Obtener los últimos 7 días del mes anterior para continuidad — solo empleados del proyecto
   const prevMonthEnd = new Date(start.getTime() - 1); // last ms of prev month
   const prevMonthStart = new Date(Date.UTC(prevMonthEnd.getUTCFullYear(), prevMonthEnd.getUTCMonth(), prevMonthEnd.getUTCDate() - 6));
   const prevTailRaw = await prisma.shiftAssignment.findMany({
-    where: { date: { gte: prevMonthStart, lte: prevMonthEnd } },
+    where: { employeeId: { in: employeeIds }, date: { gte: prevMonthStart, lte: prevMonthEnd } },
     select: { employeeId: true, date: true, shiftType: true },
   });
   const prevMonthTail: PrevMonthTail[] = prevTailRaw.map((a) => ({
@@ -79,8 +88,11 @@ export async function POST(req: NextRequest) {
 
   // Orden de rotación nocturna (de Project.nightRotationOrder si existe)
   let nightRotationIds: string[] | undefined;
+  const projectWhere = projectId
+    ? { id: projectId }
+    : { employees: { some: { id: { in: employeeIds } } } };
   const projectWithRotation = await prisma.project.findFirst({
-    where: { employees: { some: { id: { in: employees.map((e) => e.id) } } } },
+    where: projectWhere,
     select: { nightRotationOrder: true },
   });
   if (projectWithRotation?.nightRotationOrder) {
