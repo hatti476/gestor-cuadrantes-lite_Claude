@@ -65,14 +65,34 @@ function ProjectForm({
         <label className="block text-xs font-medium text-gray-600 mb-1" htmlFor="proj-region">
           Región (CCAA)
         </label>
-        <input
+        <select
           id="proj-region"
-          type="text"
+          data-testid="select-region"
           value={region}
           onChange={(e) => setRegion(e.target.value)}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none"
-          placeholder="p.ej. Madrid, Cataluña..."
-        />
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none bg-white"
+        >
+          <option value="">Sin región definida</option>
+          <option value="Andalucía">Andalucía</option>
+          <option value="Aragón">Aragón</option>
+          <option value="Asturias">Asturias</option>
+          <option value="Baleares">Baleares</option>
+          <option value="Canarias">Canarias</option>
+          <option value="Cantabria">Cantabria</option>
+          <option value="Castilla-La Mancha">Castilla-La Mancha</option>
+          <option value="Castilla y León">Castilla y León</option>
+          <option value="Cataluña">Cataluña</option>
+          <option value="Extremadura">Extremadura</option>
+          <option value="Galicia">Galicia</option>
+          <option value="La Rioja">La Rioja</option>
+          <option value="Madrid">Madrid</option>
+          <option value="Murcia">Murcia</option>
+          <option value="Navarra">Navarra</option>
+          <option value="País Vasco">País Vasco</option>
+          <option value="Valencia">Valencia</option>
+          <option value="Ceuta">Ceuta</option>
+          <option value="Melilla">Melilla</option>
+        </select>
       </div>
       <div className="flex gap-2 justify-end">
         <button
@@ -619,7 +639,18 @@ export default function ProjectsPage() {
                       <td className="px-4 py-3 text-gray-500">
                         {p.description ?? "—"}
                       </td>
-                      <td className="px-4 py-3 text-gray-500">{p.region ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        {p.region ? (
+                          <span
+                            data-testid="region-badge"
+                            className="inline-block text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700 border border-blue-200"
+                          >
+                            {p.region}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-center text-gray-600">
                         {p._count?.members ?? "—"}
                       </td>
@@ -653,23 +684,23 @@ export default function ProjectsPage() {
                           >
                             Rotación
                           </button>
+                          {(isSuperAdmin || isProjectAdmin) && (
+                            <button
+                              data-testid="btn-edit-project"
+                              onClick={() => { setEditingProject(p); setFormMode("edit"); }}
+                              className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50"
+                            >
+                              Editar
+                            </button>
+                          )}
                           {isSuperAdmin && (
-                            <>
-                              <button
-                                data-testid="btn-edit-project"
-                                onClick={() => { setEditingProject(p); setFormMode("edit"); }}
-                                className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50"
-                              >
-                                Editar
-                              </button>
-                              <button
-                                data-testid="btn-delete-project"
-                                onClick={() => handleDelete(p)}
-                                className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50"
-                              >
-                                Eliminar
-                              </button>
-                            </>
+                            <button
+                              data-testid="btn-delete-project"
+                              onClick={() => handleDelete(p)}
+                              className="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50"
+                            >
+                              Eliminar
+                            </button>
                           )}
                         </div>
                       </td>
