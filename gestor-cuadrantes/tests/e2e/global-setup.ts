@@ -29,6 +29,16 @@ export default async function globalSetup() {
   }
   console.log("\n[globalSetup] test.db eliminada — empezando con BD limpia");
 
+  // 1b. Eliminar el lock de Next.js dev (Next.js 16+) para que el servidor de tests
+  //     pueda arrancar en el puerto 3001 aunque ya haya un dev server en el puerto 3000.
+  //     El servidor de desarrollo existente NO se ve afectado: el lock se recrea cuando
+  //     el proceso de desarrollo vuelve a arrancar.
+  const nextDevLock = path.join(cwd, ".next", "dev", "lock");
+  if (fs.existsSync(nextDevLock)) {
+    fs.unlinkSync(nextDevLock);
+    console.log("[globalSetup] .next/dev/lock eliminado — el servidor de tests puede arrancar en 3001");
+  }
+
   const env = {
     ...process.env,
     DATABASE_URL: TEST_DB_URL,
