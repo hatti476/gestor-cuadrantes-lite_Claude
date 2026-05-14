@@ -74,10 +74,28 @@ metodología agile.
 7. **Equidad**: distribución equilibrada de M y T entre empleados a lo largo del mes
 8. **Noches y fines de semana**: máximo 1 persona por turno siempre
 
+## Estado Actual <!-- Actualizado: 2026-05-15 -->
+
+| Campo | Valor |
+|-------|-------|
+| Versión | 1.4 (Sprint 13) |
+| Rama activa | `feature/sprint-13-ccaa-history-docs` |
+| Sprints completados | 13 de 13 |
+| Tests unitarios | 140/140 ✅ |
+| Tests E2E | CP-01..CP-98 (9/9 Sprint 13 en verde) |
+| Próximo paso | PR a main → merge → tag v1.4 |
+
+### Funcionalidades completadas en Sprint 13
+- ✅ Selector de región (CCAA) en proyectos con badge en listado
+- ✅ Carga automática de festivos públicos vía nager.at (`/api/holidays/public`)
+- ✅ Paginación + filtro por mes en historial de empleado
+- ✅ Página `/info` actualizada con documentación Fase 2
+- ✅ Guía de despliegue completa (`docs/deployment.md`)
+
 ## Stack Técnico
 | Capa | Tecnología | Justificación |
 |------|-----------|---------------|
-| Frontend + Backend | Next.js 14 (App Router) | Full-stack en un solo framework, máximo soporte de Copilot |
+| Frontend + Backend | Next.js 16.2.6 (App Router) | Full-stack en un solo framework, máximo soporte de Copilot |
 | Estilos | Tailwind CSS | Utility-first, fácil personalización de colores de turno |
 | Base de datos (local) | SQLite + Prisma ORM | Sin instalación adicional, funciona en cualquier PC |
 | Base de datos (producción) | PostgreSQL + Prisma ORM | Mismos modelos, cambio solo de connection string |
@@ -109,6 +127,13 @@ de la UI, lo que permite testearlo de forma independiente.
 | 4 | Empleados y contadores | CRUD empleados, orden rotación, fila de contadores |
 | 5 | Fines de semana | Asignación de packs Sáb+Dom, reglas de cobertura |
 | 6 | Pulido y despliegue | Tests, Docker producción, documentación de despliegue |
+| 7 | Exportación y festivos | Exportación CSV, gestión de festivos, turnos MF/TF/NF |
+| 8 | Multiproyecto base | Proyectos múltiples, roles PROJECT_ADMIN, miembros |
+| 9 | Bloque de noches v2 | NIGHT_EPOCH_FRIDAY, celdas bloqueadas (V/L), historial |
+| 10 | Permisos y contadores | PROJECT_ADMIN edita su proyecto, tabla contadores, nightRotationOrder |
+| 11 | Preferencias y prep | shiftPreference M/T, PrepPanel 4 pasos, MonthStatus, vacaciones |
+| 12 | Aislamiento y noches | ShiftAssignment.projectId, resolveNightBlocks, pref J, RF-19 |
+| 13 | CCAA + historial + docs | Festivos por CCAA (nager.at), historial paginado, /info Fase 2, deployment.md |
 
 ## Restricciones y Requisitos No Funcionales
 - **Rendimiento**: uso interno, máx. ~20 usuarios concurrentes. Sin requisitos especiales
