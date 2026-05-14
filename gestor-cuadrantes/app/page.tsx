@@ -101,6 +101,16 @@ export default function HomePage() {
     }
   });
 
+  const [activeProjectRegion, setActiveProjectRegion] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = localStorage.getItem("activeProject");
+      return stored ? ((JSON.parse(stored) as { region?: string | null }).region ?? null) : null;
+    } catch {
+      return null;
+    }
+  });
+
   // PROJECT_ADMIN también puede editar celdas de su proyecto
   const canEdit = isAdmin || (session?.user?.projectMemberships ?? []).some(
     (m: { projectId: string; role: string }) =>
@@ -112,17 +122,34 @@ export default function HomePage() {
     if (activeProjectId !== null) return;
     fetch("/api/projects")
       .then((r) => (r.ok ? r.json() : []))
-      .then((projects: { id: string; name: string }[]) => {
+      .then((projects: { id: string; name: string; region?: string | null }[]) => {
         if (projects.length > 0) {
-          const { id, name } = projects[0];
-          localStorage.setItem("activeProject", JSON.stringify({ id, name }));
+          const { id, name, region } = projects[0];
+          localStorage.setItem("activeProject", JSON.stringify({ id, name, region: region ?? null }));
           window.dispatchEvent(new Event("activeProjectChanged"));
           setActiveProjectId(id);
+          setActiveProjectRegion(region ?? null);
         }
       })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Solo al montar
+
+  // Sincronizar región cuando cambie el proyecto activo desde otra ventana/tab
+  useEffect(() => {
+    function onProjectChanged() {
+      try {
+        const stored = localStorage.getItem("activeProject");
+        if (stored) {
+          const parsed = JSON.parse(stored) as { id: string; region?: string | null };
+          setActiveProjectId(parsed.id ?? null);
+          setActiveProjectRegion(parsed.region ?? null);
+        }
+      } catch {}
+    }
+    window.addEventListener("activeProjectChanged", onProjectChanged);
+    return () => window.removeEventListener("activeProjectChanged", onProjectChanged);
+  }, []);
 
   const [employees, setEmployees] = useState<ScheduleEmployee[]>([]);
   const [assignments, setAssignments] = useState<ScheduleAssignment[]>([]);
@@ -133,6 +160,7 @@ export default function HomePage() {
   // Estado del panel de preparación
   const [prepStep, setPrepStep] = useState<PrepStep>(null);
   const [showConfirmGenerate, setShowConfirmGenerate] = useState(false);
+  const [loadingHolidays, setLoadingHolidays] = useState(false);
   const [editingCell, setEditingCell] = useState<{
     employeeId: string;
     date: string;
@@ -328,6 +356,56 @@ export default function HomePage() {
     void loadSchedule();
   }
 
+  // Cargar festivos automáticamente desde la API pública (nager.at) filtrada por CCAA
+  async function handleAutoLoadHolidays() {
+    if (!activeProjectRegion) return;
+    setLoadingHolidays(true);
+    try {
+      const res = await fetch(
+        `/api/holidays/public?year=${year}&region=${encodeURIComponent(activeProjectRegion)}`
+      );
+      if (!res.ok) {
+        showToast("No se pudieron cargar los festivos. Puedes añadirlos manualmente.", "error");
+        return;
+      }
+      const publicHolidays: { date: string; description: string }[] = await res.json();
+
+      // Filtrar solo los del mes actual
+      const monthStr = String(month).padStart(2, "0");
+      const monthHolidays = publicHolidays.filter((h) =>
+        h.date.startsWith(`${year}-${monthStr}`)
+      );
+
+      if (monthHolidays.length === 0) {
+        showToast("No hay festivos públicos este mes para la región seleccionada.", "info");
+        return;
+      }
+
+      // Añadir los festivos a la BD (POST /api/holidays), ignorar duplicados (409)
+      let added = 0;
+      for (const h of monthHolidays) {
+        const postRes = await fetch("/api/holidays", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: h.date, description: h.description }),
+        });
+        if (postRes.ok) added++;
+        // 409 = ya existe, se ignora silenciosamente
+      }
+
+      if (added > 0) {
+        showToast(`${added} festivo${added > 1 ? "s" : ""} añadido${added > 1 ? "s" : ""} correctamente`, "success");
+        await loadSchedule(); // refresca contadores y holidayDates
+      } else {
+        showToast("Los festivos de este mes ya estaban registrados.", "info");
+      }
+    } catch {
+      showToast("No se pudieron cargar los festivos. Puedes añadirlos manualmente.", "error");
+    } finally {
+      setLoadingHolidays(false);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Exportar CSV
   // ---------------------------------------------------------------------------
@@ -488,6 +566,10 @@ export default function HomePage() {
                 generating={generating}
                 isAdmin={isAdmin}
                 onManageHolidays={() => router.push("/holidays")}
+                projectRegion={activeProjectRegion}
+                projectId={activeProjectId}
+                onAutoLoadHolidays={handleAutoLoadHolidays}
+                loadingHolidays={loadingHolidays}
               />
             </div>
           )}

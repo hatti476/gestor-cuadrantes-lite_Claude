@@ -482,7 +482,7 @@ export default function ProjectsPage() {
   }, []);
 
   function handleSelectProject(p: Project) {
-    localStorage.setItem("activeProject", JSON.stringify({ id: p.id, name: p.name }));
+    localStorage.setItem("activeProject", JSON.stringify({ id: p.id, name: p.name, region: p.region ?? null }));
     window.dispatchEvent(new Event("activeProjectChanged"));
     setSelectedProjectId(p.id);
     router.push("/");
