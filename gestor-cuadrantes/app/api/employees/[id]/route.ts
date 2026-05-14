@@ -2,11 +2,9 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { validateUpdateEmployee, isValidPassword } from "@/lib/employees/business-logic";
+import { validateUpdateEmployee, isValidPassword, VALID_SHIFT_PREFERENCES, isValidShiftPreference } from "@/lib/employees/business-logic";
 import { isProjectAdmin } from "@/lib/auth/permissions";
 import bcrypt from "bcryptjs";
-
-const VALID_SHIFT_PREFERENCES = ["M", "T", null] as const;
 
 // ---------------------------------------------------------------------------
 // PATCH /api/employees/[id] — edita nombre, rol, shiftPreference, activa/desactiva
@@ -56,10 +54,10 @@ export async function PATCH(
   }
 
   // Validar shiftPreference si viene
-  if (b.shiftPreference !== undefined && b.shiftPreference !== null) {
-    if (!VALID_SHIFT_PREFERENCES.includes(b.shiftPreference as "M" | "T" | null)) {
+  if (b.shiftPreference !== undefined) {
+    if (!isValidShiftPreference(b.shiftPreference)) {
       return NextResponse.json(
-        { error: "shiftPreference inválido. Valores: M, T, o null" },
+        { error: `shiftPreference inválido. Valores: ${VALID_SHIFT_PREFERENCES.filter(v => v !== null).join(", ")}, o null` },
         { status: 400 }
       );
     }

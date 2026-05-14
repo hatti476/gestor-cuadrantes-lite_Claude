@@ -70,7 +70,12 @@ export default function HolidaysPage() {
   async function handleDelete(id: string) {
     const res = await fetch(`/api/holidays/${id}`, { method: "DELETE" });
     if (res.ok) {
-      showToast("Festivo eliminado", "success");
+      const data: { ok: boolean; reverted: number } = await res.json();
+      if (data.reverted > 0) {
+        showToast(`Festivo eliminado. ${data.reverted} turno${data.reverted === 1 ? "" : "s"} revertido${data.reverted === 1 ? "" : "s"} a su tipo original.`, "success");
+      } else {
+        showToast("Festivo eliminado correctamente.", "success");
+      }
       setHolidays((prev) => prev.filter((h) => h.id !== id));
     } else {
       showToast("Error al eliminar festivo", "error");

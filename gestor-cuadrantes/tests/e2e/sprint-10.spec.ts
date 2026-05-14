@@ -9,6 +9,7 @@
  * CP-75 — PROJECT_ADMIN no puede editar celdas de otro proyecto (sin onCellClick)
  * CP-76 — nightRotationOrder se puede reordenar y guardar desde /projects
  * CP-77 — Tabla de contadores aparece debajo del grid con datos coherentes
+ * CP-78 — Tabla de contadores: estilo visual consistente con el grid (bordes redondeados, badges de turno)
  */
 
 import { test, expect } from "@playwright/test";
@@ -353,6 +354,52 @@ test("CP-77 — Tabla de contadores debajo del grid muestra totales correctos", 
     expect(displayedTotal).toBe(totalAssignments);
   } catch (e) {
     await screenshotOnFail(page, "CP-77");
+    throw e;
+  }
+});
+
+// ===========================================================================
+// CP-78 — Tabla de contadores: estilo visual consistente con el grid
+// ===========================================================================
+test("CP-78 — Tabla de contadores tiene estilo visual consistente con el grid", async ({ page }) => {
+  test.setTimeout(60_000);
+  try {
+    await loginAsAdmin(page);
+    await page.goto(ROUTES.home);
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(1_000);
+
+    const countersTable = page.locator('[data-testid="counters-table"]');
+    await expect(countersTable).toBeVisible({ timeout: 8_000 });
+
+    // La tabla de contadores debe aparecer DESPUÉS del grid en el DOM
+    const grid = page.locator(".overflow-x-auto.w-fit").first();
+    const gridBox = await grid.boundingBox();
+    const tableBox = await countersTable.boundingBox();
+    expect(gridBox).not.toBeNull();
+    expect(tableBox).not.toBeNull();
+    // La tabla debe estar debajo del grid (mayor coordenada Y)
+    expect(tableBox!.y).toBeGreaterThan(gridBox!.y);
+
+    // La tabla NO debe estar más ancha que el viewport (no se extiende al infinito)
+    const viewportWidth = page.viewportSize()?.width ?? 1280;
+    expect(tableBox!.x + tableBox!.width).toBeLessThanOrEqual(viewportWidth + 20);
+
+    // Las cabeceras de turno en la tabla deben tener color de fondo (mismo que ShiftCell)
+    const firstShiftHeader = countersTable.locator("thead th").nth(1);
+    await expect(firstShiftHeader).toBeVisible();
+    const bgColor = await firstShiftHeader.evaluate(
+      (el) => window.getComputedStyle(el).backgroundColor
+    );
+    // El fondo no debe ser transparente ni blanco puro (debe tener color de turno)
+    expect(bgColor).not.toBe("rgba(0, 0, 0, 0)");
+    expect(bgColor).not.toBe("rgb(255, 255, 255)");
+
+    // La tabla de contadores y el grid no deben solaparse verticalmente
+    const gridBottom = gridBox!.y + gridBox!.height;
+    expect(tableBox!.y).toBeGreaterThanOrEqual(gridBottom - 4); // tolerancia 4px
+  } catch (e) {
+    await screenshotOnFail(page, "CP-78");
     throw e;
   }
 });

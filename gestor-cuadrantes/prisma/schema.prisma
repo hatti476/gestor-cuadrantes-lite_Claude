@@ -111,10 +111,12 @@ model ShiftAssignment {
   employeeId String
   date       DateTime
   shiftType  String
+  manual     Boolean  @default(false) // true = assigned manually by admin (not auto-generated)
+  projectId  String?  // proyecto al que pertenece esta asignación (nullable para compatibilidad)
 
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
-  @@unique([employeeId, date])
+  @@unique([employeeId, date, projectId])
 }
 
 model Schedule {

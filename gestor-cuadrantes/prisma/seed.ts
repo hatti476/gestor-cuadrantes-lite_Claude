@@ -120,9 +120,9 @@ async function main() {
       const date = new Date(Date.UTC(year, month - 1, day));
 
       await prisma.shiftAssignment.upsert({
-        where: { employeeId_date: { employeeId, date } },
+        where: { employeeId_date_projectId: { employeeId, date, projectId: project.id } },
         update: { shiftType },
-        create: { employeeId, date, shiftType },
+        create: { employeeId, date, shiftType, projectId: project.id },
       });
       assignmentsCreated++;
     }

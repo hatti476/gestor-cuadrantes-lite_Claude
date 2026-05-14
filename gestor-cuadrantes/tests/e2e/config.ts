@@ -41,4 +41,5 @@ export const ROUTES = {
   employees: "/employees",
   projects: "/projects",
   info: "/info",
+  holidays: "/holidays",
 } as const;

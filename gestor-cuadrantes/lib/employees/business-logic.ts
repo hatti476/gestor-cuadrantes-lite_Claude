@@ -5,6 +5,14 @@
 export const VALID_ROLES = ["SUPER_ADMIN", "USER"] as const;
 export type ValidRole = (typeof VALID_ROLES)[number];
 
+export const VALID_SHIFT_PREFERENCES = ["M", "T", "J", null] as const;
+export type ValidShiftPreference = (typeof VALID_SHIFT_PREFERENCES)[number];
+
+/** Valida que el valor sea una preferencia de turno válida: "M", "T", "J" o null */
+export function isValidShiftPreference(value: unknown): value is ValidShiftPreference {
+  return (VALID_SHIFT_PREFERENCES as readonly unknown[]).includes(value);
+}
+
 export function isValidRole(value: string): value is ValidRole {
   return (VALID_ROLES as readonly string[]).includes(value);
 }

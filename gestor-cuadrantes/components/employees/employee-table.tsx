@@ -3,6 +3,7 @@ import { type EmployeeRecord } from "@/app/employees/page";
 const PREF_BADGES: Record<string, { label: string; classes: string }> = {
   M: { label: "Mañanas", classes: "bg-orange-100 text-orange-700" },
   T: { label: "Tardes", classes: "bg-blue-100 text-blue-700" },
+  J: { label: "Jornada", classes: "bg-purple-100 text-purple-700" },
 };
 
 interface EmployeeTableProps {

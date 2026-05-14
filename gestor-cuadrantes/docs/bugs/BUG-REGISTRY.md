@@ -2,7 +2,7 @@
 
 **Proyecto:** Gestor de Cuadrantes  
 **Mantenido por:** Agente `doc-writer`  
-**Última actualización:** 2026-05-12  
+**Última actualización:** 2026-05-14  
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Total bugs | Críticos | Altos | Medios | Bajos | Abiertos | Resueltos |
 |-----------|----------|-------|--------|-------|----------|-----------|
-| 26 | 0 | 10 | 10 | 6 | 1 | 25 |
+| 31 | 0 | 15 | 10 | 6 | 1 | 30 |
 
 ---
 
@@ -44,6 +44,11 @@
 | [BUG-24](#bug-24) | Sprint 9-PO | 🟢 Low | ✅ Fixed | Información de la parte derecha de la tabla de proyectos cortada (max-width) |
 | [BUG-25](#bug-25) | Sprint 9-PO | 🟠 High | ✅ Fixed | El cuadrante tiene un desplegable de proyectos confuso; debe elegirse desde Proyectos |
 | [BUG-26](#bug-26) | Sprint 9-PO | 🟠 High | ✅ Fixed | Regresión de timing: cuadrante tardía en cargar por estado `undefined` de proyecto activo |
+| [BUG-27](#bug-27) | Sprint 11 | 🟠 High | ✅ Fixed | `turbopack.root: __dirname` en `next.config.ts` provoca que la mayoría de rutas API devuelvan 404 |
+| [BUG-28](#bug-28) | Sprint 11 | 🟠 High | ✅ Fixed | Grid vacío en mes sin turnos: empleados derivados de asignaciones en lugar de la API |
+| [BUG-29](#bug-29) | Sprint 12 | 🟠 High | ✅ Fixed | Nuevo proyecto hereda asignaciones históricas de empleados de proyectos anteriores |
+| [BUG-30](#bug-30) | Sprint 12 | 🟠 High | ✅ Fixed | `_pickWorkdayShift` ignoraba preferencia M/T cuando `weeklyShift` fue fijado por cobertura urgente |
+| [BUG-31](#bug-31) | Sprint 12 | 🟠 High | ✅ Fixed | Empleado con pref `J` recibía MF/TF en fin de semana y M/T en días laborables |
 
 ---
 
@@ -936,3 +941,200 @@ El cuadrante no cargaba en la primera visita hasta que el `useEffect` completaba
 
 **Fix aplicado**  
 Sustituido el `useState(undefined)` + `useEffect` por un inicializador lazy `useState(() => { localStorage.getItem... })`. La lectura de localStorage es síncrona en el primer render, por lo que `activeProjectId` tiene su valor correcto desde el inicio y `loadSchedule` puede correr sin guard. El `useEffect` secundario solo busca el primer proyecto en API cuando `activeProjectId === null` (primera visita sin localStorage previo).
+
+---
+
+### BUG-27
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-27 |
+| **Sprint** | Sprint 11 — Pruebas manuales post-sprint |
+| **Detectado por** | Prueba manual — arranque del servidor de desarrollo |
+| **Fecha detección** | 2026-05-13 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+La opción `turbopack: { root: __dirname }` en `next.config.ts` causaba que Turbopack generase un `app-paths-manifest.json` incompleto al arrancar el servidor de desarrollo. Solo se registraban 4 rutas (página raíz, `/api/holidays`, `/api/schedules` y `_not-found`); el resto de rutas de la API (`/api/auth/[...nextauth]`, `/api/employees`, `/api/projects`, etc.) devolvían HTTP 404 como si no existiesen.
+
+**Pasos para reproducir**
+1. Asegurarse de que `next.config.ts` contiene la opción `turbopack: { root: __dirname }`.
+2. Borrar `.next` y arrancar `npm run dev`.
+3. Hacer `curl http://localhost:3000/api/auth/session`.
+4. La respuesta es HTTP 404 con HTML de la página de error de Next.js.
+
+**Resultado esperado**  
+Todas las rutas de la API responden correctamente: `/api/auth/session` → 200, `/api/employees` → 401, etc.
+
+**Resultado obtenido**  
+`/api/auth/session`, `/api/employees`, `/api/projects` y todas las rutas de API excepto `/api/holidays` y `/api/schedules` devuelven HTTP 404.
+
+**Ficheros afectados**  
+- `next.config.ts`
+
+**Fix aplicado**  
+Eliminado el bloque `turbopack: { root: __dirname }` de `next.config.ts`. La opción fue introducida originalmente para evitar que Next.js usase el `package-lock.json` del directorio padre en un workspace monorepo, pero su efecto secundario es el manifest incompleto de Turbopack.
+
+---
+
+### BUG-28
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-28 |
+| **Sprint** | Sprint 11 — Pruebas manuales post-sprint |
+| **Detectado por** | Prueba manual — cuadrante de mes nuevo |
+| **Fecha detección** | 2026-05-13 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+Al navegar a un mes sin ningún turno asignado, el grid no mostraba ninguna fila de empleados y aparecía el mensaje "Sin turnos asignados este mes. Usa el panel para preparar y generar.". Esto impedía al administrador marcar vacaciones o días libres antes de generar el cuadrante.
+
+La causa raíz era que `loadSchedule` en `app/page.tsx` derivaba la lista de empleados extrayendo los datos del campo `employee` de las propias asignaciones devueltas por la API. Si el mes no tenía asignaciones, no había datos de los que extraer empleados y `employees` quedaba como array vacío.
+
+**Pasos para reproducir**
+1. Iniciar sesión como `admin@cuadrantes.local`.
+2. Navegar a cualquier mes futuro sin cuadrante generado (p.ej. Agosto 2026).
+3. El grid muestra el mensaje vacío en lugar de las filas de los 7 técnicos.
+4. Al abrir el paso "1. Vacaciones" en el PrepPanel y hacer clic donde debería haber una celda, no ocurre nada.
+
+**Resultado esperado**  
+El grid muestra las filas de todos los empleados del proyecto aunque el mes esté vacío, permitiendo asignar vacaciones y días libres antes de generar.
+
+**Resultado obtenido**  
+Grid completamente vacío; mensaje "Sin turnos asignados" visible. El flujo de preparación mensual (PrepPanel) era inutilizable para meses nuevos.
+
+**Ficheros afectados**  
+- `app/page.tsx`
+
+**Fix aplicado**  
+Modificada `loadSchedule` para hacer una llamada paralela a `GET /api/employees?projectId=...` independientemente de si hay asignaciones. Los empleados se ordenan por `rotationOrder` directamente desde la respuesta de la API. Se mantiene un fallback que extrae empleados de las asignaciones en caso de que la llamada a `/api/employees` falle.
+
+---
+
+### BUG-29
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-29 |
+| **Sprint** | Sprint 12 — Pruebas manuales post-sprint 11 |
+| **Detectado por** | Prueba manual — PO crea segundo proyecto con empleados ya existentes |
+| **Fecha detección** | 2026-05-13 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+Al crear un nuevo proyecto y añadirle empleados que previamente pertenecían a otro proyecto, el cuadrante del nuevo proyecto mostraba todos los turnos históricos de esos empleados del proyecto anterior.
+
+La causa raíz era que `ShiftAssignment` no tenía campo `projectId`. El endpoint `GET /api/schedules` filtraba usando `employee.projectId`, pero ese campo en `Employee` apunta siempre al **proyecto actual** del empleado. Al mover un empleado a un nuevo proyecto, `Employee.projectId` se actualiza y el filtro por ese campo devuelve también todas las asignaciones históricas, que no tenían ningún identificador de proyecto propio.
+
+**Pasos para reproducir**
+1. Iniciar sesión como `admin@cuadrantes.local`.
+2. Crear proyecto A, añadir Técnico 1, generar cuadrante de Mayo 2026.
+3. Crear proyecto B, añadir Técnico 1 al proyecto B.
+4. Navegar al cuadrante de proyecto B, mes Mayo 2026.
+5. El cuadrante de proyecto B muestra los turnos de Mayo generados para proyecto A.
+
+**Resultado esperado**  
+El cuadrante del proyecto B aparece vacío (sin turnos) porque aún no se han generado asignaciones para ese proyecto.
+
+**Resultado obtenido**  
+Las asignaciones históricas de Mayo generadas bajo proyecto A aparecen en proyecto B, mezclando datos entre proyectos.
+
+**Ficheros afectados**  
+- `prisma/schema.prisma` — añadir `projectId String?` a `ShiftAssignment`
+- `prisma/migrations/20260513081837_sprint12_assignment_projectid/` — migración SQL
+- `app/api/schedules/route.ts` — GET filtra por `ShiftAssignment.projectId`; POST incluye `projectId` en upsert
+- `app/api/schedules/generate/route.ts` — upsert incluye `projectId` en `where` y `create`
+- `prisma/seed.ts` — compound key actualizada
+
+**Fix aplicado**  
+1. Añadido campo `projectId String?` a `ShiftAssignment` en el esquema Prisma.
+2. Cambiada la clave única compuesta de `[employeeId, date]` a `[employeeId, date, projectId]`.
+3. Migración `20260513081837_sprint12_assignment_projectid` aplicada a `dev.db`.
+4. Backfill: 4.379 registros existentes actualizados con `projectId` tomado del `Employee` correspondiente.
+5. `GET /api/schedules` ahora filtra directamente por `ShiftAssignment.projectId` en lugar de `employee.projectId`.
+6. `POST /api/schedules` y `generate/route.ts` incluyen `projectId` del empleado en cada `upsert`.
+7. Clave compuesta en `prisma/seed.ts` actualizada a `employeeId_date_projectId`.
+
+---
+
+### BUG-30
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-30 |
+| **Sprint** | Sprint 12 — Correcciones post-sprint |
+| **Detectado por** | Test unitario + prueba manual (Admin_sprint11 pref T no respetada) |
+| **Fecha detección** | 2026-05-14 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+El algoritmo de generación (`_pickWorkdayShift`) usaba `weeklyShift` (la consistencia de turno dentro de la semana ISO) como prioridad absoluta. Si el primer día de una semana RF-16 forzaba urgentemente un turno `M` para cumplir el mínimo de cobertura, ese valor quedaba registrado en `weeklyShift` para el empleado con preferencia `T`. El resto de días de la semana, el guard de consistencia retornaba `M` (el valor en `weeklyShift`) sin consultar la preferencia, ignorando `T` durante toda la semana.
+
+**Pasos para reproducir**  
+1. Crear proyecto con 7 técnicos, uno con `shiftPreference = "T"`.
+2. Generar el cuadrante de un mes con varios lunes donde la cobertura M es urgente (< mínimo).
+3. Observar que el empleado pref T recibe turno M durante toda la semana donde RF-16 forzó M el lunes.
+
+**Resultado esperado**  
+El empleado con preferencia T recibe T en días laborables salvo que la cobertura urgente lo requiera ese mismo día.
+
+**Resultado obtenido**  
+El empleado con preferencia T recibe M toda la semana cuando el primer día de semana fue forzado a M por RF-16.
+
+**Ficheros afectados**  
+- `lib/schedules/generate.ts` — bucle principal y `_pickWorkdayShift`
+
+**Fix aplicado**  
+Añadida variable `dailyOrder` en el bucle principal: en cada día se ordenan los empleados poniendo primero los que no tienen preferencia M/T (pref null o J). Estos empleados "neutrales" resuelven antes la cobertura urgente RF-16 sin comprometer su `weeklyShift`. Los empleados con preferencia M/T entran después y pueden asignarse a su turno preferido sin necesidad de que RF-16 les fuerce el contrario. Se eliminó además el seeding de `weeklyShift` desde el guard de urgencia (ya no sobreescribe el turno preferido).
+
+---
+
+### BUG-31
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-31 |
+| **Sprint** | Sprint 12 — Correcciones post-sprint |
+| **Detectado por** | Prueba manual (Admin_sprint11 pref J con MF/TF en fin de semana y M/T en días laborables) |
+| **Fecha detección** | 2026-05-14 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+El algoritmo de generación no manejaba la preferencia `J` en ninguna de sus dos rutas de decisión:
+
+- **BUG-31a** (`_pickWeekendShift`): no existía caso para `pref === "J"`. El empleado J caía en la lógica de balance de MF/TF y recibía MF o TF en fin de semana en lugar de descansar (D).  
+- **BUG-31b** (`_pickWorkdayShift`): no existía caso para `pref === "J"`. El empleado J entraba en la lógica de M/T y recibía M o T en días laborables en lugar del turno `J`.
+
+**Pasos para reproducir**  
+1. Crear empleado con `shiftPreference = "J"`.
+2. Generar el cuadrante de cualquier mes.
+3. Observar que el empleado J tiene MF o TF en sábados/domingos (debería tener D) y M o T en días L-V (debería tener J).
+
+**Resultado esperado**  
+- L-V (días laborables): turno `J`.
+- Sábado / domingo / festivo: turno `D`.
+
+**Resultado obtenido**  
+- Sábado / domingo: `MF` o `TF`.
+- L-V: `M` o `T`.
+
+**Ficheros afectados**  
+- `lib/schedules/generate.ts` — funciones `_pickWeekendShift` y `_pickWorkdayShift`
+
+**Fix aplicado**  
+1. `_pickWeekendShift`: añadida primera línea `if (pref === "J") return "D"`.  
+2. `_pickWorkdayShift`: añadida primera línea `if (pref === "J") return "J"`.  
+Los empleados J no compiten por la cobertura M/T del equipo gracias al `dailyOrder` introducido en BUG-30 (se procesan antes los empleados neutrales que cubren RF-16).
+
+*Registro mantenido por el agente `doc-writer`. Actualizar tras cada sesión de QA.*

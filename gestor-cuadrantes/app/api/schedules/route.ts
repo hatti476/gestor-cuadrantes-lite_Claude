@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { validateScheduleBody, getMonthRange } from "@/lib/schedules/business-logic";
 import { canViewProject, isSuperAdmin, isProjectAdmin } from "@/lib/auth/permissions";
+import { computeMonthStatus } from "@/lib/schedules/types";
 
 // ---------------------------------------------------------------------------
 // GET /api/schedules?year=YYYY&month=M[&projectId=xxx]
@@ -34,25 +35,19 @@ export async function GET(req: NextRequest) {
 
   const { start, end } = getMonthRange(year, month);
 
-  // Filtro de empleados: si hay projectId, solo empleados de ese proyecto
-  // Si no hay projectId: SUPER_ADMIN ve todos; USER ve su propio proyecto
-  let employeeFilter: { projectId?: string | null } = {};
+  // Determinar el projectId efectivo para filtrar
+  let effectiveProjectId: string | undefined | null = undefined;
   if (projectId) {
-    employeeFilter = { projectId };
+    effectiveProjectId = projectId;
   } else if (!isSuperAdmin(session)) {
-    // USER sin projectId: ver solo empleados de sus proyectos
     const memberProjectIds = session.user.projectMemberships.map((m) => m.projectId);
-    if (memberProjectIds.length > 0) {
-      employeeFilter = { projectId: memberProjectIds[0] };
-    }
+    effectiveProjectId = memberProjectIds[0] ?? null;
   }
 
   const assignments = await prisma.shiftAssignment.findMany({
     where: {
       date: { gte: start, lt: end },
-      ...(Object.keys(employeeFilter).length > 0
-        ? { employee: employeeFilter }
-        : {}),
+      ...(effectiveProjectId !== undefined ? { projectId: effectiveProjectId } : {}),
     },
     include: {
       employee: {
@@ -62,7 +57,8 @@ export async function GET(req: NextRequest) {
     orderBy: [{ employee: { rotationOrder: "asc" } }, { date: "asc" }],
   });
 
-  return NextResponse.json(assignments);
+  const monthStatus = computeMonthStatus(assignments);
+  return NextResponse.json({ assignments, monthStatus });
 }
 
 // ---------------------------------------------------------------------------
@@ -86,26 +82,27 @@ export async function POST(req: NextRequest) {
 
   // Verificar que tiene permisos de edición para este empleado
   // SUPER_ADMIN puede editar cualquiera; PROJECT_ADMIN solo los de su proyecto
+  const emp = await prisma.employee.findUnique({
+    where: { id: employeeId! },
+    select: { projectId: true },
+  });
   if (!isSuperAdmin(session)) {
-    const emp = await prisma.employee.findUnique({
-      where: { id: employeeId! },
-      select: { projectId: true },
-    });
     if (!emp?.projectId || !isProjectAdmin(session, emp.projectId)) {
       return NextResponse.json({ error: "Prohibido" }, { status: 403 });
     }
   }
+  const assignmentProjectId = emp?.projectId ?? null;
 
   // Buscar turno previo para el log
-  const previous = await prisma.shiftAssignment.findUnique({
-    where: { employeeId_date: { employeeId: employeeId!, date: parsedDate! } },
-    select: { shiftType: true },
+  const previous = await prisma.shiftAssignment.findFirst({
+    where: { employeeId: employeeId!, date: parsedDate!, projectId: assignmentProjectId },
+    select: { shiftType: true, id: true },
   });
 
   const assignment = await prisma.shiftAssignment.upsert({
-    where: { employeeId_date: { employeeId: employeeId!, date: parsedDate! } },
-    update: { shiftType: shiftType! },
-    create: { employeeId: employeeId!, date: parsedDate!, shiftType: shiftType! },
+    where: { employeeId_date_projectId: { employeeId: employeeId!, date: parsedDate!, projectId: assignmentProjectId! } },
+    update: { shiftType: shiftType!, manual: true },
+    create: { employeeId: employeeId!, date: parsedDate!, shiftType: shiftType!, manual: true, projectId: assignmentProjectId },
   });
 
   // Registrar en el historial de cambios

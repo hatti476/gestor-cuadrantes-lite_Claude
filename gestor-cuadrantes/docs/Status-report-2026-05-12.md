@@ -1,6 +1,6 @@
 # Informe de Estado — Gestor de Cuadrantes
 
-**Fecha**: 12/05/2026 | **Versión del sistema**: 0.9 | **Branch**: `main` | **Commits totales**: 24
+**Fecha**: 12/05/2026 | **Versión del sistema**: 1.1 | **Branch**: `main` | **Commits totales**: 26
 
 ---
 
@@ -11,8 +11,8 @@
 | Framework | Next.js 15 (App Router, TypeScript, Tailwind CSS) |
 | Base de datos | Prisma 5.22 + SQLite (dev) / PostgreSQL 16 (prod) |
 | Autenticación | NextAuth 4.x — JWT + CredentialsProvider |
-| Tests unitarios | Vitest 4.1 — **118/118 ✅** |
-| Tests E2E | Playwright 1.59 — **69/69 ✅** |
+| Tests unitarios | Vitest 4.1 — **128/128 ✅** |
+| Tests E2E | Playwright 1.59 — **84/84 ✅** |
 | Producción | Docker + docker-compose.prod.yml |
 
 ---
@@ -282,6 +282,141 @@ RF-05 (completo), RF-13 (completo), RF-14, RF-15, RF-16
 
 ---
 
+## Sprint 10 — Soft-delete, shiftPreference UI, PROJECT_ADMIN edición, nightRotationOrder UI, tabla de contadores
+
+**Commit**: `7fcc9a9`
+
+### Implementado
+
+#### Soft-delete de empleados
+- Campo `Employee.active Boolean @default(true)` en Prisma
+- Migración: `20260512150600_sprint10_soft_delete_shift_preference`
+- API PATCH `/api/employees/[id]`: acepta `active` (solo SUPER_ADMIN), `name`/`shiftPreference`/`role` (SUPER_ADMIN o PROJECT_ADMIN)
+- API DELETE `/api/employees/[id]`: soft-delete (`active = false`); solo SUPER_ADMIN
+- Reactivación: PATCH con `active: true`
+- La API `GET /api/employees` devuelve solo activos por defecto; param `includeInactive=true` para SUPER_ADMIN
+- La generación automática solo incluye empleados activos
+
+#### shiftPreference editable en UI
+- Selector `data-testid="select-shift-preference"` en `EmployeeForm`
+- Badge de preferencia `data-testid="badge-pref-{id}"` en `EmployeeTable`
+- API PATCH actualiza `shiftPreference` junto con el resto de campos
+
+#### PROJECT_ADMIN puede editar turnos
+- `canEdit = isAdmin || PROJECT_ADMIN del proyecto activo` en `app/page.tsx`
+- `onCellClick` solo se pasa al grid si `canEdit` es true
+- API POST/DELETE `/api/schedules` acepta PROJECT_ADMIN del proyecto
+
+#### nightRotationOrder editable en UI
+- Panel `NightRotationPanel` en `/projects` con lista reordenable (botones ↑/↓)
+- `data-testid="night-rotation-panel"`, `rotation-order-list`, `btn-rotation-up-{id}`, `btn-rotation-down-{id}`, `btn-save-rotation-order`
+- API PUT `/api/projects/[id]` acepta `nightRotationOrder` (JSON string de IDs)
+
+#### Tabla de contadores separada (RF-17)
+- Extraida del ScheduleGrid a un componente `CountersTable` en `app/page.tsx`
+- Posición: debajo del grid, antes de la leyenda, alineada a la izquierda (`w-fit`)
+- Columna sticky "Empleado" propia (140px) — no comparte encabezado con el grid
+- Cabeceras de turno: mismo badge cuadrado redondeado que `ShiftCell` (colores + tipografía)
+- Estilo visual: `rounded-lg border border-gray-200 shadow-sm`, hover de filas `hover:bg-yellow-50/40`
+- Grid: añadido `w-fit` al wrapper `overflow-x-auto` para eliminar el hueco vacío a la derecha
+
+### Tests E2E añadidos
+| CP | Descripción |
+|----|-------------|
+| CP-71 | `shiftPreference` se guarda y muestra badge en el listado de empleados |
+| CP-72 | Desactivar empleado hace soft-delete; el historial persiste |
+| CP-73 | Empleado inactivo no aparece en la API de empleados activos |
+| CP-74 | PROJECT_ADMIN puede editar celdas de su proyecto |
+| CP-75 | PROJECT_ADMIN no puede editar celdas de otro proyecto |
+| CP-76 | `nightRotationOrder` se puede reordenar y guardar desde /projects |
+| CP-77 | Tabla de contadores aparece debajo del grid con datos coherentes |
+| CP-78 | Tabla de contadores tiene estilo visual consistente con el grid (posición, colores, no solape) |
+
+### Tests al cierre de Sprint 10
+- **Unit**: 118/118 ✅ (sin cambios: `countShifts` y lógica de negocio ya cubiertos)
+- **E2E**: 77/77 ✅
+
+### RFs cubiertos
+RF-02.8, RF-04.7/04.8, RF-08.9-08.12, RF-14.12/14.13, RF-17 (completo)
+
+---
+
+## Sprint 11 — Estado del mes, PrepPanel, revert festivos y celdas bloqueadas
+
+**Commit**: `pendiente`
+
+### Implementado
+
+#### Estado del mes (`MonthStatus`)
+- Tipo `MonthStatus = "ungenerated" | "preparation" | "generated"` en `lib/schedules/types.ts`
+- Función pura `computeMonthStatus(assignments)`: sin asignaciones → `ungenerated`; solo V/D → `preparation`; cualquier M/T/N/MF/TF/NF → `generated`
+- API `GET /api/schedules` devuelve `{ assignments, monthStatus }` (antes solo `assignments`)
+- Componente `MonthStatusBadge` visible junto al título del mes en `app/page.tsx`:
+  - Sin generar → badge gris `"Sin generar"`
+  - En preparación → badge azul `"En preparación"`
+  - Generado → badge verde `"Generado"`
+
+#### Panel de preparación (`PrepPanel`)
+- Componente `components/schedule/prep-panel.tsx` con 4 pasos desplegables (acordeón):
+  1. **Vacaciones** — muestra contador de V asignadas en el mes
+  2. **Libres** — muestra contador de D(manual) asignados en el mes
+  3. **Festivos** — muestra contador de festivos del mes + enlace a `/holidays`
+  4. **Generar** — botón `btn-generate` solo visible cuando este paso está activo
+- Botón `btn-save-preparation` (guardar preparación): guarda el estado y recarga el cuadrante; **deshabilitado si `monthStatus === "generated"`**
+- Props: `monthStatus, activeStep, onStepChange, vacacionesCount, libresCount, holidaysCount, onSavePreparation, onGenerate, generating, isAdmin, onManageHolidays`
+- `data-testid="prep-panel"` y `"prep-step-{id}"` para cada paso
+
+#### Modo dual de asignación en celda
+- Con paso activo `vacaciones` → clic en celda asigna `V` directamente (sin modal)
+- Con paso activo `libres` → clic en celda asigna `D` directamente con `manual: true`
+- Resto de pasos o sin paso → comportamiento modal habitual
+
+#### Campo `manual` en asignaciones
+- Migración `20260512173942_sprint11_manual_assignment`: `ShiftAssignment.manual Boolean @default(false)`
+- API `POST /api/schedules`: guarda `manual: true` en todas las asignaciones manuales
+- API `GET /api/schedules/generate`: bloquea celdas con `V`, `B` **y** `D` con `manual=true` (no sobreescribe)
+
+#### Celdas bloqueadas (`lockedCells`)
+- Prop `lockedCells?: Set<string>` en `ScheduleGrid` (formato `"employeeId|YYYY-MM-DD"`)
+- Celdas bloqueadas muestran `ring-2 ring-inset ring-dashed ring-amber-400` + emoji 🔒
+- En `app/page.tsx`: se bloquean `V` y `D` con `manual=true`
+- Añadido `data-testid={`cell-${emp.id}-${dateStr}`}` a cada `<td>` del grid
+
+#### Confirmación antes de regenerar (L-03)
+- Si `monthStatus === "generated"`, el botón Generar muestra un modal de confirmación antes de ejecutar
+- Modal con `data-testid="confirm-generate-modal"`, `"btn-confirm-generate"`, `"btn-cancel-generate"`
+- El usuario puede cancelar sin perder los datos existentes
+
+#### Revert de turnos al eliminar festivo (L-02)
+- `DELETE /api/holidays/[id]`: tras eliminar el festivo, revierte automáticamente:
+  - `MF` → `M` en la fecha del festivo
+  - `TF` → `T` en la fecha del festivo
+  - `NF` → `N` en el día anterior al festivo
+- Devuelve `{ ok: true, reverted: <count> }` con el número de turnos revertidos
+- UI en `/holidays`: toast diferenciado:
+  - Si `reverted > 0` → `"Festivo eliminado. X turno(s) revertido(s) a su tipo original."`
+  - Si `reverted === 0` → `"Festivo eliminado correctamente."`
+
+### Tests E2E añadidos
+| CP | Descripción |
+|----|-------------|
+| CP-79 | Badge muestra "Sin generar" en mes sin cuadrante |
+| CP-80 | Marcar vacaciones en modo PrepPanel bloquea celda con 🔒 |
+| CP-81 | Guardar preparación cambia badge a "En preparación" |
+| CP-82 | Generar cuadrante preserva las celdas V bloqueadas |
+| CP-83 | Confirmación de regeneración aparece si ya hay datos; cancelar no borra nada |
+| CP-84 | Eliminar festivo con turnos MF/TF/NF muestra toast con conteo de revertidos |
+| CP-85 | Eliminar festivo sin turnos MF/TF/NF muestra toast genérico de "eliminado" |
+
+### Tests al cierre de Sprint 11
+- **Unit**: 128/128 ✅ (+10 nuevos en `tests/unit/schedules/month-status.test.ts`)
+- **E2E**: 84/84 ✅ (+7 nuevos CP-79 a CP-85)
+
+### RFs cubiertos
+RF-04.9, RF-05.8, RF-07.6/07.7, RF-11.4, RF-18 (completo)
+
+---
+
 ## Resumen de bugs por sprint
 
 | Sprint | Bugs totales | Resueltos | Abiertos/Mitigados |
@@ -293,9 +428,14 @@ RF-05 (completo), RF-13 (completo), RF-14, RF-15, RF-16
 | S8 | 3 | 3 | 0 |
 | S9 | 3 | 2 | 1 mitigado |
 | S9-PO | 6 | 6 | 0 |
-| **Total** | **26** | **25** | **1 mitigado** |
+| S10 | 0 | 0 | 0 |
+| S11 | 0 | 0 | 0 |
+| Post-S11 | 2 | 2 | 0 |
+| **Total** | **31** | **30** | **1 mitigado** |
 
 > BUG-20 (mitigado): el servidor E2E con estado obsoleto no puede verificar celdas N/NF por DOM. No impacta a producción.
+
+> BUG-27 y BUG-28 detectados durante pruebas manuales post-Sprint 11 en servidor de desarrollo.
 
 ---
 
@@ -319,7 +459,9 @@ RF-05 (completo), RF-13 (completo), RF-14, RF-15, RF-16
 | RF-14 — Algoritmo Fase 2 | 11 | 11 ✅ |
 | RF-15 — UX Header | 7 | 7 ✅ |
 | RF-16 — Cobertura mínima | 5 | 5 ✅ |
-| **TOTAL** | **~118** | **~118 ✅** |
+| RF-17 — Tabla de contadores | 6 | 6 ✅ |
+| RF-18 — Estado del mes y PrepPanel | 8 | 8 ✅ |
+| **TOTAL** | **~132** | **~132 ✅** |
 
 ### Requisitos no funcionales
 
@@ -340,9 +482,6 @@ RF-05 (completo), RF-13 (completo), RF-14, RF-15, RF-16
 | Área | Descripción | Complejidad estimada |
 |------|-------------|----------------------|
 | **Festivos por proyecto** | Los festivos son actualmente globales. Cada proyecto debería tener su propio calendario (CCAA, convenio colectivo). El schema ya reserva `ProjectHoliday`. | Media |
-| **`shiftPreference` editable en UI** | El campo existe en BD y el algoritmo lo usa, pero no hay interfaz para que el admin lo configure por empleado. | Baja |
-| **`nightRotationOrder` editable en UI** | El JSON de rotación nocturna existe en BD pero solo es modificable directamente en BD. | Media |
-| **Edición de turno para PROJECT_ADMIN** | El PROJECT_ADMIN puede ver el cuadrante de su proyecto pero no editar turnos. | Baja |
 | **Vista personalizada del técnico** | El técnico ve el cuadrante completo. Podría tener una vista solo con sus propios turnos y próximos días. | Baja |
 | **Solicitud / aprobación de vacaciones** | Las vacaciones y ausencias se asignan manualmente celda a celda. No hay flujo de solicitud ni aprobación. | Alta |
 | **Dashboard de proyecto** | El PROJECT_ADMIN no tiene estadísticas centralizadas: cobertura diaria, ausencias del mes, horas totales. | Alta |

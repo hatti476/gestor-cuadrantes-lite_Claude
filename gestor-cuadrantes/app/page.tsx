@@ -7,8 +7,9 @@ import { ScheduleGrid } from "@/components/schedule/schedule-grid";
 import { Header } from "@/components/layout/header";
 import { ShiftEditor } from "@/components/schedule/shift-editor";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
-import { ScheduleAssignment, ScheduleEmployee } from "@/lib/schedules/types";
+import { ScheduleAssignment, ScheduleEmployee, MonthStatus, computeMonthStatus } from "@/lib/schedules/types";
 import { countShifts } from "@/lib/schedules/business-logic";
+import { PrepPanel, MonthStatusBadge, PrepStep } from "@/components/schedule/prep-panel";
 import { useToast } from "@/components/ui/toast-provider";
 
 const MONTH_NAMES = [
@@ -26,11 +27,8 @@ function CountersTable({
   assignments: ScheduleAssignment[];
 }) {
   return (
-    <div
-      className="overflow-x-auto mt-3 rounded-lg border border-gray-200 shadow-sm"
-      data-testid="counters-table"
-    >
-      <table className="border-collapse text-xs min-w-max w-full">
+    <div className="mt-2 w-fit overflow-x-auto rounded-lg border border-gray-200 shadow-sm" data-testid="counters-table">
+      <table className="border-collapse text-xs min-w-max">
         <thead>
           <tr className="bg-gray-50">
             <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-b border-r border-gray-200 min-w-[140px]">
@@ -39,13 +37,14 @@ function CountersTable({
             {COUNTER_SHIFTS.map((s) => (
               <th
                 key={s}
-                className="w-10 py-2 text-center border-b border-r border-gray-200 font-semibold"
-                style={{
-                  backgroundColor: SHIFT_COLORS[s].color,
-                  color: SHIFT_COLORS[s].textColor,
-                }}
+                className="w-9 py-1 text-center border-b border-r border-gray-200"
               >
-                {s}
+                <div
+                  className="flex items-center justify-center w-7 h-7 mx-auto rounded-sm text-xs font-bold select-none"
+                  style={{ backgroundColor: SHIFT_COLORS[s].color, color: SHIFT_COLORS[s].textColor }}
+                >
+                  {s}
+                </div>
               </th>
             ))}
           </tr>
@@ -58,7 +57,7 @@ function CountersTable({
             const counters = countShifts(empShifts);
             const rowBg = rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/50";
             return (
-              <tr key={emp.id} className={rowBg}>
+              <tr key={emp.id} className={`${rowBg} hover:bg-yellow-50/40 transition-colors`}>
                 <td className={`sticky left-0 z-10 ${rowBg} px-3 py-1 font-medium text-gray-700 border-r border-b border-gray-200 whitespace-nowrap`}>
                   {emp.name}
                 </td>
@@ -67,7 +66,7 @@ function CountersTable({
                   return (
                     <td
                       key={s}
-                      className="w-10 py-1 text-center border-r border-b border-gray-200 font-mono tabular-nums"
+                      className="w-9 h-8 py-1 text-center border-r border-b border-gray-200 font-mono tabular-nums"
                       style={{ color: count === 0 ? "#9E9E9E" : undefined }}
                       data-testid={`counter-${emp.id}-${s}`}
                     >
@@ -87,11 +86,6 @@ function CountersTable({
 export default function HomePage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "SUPER_ADMIN";
-  // PROJECT_ADMIN también puede editar celdas de su proyecto
-  const canEdit = isAdmin || (session?.user?.projectMemberships ?? []).some(
-    (m: { projectId: string; role: string }) =>
-      m.projectId === activeProjectId && m.role === "PROJECT_ADMIN"
-  );
   const router = useRouter();
   const { showToast } = useToast();
 
@@ -106,6 +100,12 @@ export default function HomePage() {
       return null;
     }
   });
+
+  // PROJECT_ADMIN también puede editar celdas de su proyecto
+  const canEdit = isAdmin || (session?.user?.projectMemberships ?? []).some(
+    (m: { projectId: string; role: string }) =>
+      m.projectId === activeProjectId && m.role === "PROJECT_ADMIN"
+  );
 
   // Auto-seleccionar primer proyecto si no hay ninguno en localStorage
   useEffect(() => {
@@ -128,8 +128,11 @@ export default function HomePage() {
   const [assignments, setAssignments] = useState<ScheduleAssignment[]>([]);
   const [holidayDates, setHolidayDates] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [monthStatus, setMonthStatus] = useState<MonthStatus>("ungenerated");
 
-  // Editor de turno
+  // Estado del panel de preparación
+  const [prepStep, setPrepStep] = useState<PrepStep>(null);
+  const [showConfirmGenerate, setShowConfirmGenerate] = useState(false);
   const [editingCell, setEditingCell] = useState<{
     employeeId: string;
     date: string;
@@ -144,26 +147,39 @@ export default function HomePage() {
     setLoading(true);
     try {
       const projectParam = activeProjectId ? `&projectId=${activeProjectId}` : "";
-      const [scheduleRes, holidayRes] = await Promise.all([
+      const employeeParam = activeProjectId ? `?projectId=${activeProjectId}` : "";
+      const [scheduleRes, holidayRes, employeeRes] = await Promise.all([
         fetch(`/api/schedules?year=${year}&month=${month}${projectParam}`),
         fetch(`/api/holidays?year=${year}`),
+        fetch(`/api/employees${employeeParam}`),
       ]);
       if (!scheduleRes.ok) throw new Error("Error cargando cuadrante");
-      const data: ScheduleAssignment[] = await scheduleRes.json();
+      const responseData: { assignments: ScheduleAssignment[]; monthStatus: MonthStatus } = await scheduleRes.json();
+      const data = responseData.assignments ?? [];
 
-      // Extraer empleados únicos ordenados por rotationOrder
-      const empMap = new Map<string, ScheduleEmployee>();
-      data.forEach((a) => {
-        if (a.employee && !empMap.has(a.employeeId)) {
-          empMap.set(a.employeeId, a.employee);
-        }
-      });
-      const sortedEmployees = Array.from(empMap.values()).sort(
-        (a, b) => a.rotationOrder - b.rotationOrder
-      );
+      // Cargar empleados desde la API (independientemente de si hay turnos)
+      let sortedEmployees: ScheduleEmployee[] = [];
+      if (employeeRes.ok) {
+        const apiEmployees: (ScheduleEmployee & { userId?: string })[] = await employeeRes.json();
+        sortedEmployees = apiEmployees
+          .sort((a, b) => a.rotationOrder - b.rotationOrder)
+          .map((e) => ({ ...e, userId: e.userId ?? null }));
+      } else {
+        // Fallback: extraer de asignaciones si la API falla
+        const empMap = new Map<string, ScheduleEmployee>();
+        data.forEach((a) => {
+          if (a.employee && !empMap.has(a.employeeId)) {
+            empMap.set(a.employeeId, a.employee);
+          }
+        });
+        sortedEmployees = Array.from(empMap.values()).sort(
+          (a, b) => a.rotationOrder - b.rotationOrder
+        );
+      }
 
       setEmployees(sortedEmployees);
       setAssignments(data);
+      setMonthStatus(responseData.monthStatus ?? computeMonthStatus(data));
 
       // Filtrar festivos del mes actual
       if (holidayRes.ok) {
@@ -203,9 +219,32 @@ export default function HomePage() {
   }
 
   // ---------------------------------------------------------------------------
-  // Clic en celda (solo ADMIN)
+  // Clic en celda — normal o en modo prep
   // ---------------------------------------------------------------------------
-  function handleCellClick(employeeId: string, date: string, currentShift?: string) {
+  async function handleCellClick(employeeId: string, date: string, currentShift?: string) {
+    // Modo preparación: asigna directamente V o D sin abrir el modal
+    if (prepStep === "vacaciones" || prepStep === "libres") {
+      const shiftType = prepStep === "vacaciones" ? "V" : "D";
+      // Toggle: si ya tiene ese tipo, limpiarlo
+      const found = assignments.find(
+        (a) => a.employeeId === employeeId && a.date.slice(0, 10) === date
+      );
+      if (found?.shiftType === shiftType) {
+        // Quitar la asignación
+        if (found.id) {
+          await fetch(`/api/schedules?id=${found.id}`, { method: "DELETE" });
+        }
+      } else {
+        await fetch("/api/schedules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ employeeId, date, shiftType }),
+        });
+      }
+      await loadSchedule();
+      return;
+    }
+    // Modo normal: abrir editor modal
     const found = assignments.find(
       (a) => a.employeeId === employeeId && a.date.slice(0, 10) === date
     );
@@ -249,11 +288,20 @@ export default function HomePage() {
   }
 
   // ---------------------------------------------------------------------------
-  // Generación automática
+  // Generación automática (con confirmación si ya hay datos)
   // ---------------------------------------------------------------------------
   const [generating, setGenerating] = useState(false);
 
-  async function handleGenerate() {
+  function requestGenerate() {
+    if (monthStatus === "generated") {
+      setShowConfirmGenerate(true);
+    } else {
+      void doGenerate();
+    }
+  }
+
+  async function doGenerate() {
+    setShowConfirmGenerate(false);
     setGenerating(true);
     try {
       const res = await fetch("/api/schedules/generate", {
@@ -270,6 +318,14 @@ export default function HomePage() {
     } finally {
       setGenerating(false);
     }
+  }
+
+  // Guardar preparación (marca el badge como "En preparación")
+  function handleSavePreparation() {
+    showToast("Preparación guardada", "success");
+    // El estado ya refleja la preparación porque las celdas V/D existen en BD
+    // Solo necesitamos recargar para asegurar el badge correcto
+    void loadSchedule();
   }
 
   // ---------------------------------------------------------------------------
@@ -310,6 +366,18 @@ export default function HomePage() {
   }
 
   // ---------------------------------------------------------------------------
+  // Render helpers
+  // ---------------------------------------------------------------------------
+  // Celdas bloqueadas por preparación manual (V manual o D manual)
+  const lockedCells = new Set<string>(
+    assignments
+      .filter((a) => (a.shiftType === "V" || (a.shiftType === "D" && a.manual)))
+      .map((a) => `${a.employeeId}|${a.date.slice(0, 10)}`)
+  );
+  const vacacionesCount = assignments.filter((a) => a.shiftType === "V").length;
+  const libresCount = assignments.filter((a) => a.shiftType === "D" && a.manual).length;
+
+  // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
   return (
@@ -317,7 +385,7 @@ export default function HomePage() {
       <Header />
       <main className="flex-1 p-6">
         {/* Navegación de mes */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-4 mb-4 flex-wrap">
           <button
             data-testid="btn-prev-month"
             onClick={prevMonth}
@@ -335,25 +403,22 @@ export default function HomePage() {
           >
             ›
           </button>
-          {canEdit && (
-            <span className="ml-2 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1 print:hidden">
-              Modo edición — clic en celda para asignar turno
+          {/* Badge de estado del mes */}
+          {!loading && <MonthStatusBadge status={monthStatus} />}
+          {canEdit && prepStep && (
+            <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-1 print:hidden">
+              Modo preparación — clic en celda para asignar {prepStep === "vacaciones" ? "V" : "D"}
             </span>
           )}
-          {isAdmin && (
-            <button
-              data-testid="btn-generate"
-              onClick={handleGenerate}
-              disabled={generating}
-              className="ml-auto text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors print:hidden"
-            >
-              {generating ? "Generando..." : "Generar cuadrante"}
-            </button>
+          {canEdit && !prepStep && (
+            <span className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1 print:hidden">
+              Modo edición — clic en celda para asignar turno
+            </span>
           )}
           <button
             data-testid="btn-export-csv"
             onClick={handleExportCSV}
-            className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors print:hidden"
+            className="ml-auto text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors print:hidden"
           >
             Exportar CSV
           </button>
@@ -375,31 +440,58 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Grid */}
-        {loading ? (
-          <div className="flex items-center justify-center h-64 text-gray-400">
-            Cargando cuadrante...
+        {/* Contenido principal: grid + panel de preparación */}
+        <div className="flex gap-6 items-start">
+          {/* Grid + contadores */}
+          <div className="flex-1 min-w-0 overflow-x-hidden">
+            {loading ? (
+              <div className="flex items-center justify-center h-64 text-gray-400">
+                Cargando cuadrante...
+              </div>
+            ) : (
+              <>
+                <ScheduleGrid
+                  year={year}
+                  month={month}
+                  employees={employees}
+                  assignments={assignments}
+                  holidayDates={holidayDates}
+                  onCellClick={canEdit ? handleCellClick : undefined}
+                  lockedCells={lockedCells}
+                  currentUserId={session?.user?.id ?? null}
+                />
+                {employees.length > 0 && (
+                  <CountersTable employees={employees} assignments={assignments} />
+                )}
+                {employees.length === 0 && monthStatus === "ungenerated" && (
+                  <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2 mt-4">
+                    <span className="text-4xl">📋</span>
+                    <p className="text-sm">Sin turnos asignados este mes. Usa el panel para preparar y generar.</p>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-        ) : employees.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-400 gap-2">
-            <span className="text-4xl">📋</span>
-            <p className="text-sm">Sin turnos asignados este mes</p>
-          </div>
-        ) : (
-          <>
-            <ScheduleGrid
-              year={year}
-              month={month}
-              employees={employees}
-              assignments={assignments}
-              holidayDates={holidayDates}
-              onCellClick={canEdit ? handleCellClick : undefined}
-            />
 
-            {/* Tabla de contadores debajo del grid */}
-            <CountersTable employees={employees} assignments={assignments} />
-          </>
-        )}
+          {/* Panel de preparación (solo admins) */}
+          {isAdmin && !loading && (
+            <div className="w-56 flex-shrink-0 print:hidden">
+              <PrepPanel
+                monthStatus={monthStatus}
+                activeStep={prepStep}
+                onStepChange={setPrepStep}
+                vacacionesCount={vacacionesCount}
+                libresCount={libresCount}
+                holidaysCount={holidayDates.size}
+                onSavePreparation={handleSavePreparation}
+                onGenerate={requestGenerate}
+                generating={generating}
+                isAdmin={isAdmin}
+                onManageHolidays={() => router.push("/holidays")}
+              />
+            </div>
+          )}
+        </div>
 
         {/* Leyenda */}
         <div className="mt-6 flex flex-wrap gap-3">
@@ -429,6 +521,34 @@ export default function HomePage() {
           onDelete={editingCell.assignmentId ? handleDeleteShift : undefined}
           onClose={() => setEditingCell(null)}
         />
+      )}
+
+      {/* Modal de confirmación de generación */}
+      {showConfirmGenerate && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" data-testid="confirm-generate-modal">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">¿Regenerar cuadrante?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Esto sobreescribirá las celdas no bloqueadas del mes. Las vacaciones, bajas y días libres marcados se conservarán. ¿Continuar?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                data-testid="btn-cancel-generate"
+                onClick={() => setShowConfirmGenerate(false)}
+                className="px-4 py-2 text-sm rounded-lg border border-gray-200 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                data-testid="btn-confirm-generate"
+                onClick={() => void doGenerate()}
+                className="px-4 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700"
+              >
+                Generar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

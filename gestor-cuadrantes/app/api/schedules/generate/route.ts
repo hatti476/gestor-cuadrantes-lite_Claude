@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   const employeeWhere = projectId ? { projectId } : {};
   const employees = await prisma.employee.findMany({
     where: employeeWhere,
-    select: { id: true, rotationOrder: true, shiftPreference: true },
+    select: { id: true, rotationOrder: true, shiftPreference: true, projectId: true },
     orderBy: { rotationOrder: "asc" },
   });
 
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   const { start, end } = getMonthRange(year, month);
   const existing = await prisma.shiftAssignment.findMany({
     where: { employeeId: { in: employeeIds }, date: { gte: start, lt: end } },
-    select: { employeeId: true, date: true, shiftType: true },
+    select: { employeeId: true, date: true, shiftType: true, manual: true },
   });
 
   // Obtener festivos del mes
@@ -63,13 +63,14 @@ export async function POST(req: NextRequest) {
     holidays.map((h) => h.date.toISOString().slice(0, 10))
   );
 
-  // Construir el set de celdas bloqueadas (V / B — no regenerar)
-  // J (Jornada normal) NO se bloquea: puede ser un turno residual de un proyecto
-  // anterior y bloquearía la rotación nocturna. V y B son datos de RRHH explícitos.
-  const LOCKED_TYPES = new Set(["V", "B"]);
+  // Construir el set de celdas bloqueadas:
+  //   - V y B: siempre bloqueados (datos de RRHH explícitos)
+  //   - D con manual=true: descanso excepcional marcado en preparación (Sprint 11)
+  //   - J (Jornada normal) NO se bloquea: puede ser residual de otro proyecto
+  const ALWAYS_LOCKED = new Set(["V", "B"]);
   const existingSet = new Set<string>(
     existing
-      .filter((a) => LOCKED_TYPES.has(a.shiftType))
+      .filter((a) => ALWAYS_LOCKED.has(a.shiftType) || (a.shiftType === "D" && a.manual))
       .map((a) => `${a.employeeId}|${a.date.toISOString().slice(0, 10)}`)
   );
 
@@ -115,16 +116,19 @@ export async function POST(req: NextRequest) {
   );
 
   // Insertar en BD — una sola transacción para máximo rendimiento con SQLite
+  // projectId se incluye en cada asignación para que quede ligada al proyecto correcto
+  // y no contamine a otros proyectos que reutilicen los mismos empleados
   await prisma.$transaction(
-    toCreate.map((a) =>
-      prisma.shiftAssignment.upsert({
+    toCreate.map((a) => {
+      const empProjectId = employees.find((e) => e.id === a.employeeId)?.projectId ?? projectId ?? null;
+      return prisma.shiftAssignment.upsert({
         where: {
-          employeeId_date: { employeeId: a.employeeId, date: a.date },
+          employeeId_date_projectId: { employeeId: a.employeeId, date: a.date, projectId: empProjectId! },
         },
-        create: { employeeId: a.employeeId, date: a.date, shiftType: a.shiftType },
+        create: { employeeId: a.employeeId, date: a.date, shiftType: a.shiftType, projectId: empProjectId },
         update: { shiftType: a.shiftType },
-      })
-    )
+      });
+    })
   );
 
   return NextResponse.json({ created: toCreate.length });

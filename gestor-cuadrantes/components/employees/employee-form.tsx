@@ -149,6 +149,7 @@ export function EmployeeForm(props: EmployeeFormProps | EmployeeFormEditProps) {
                 <option value="ANY">Sin preferencia</option>
                 <option value="M">Solo mañanas</option>
                 <option value="T">Solo tardes</option>
+                <option value="J">Jornada (L-V 9:00–18:00)</option>
               </select>
             </div>
           )}

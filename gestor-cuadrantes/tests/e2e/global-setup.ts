@@ -37,12 +37,14 @@ export default async function globalSetup() {
   };
 
   // 2. Aplicar migraciones (crea test.db con schema completo)
+  // Pasamos DATABASE_URL explícitamente en la línea de comando para que Prisma CLI
+  // no pueda sobreescribirlo con .env (que apunta a dev.db)
   console.log("[globalSetup] Aplicando migraciones...");
-  execSync("npx prisma migrate deploy", { env, cwd, stdio: "inherit" });
+  execSync(`DATABASE_URL="${TEST_DB_URL}" npx prisma migrate deploy`, { env, cwd, stdio: "inherit" });
 
   // 3. Sembrar datos de prueba
   console.log("[globalSetup] Sembrando datos...");
-  execSync("npx tsx prisma/seed.ts", { env, cwd, stdio: "inherit" });
+  execSync(`DATABASE_URL="${TEST_DB_URL}" npx tsx prisma/seed.ts`, { env, cwd, stdio: "inherit" });
 
   console.log("[globalSetup] ✓ BD de tests lista en test.db\n");
 }

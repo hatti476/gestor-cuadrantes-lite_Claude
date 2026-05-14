@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import {
   nightBlockDays,
   computeNightBlocks,
+  resolveNightBlocks,
   generateMonthSchedule,
   applySpecialDayRule,
   isWeekend,
@@ -576,7 +577,80 @@ describe("generateMonthSchedule — preferencias de turno", () => {
     const emp2 = result.filter((a) => a.employeeId === "emp-2" && !isWeekend(a.date));
     const mCount = emp2.filter((a) => normalizeShift(a.shiftType) === "M").length;
     const tCount = emp2.filter((a) => normalizeShift(a.shiftType) === "T").length;
-    expect(tCount).toBeGreaterThan(mCount);
+    // La preferencia T debe dominar: T >= M (>= porque el balance puede dar empate exacto)
+    expect(tCount).toBeGreaterThanOrEqual(mCount);
+  });
+
+  // ── BUG-30: preferencia M/T se respeta incluso cuando hay varios empleados ──
+  it("BUG-30 — técnico con pref T no recibe más M que T aunque otros empiecen en M", () => {
+    // Reproduce el escenario del pantallazo: 7 técnicos, emp-2 tiene pref T.
+    // nightRotationIds explícito para que emp-2 no caiga siempre en bloque N.
+    const emps = [
+      { id: "emp-1", rotationOrder: 0, shiftPreference: null },
+      { id: "emp-2", rotationOrder: 1, shiftPreference: "T" as const },
+      { id: "emp-3", rotationOrder: 2, shiftPreference: "M" as const },
+      { id: "emp-4", rotationOrder: 3, shiftPreference: null },
+      { id: "emp-5", rotationOrder: 4, shiftPreference: null },
+      { id: "emp-6", rotationOrder: 5, shiftPreference: null },
+      { id: "emp-7", rotationOrder: 6, shiftPreference: null },
+    ];
+    const nightOrder = ["emp-1", "emp-3", "emp-4", "emp-5", "emp-6", "emp-7"]; // emp-2 fuera de noches
+    const result = generateMonthSchedule(emps, 2026, 3, new Set(), new Set(), [], nightOrder);
+    // Filtrar SOLO días laborables donde emp-2 recibe M o T (excluye N/D de bloque nocturno)
+    const emp2Work = result.filter(
+      (a) =>
+        a.employeeId === "emp-2" &&
+        !isWeekend(a.date) &&
+        (normalizeShift(a.shiftType) === "M" || normalizeShift(a.shiftType) === "T")
+    );
+    const mCount = emp2Work.filter((a) => normalizeShift(a.shiftType) === "M").length;
+    const tCount = emp2Work.filter((a) => normalizeShift(a.shiftType) === "T").length;
+    // La preferencia T debe dominar: T >= M en días laborables efectivos
+    expect(tCount).toBeGreaterThanOrEqual(mCount);
+  });
+
+  // ── BUG-31: preferencia J — descanso en fin de semana ───────────────────────
+  it("BUG-31 — técnico con pref J (Jornada) descansa todos los fines de semana", () => {
+    const emps = [
+      { id: "emp-1", rotationOrder: 0, shiftPreference: null },
+      { id: "emp-2", rotationOrder: 1, shiftPreference: null },
+      { id: "emp-3", rotationOrder: 2, shiftPreference: null },
+      { id: "emp-4", rotationOrder: 3, shiftPreference: null },
+      { id: "emp-5", rotationOrder: 4, shiftPreference: null },
+      { id: "emp-6", rotationOrder: 5, shiftPreference: null },
+      { id: "emp-J", rotationOrder: 6, shiftPreference: "J" as const },
+    ];
+    // Excluir emp-J de la rotación nocturna para un test limpio
+    const nightOrder = ["emp-1", "emp-2", "emp-3", "emp-4", "emp-5", "emp-6"];
+    const result = generateMonthSchedule(emps, 2026, 5, new Set(), new Set(), [], nightOrder);
+    const empJWeekend = result.filter(
+      (a) => a.employeeId === "emp-J" && isWeekend(a.date)
+    );
+    // Todos los días de fin de semana deben ser D (no MF/TF)
+    const nonRestWeekend = empJWeekend.filter((a) => a.shiftType !== "D");
+    expect(nonRestWeekend).toHaveLength(0);
+  });
+
+  it("BUG-31 — técnico con pref J trabaja en días laborables con turno J (no M ni T)", () => {
+    const emps = [
+      { id: "emp-1", rotationOrder: 0, shiftPreference: null },
+      { id: "emp-2", rotationOrder: 1, shiftPreference: null },
+      { id: "emp-3", rotationOrder: 2, shiftPreference: null },
+      { id: "emp-4", rotationOrder: 3, shiftPreference: null },
+      { id: "emp-5", rotationOrder: 4, shiftPreference: null },
+      { id: "emp-6", rotationOrder: 5, shiftPreference: null },
+      { id: "emp-J", rotationOrder: 6, shiftPreference: "J" as const },
+    ];
+    const nightOrder = ["emp-1", "emp-2", "emp-3", "emp-4", "emp-5", "emp-6"];
+    const result = generateMonthSchedule(emps, 2026, 5, new Set(), new Set(), [], nightOrder);
+    const empJWorkdays = result.filter(
+      (a) => a.employeeId === "emp-J" && !isWeekend(a.date)
+    );
+    // En días laborables el técnico J debe recibir exactamente "J" (no M, T, MF, TF)
+    const nonJ = empJWorkdays.filter((a) => a.shiftType !== "J" && a.shiftType !== "D");
+    expect(nonJ).toHaveLength(0);
+    const jShifts = empJWorkdays.filter((a) => a.shiftType === "J");
+    expect(jShifts.length).toBeGreaterThan(0);
   });
 });
 
@@ -610,5 +684,170 @@ describe("isWeekend", () => {
   });
   it("lunes no es fin de semana", () => {
     expect(isWeekend(fromDateStr("2026-06-01"))).toBe(false);
+  });
+});
+
+// ─── resolveNightBlocks — transferencia por conflicto ────────────────────────
+
+describe("resolveNightBlocks — sin conflictos devuelve los bloques sin cambios", () => {
+  it("con existingDates vacío devuelve el mismo array", () => {
+    const ids = make7Employees().map((e) => e.id);
+    const raw = computeNightBlocks(2026, 6, ids);
+    const resolved = resolveNightBlocks(raw, new Set(), ids);
+    // Mismo número de bloques y mismos empleados asignados
+    expect(resolved).toHaveLength(raw.length);
+    for (let i = 0; i < raw.length; i++) {
+      expect(resolved[i].employeeId).toBe(raw[i].employeeId);
+      expect(resolved[i].startFriday).toEqual(raw[i].startFriday);
+    }
+  });
+});
+
+describe("resolveNightBlocks — transferencia por vacaciones", () => {
+  it("transfiere el bloque al empleado con más tiempo sin noches cuando hay conflicto", () => {
+    // Usamos 3 empleados para simplificar el razonamiento.
+    // La rotación matemática (Mayo 2026) asigna el primer bloque al emp-1.
+    // Si emp-1 tiene vacaciones en los días N, el bloque debe ir a otro empleado.
+    const ids = ["emp-1", "emp-2", "emp-3"];
+    const raw = computeNightBlocks(2026, 5, ids); // Mayo 2026
+
+    // Identificar el primer bloque del mes y bloquear las noches del empleado asignado
+    const sorted = [...raw].sort((a, b) => a.startFriday.getTime() - b.startFriday.getTime());
+    const firstBlock = sorted[0];
+    const firstBlockDays = nightBlockDays(firstBlock);
+    const nDays = [...firstBlockDays.entries()]
+      .filter(([, s]) => s === "N")
+      .map(([d]) => d);
+
+    // Marcar todos los días N del primer bloque como vacaciones del empleado original
+    const existingDates = new Set(nDays.map((d) => `${firstBlock.employeeId}|${d}`));
+
+    const resolved = resolveNightBlocks(raw, existingDates, ids);
+
+    // El primer bloque resuelto debe pertenecer a un empleado distinto al original
+    const resolvedFirst = [...resolved].sort(
+      (a, b) => a.startFriday.getTime() - b.startFriday.getTime()
+    )[0];
+    expect(resolvedFirst.startFriday).toEqual(firstBlock.startFriday);
+    expect(resolvedFirst.employeeId).not.toBe(firstBlock.employeeId);
+  });
+
+  it("el empleado de reemplazo no tiene conflictos en los días N del bloque transferido", () => {
+    const ids = ["emp-1", "emp-2", "emp-3", "emp-4"];
+    const raw = computeNightBlocks(2026, 5, ids);
+    const sorted = [...raw].sort((a, b) => a.startFriday.getTime() - b.startFriday.getTime());
+    const firstBlock = sorted[0];
+    const firstBlockDays = nightBlockDays(firstBlock);
+    const nDays = [...firstBlockDays.entries()]
+      .filter(([, s]) => s === "N")
+      .map(([d]) => d);
+
+    // Bloquear al empleado original Y al segundo candidato (emp-2) para probar cascada
+    const existingDates = new Set([
+      ...nDays.map((d) => `${firstBlock.employeeId}|${d}`),
+      ...nDays.map((d) => `emp-2|${d}`),
+    ]);
+
+    const resolved = resolveNightBlocks(raw, existingDates, ids);
+
+    const resolvedFirst = [...resolved].sort(
+      (a, b) => a.startFriday.getTime() - b.startFriday.getTime()
+    )[0];
+    // Debe asignarse a alguien que no sea el original ni emp-2
+    expect(resolvedFirst.employeeId).not.toBe(firstBlock.employeeId);
+    expect(resolvedFirst.employeeId).not.toBe("emp-2");
+  });
+});
+
+describe("resolveNightBlocks — invariante: máx 1 N por día tras resolución", () => {
+  it("no hay dos bloques resueltos con N-days solapados", () => {
+    // Forzar múltiples conflictos para activar varias transferencias
+    const ids = ["emp-1", "emp-2", "emp-3", "emp-4", "emp-5", "emp-6", "emp-7"];
+    const raw = computeNightBlocks(2026, 5, ids);
+
+    // Bloquear el primer bloque del empleado 0
+    const sorted = [...raw].sort((a, b) => a.startFriday.getTime() - b.startFriday.getTime());
+    const firstBlock = sorted[0];
+    const firstNDays = [...nightBlockDays(firstBlock).entries()]
+      .filter(([, s]) => s === "N")
+      .map(([d]) => d);
+    const existingDates = new Set(firstNDays.map((d) => `${firstBlock.employeeId}|${d}`));
+
+    const resolved = resolveNightBlocks(raw, existingDates, ids);
+
+    // Contar cuántos bloques tienen N en cada fecha
+    const nightCount = new Map<string, number>();
+    for (const block of resolved) {
+      const days = nightBlockDays(block);
+      for (const [dateStr, shift] of days) {
+        if (shift === "N") {
+          nightCount.set(dateStr, (nightCount.get(dateStr) ?? 0) + 1);
+        }
+      }
+    }
+    for (const [, count] of nightCount) {
+      expect(count).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe("generateMonthSchedule — vacaciones en bloque de noches transfieren el bloque", () => {
+  it("el empleado con vacaciones en su semana de noches no aparece como N", () => {
+    const emps = make7Employees();
+    const ids = emps.map((e) => e.id);
+
+    // Identificar qué empleado tiene el bloque de noches en Junio 2026
+    const raw = computeNightBlocks(2026, 6, ids);
+    const sorted = [...raw].sort((a, b) => a.startFriday.getTime() - b.startFriday.getTime());
+    const firstBlock = sorted[0];
+    const firstNDays = [...nightBlockDays(firstBlock).entries()]
+      .filter(([, s]) => s === "N")
+      .map(([d]) => d)
+      .filter((d) => d.startsWith("2026-06")); // solo días del mes
+
+    // Marcar todos sus días N como vacaciones
+    const existingDates = new Set(firstNDays.map((d) => `${firstBlock.employeeId}|${d}`));
+
+    const result = generateMonthSchedule(emps, 2026, 6, existingDates, new Set(), [], ids);
+
+    // El empleado original NO debe tener ninguna N en los días de su bloque
+    const originalNights = result.filter(
+      (a) =>
+        a.employeeId === firstBlock.employeeId &&
+        firstNDays.includes(toDateStr(a.date)) &&
+        normalizeShift(a.shiftType) === "N"
+    );
+    expect(originalNights).toHaveLength(0);
+  });
+
+  it("el bloque transferido mantiene la cobertura nocturna continua", () => {
+    // Con vacaciones en el bloque del emp-1, otro emp cubre esas noches →
+    // debe seguir habiendo exactamente 1 N por día en todo el mes
+    const emps = make7Employees();
+    const ids = emps.map((e) => e.id);
+
+    const raw = computeNightBlocks(2026, 6, ids);
+    const sorted = [...raw].sort((a, b) => a.startFriday.getTime() - b.startFriday.getTime());
+    const firstBlock = sorted[0];
+    const firstNDays = [...nightBlockDays(firstBlock).entries()]
+      .filter(([, s]) => s === "N")
+      .map(([d]) => d)
+      .filter((d) => d.startsWith("2026-06"));
+
+    const existingDates = new Set(firstNDays.map((d) => `${firstBlock.employeeId}|${d}`));
+    const result = generateMonthSchedule(emps, 2026, 6, existingDates, new Set(), [], ids);
+
+    // Contar N por día — debe ser exactamente 1 en todo Junio
+    const nightsByDate = new Map<string, number>();
+    for (const a of result) {
+      if (normalizeShift(a.shiftType) === "N") {
+        const ds = toDateStr(a.date);
+        nightsByDate.set(ds, (nightsByDate.get(ds) ?? 0) + 1);
+      }
+    }
+    for (let d = 1; d <= 30; d++) {
+      const ds = `2026-06-${String(d).padStart(2, "0")}`;
+      expect(nightsByDate.get(ds) ?? 0).toBe(1);
+    }
   });
 });

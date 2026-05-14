@@ -196,6 +196,106 @@ export function computeNightBlocks(
   return blocks;
 }
 
+// ─── Night-block conflict resolution ─────────────────────────────────────────
+
+/**
+ * Resolves night-block assignments by transferring a block from an employee
+ * who has any locked day (V, B, manual D…) in its 7 N-shift days to the
+ * employee who has gone the longest without doing a night block.
+ *
+ * If that employee also has conflicts, it tries the next one, and so on.
+ * If no one is available, the block is dropped (night coverage gap — rare).
+ *
+ * Invariants preserved:
+ *  - Max 1 employee on N per day (no overlapping N-days between resolved blocks)
+ *  - An employee with a conflict does not get assigned that block
+ *
+ * @param rawBlocks     Output of computeNightBlocks (chronological order)
+ * @param existingDates Set of "empId|YYYY-MM-DD" that are locked (V, B, manual)
+ * @param nightOrder    Ordered employee IDs for the night rotation
+ */
+export function resolveNightBlocks(
+  rawBlocks: NightBlock[],
+  existingDates: Set<string>,
+  nightOrder: string[]
+): NightBlock[] {
+  if (nightOrder.length === 0) return rawBlocks;
+  if (existingDates.size === 0) return rawBlocks; // fast-path: no conflicts possible
+
+  // Track the most recent startFriday (ms) assigned to each employee during resolution.
+  // Employees with no block yet have -Infinity → highest priority for replacement.
+  const lastBlockMs = new Map<string, number>();
+  for (const id of nightOrder) lastBlockMs.set(id, -Infinity);
+
+  const resolved: NightBlock[] = [];
+
+  // Process blocks in chronological order so "busyOnNights" is always accurate.
+  const sorted = [...rawBlocks].sort((a, b) => a.startFriday.getTime() - b.startFriday.getTime());
+
+  for (const block of sorted) {
+    const days = nightBlockDays(block);
+
+    // The 7 actual N-shift date strings of this block
+    const nDays = [...days.entries()]
+      .filter(([, shift]) => shift === "N")
+      .map(([dateStr]) => dateStr);
+
+    // ── Check original employee for conflicts ─────────────────────────────────
+    const originalConflict = nDays.some((d) =>
+      existingDates.has(`${block.employeeId}|${d}`)
+    );
+
+    if (!originalConflict) {
+      // No conflict — keep as-is and update tracking
+      resolved.push(block);
+      const prev = lastBlockMs.get(block.employeeId) ?? -Infinity;
+      if (block.startFriday.getTime() > prev) {
+        lastBlockMs.set(block.employeeId, block.startFriday.getTime());
+      }
+      continue;
+    }
+
+    // ── Conflict detected — find a replacement ────────────────────────────────
+    // Employees whose blocks already occupy any of this block's N-days
+    // (N-overlap = double night; D-overlap = would overwrite N in nightPlan)
+    const busyOnNights = new Set<string>([block.employeeId]);
+    for (const r of resolved) {
+      const rDays = nightBlockDays(r);
+      if (nDays.some((d) => rDays.has(d))) {
+        busyOnNights.add(r.employeeId);
+      }
+    }
+
+    // Sort candidates: ascending lastBlockMs → longest without nights first
+    const candidates = nightOrder
+      .filter((id) => !busyOnNights.has(id))
+      .sort((a, b) => (lastBlockMs.get(a) ?? -Infinity) - (lastBlockMs.get(b) ?? -Infinity));
+
+    let assigned = false;
+    for (const candidateId of candidates) {
+      const candidateConflict = nDays.some((d) =>
+        existingDates.has(`${candidateId}|${d}`)
+      );
+      if (!candidateConflict) {
+        resolved.push({ employeeId: candidateId, startFriday: block.startFriday });
+        const prev = lastBlockMs.get(candidateId) ?? -Infinity;
+        if (block.startFriday.getTime() > prev) {
+          lastBlockMs.set(candidateId, block.startFriday.getTime());
+        }
+        assigned = true;
+        break;
+      }
+    }
+
+    if (!assigned) {
+      // All employees have conflicts on these N-days — gap in night coverage.
+      // This is an extreme edge case; no block is emitted.
+    }
+  }
+
+  return resolved;
+}
+
 // ─── Normalisation ────────────────────────────────────────────────────────────
 
 /** Return the base shift type (strip the F suffix for holiday variants) */
@@ -252,16 +352,27 @@ export function generateMonthSchedule(
       : sortedEmps.map((e) => e.id);
 
   // ── Night blocks ─────────────────────────────────────────────────────────
-  const nightBlocks = computeNightBlocks(year, month, nightOrder);
+  // Compute the mathematical rotation, then resolve conflicts: if an employee
+  // has any locked day (V, B, manual D…) in their 7 N-shift days, the entire
+  // block transfers to the employee who has gone longest without night shifts.
+  const rawNightBlocks = computeNightBlocks(year, month, nightOrder);
+  const nightBlocks = resolveNightBlocks(rawNightBlocks, existingDates, nightOrder);
 
   // Map: "empId|YYYY-MM-DD" → base shift from night plan
+  // N takes priority over D: a night shift must never be overwritten by a rest day
+  // (can happen when the same employee gets both a transferred block and their natural
+  // block, whose pre/post-rest D-days overlap with the transferred N-days).
   const nightPlan = new Map<string, string>();
   for (const block of nightBlocks) {
     const days = nightBlockDays(block);
     for (const [dateStr, baseShift] of days) {
       const d = fromDateStr(dateStr);
       if (d.getUTCFullYear() !== year || d.getUTCMonth() + 1 !== month) continue;
-      nightPlan.set(`${block.employeeId}|${dateStr}`, baseShift);
+      const key = `${block.employeeId}|${dateStr}`;
+      // N wins over D: skip writing D if N is already recorded for this slot
+      if (nightPlan.get(key) !== "N") {
+        nightPlan.set(key, baseShift);
+      }
     }
   }
 
@@ -320,7 +431,17 @@ export function generateMonthSchedule(
     if (!dayCoverage.has(dateStr)) dayCoverage.set(dateStr, { M: 0, T: 0 });
     const cov = dayCoverage.get(dateStr)!;
 
-    for (const emp of sortedEmps) {
+    // BUG-30 fix: process preference-less employees first each day so that
+    // coverage urgency (RF-16 hard minimum) is resolved by neutral employees.
+    // Preference employees (M/T) are processed last and find urgency already met.
+    // "J" is treated as preference-less for ordering (no M/T urgency impact).
+    const dailyOrder = [...sortedEmps].sort((a, b) => {
+      const aPref = (a.shiftPreference === "M" || a.shiftPreference === "T") ? 1 : 0;
+      const bPref = (b.shiftPreference === "M" || b.shiftPreference === "T") ? 1 : 0;
+      return aPref - bPref || a.rotationOrder - b.rotationOrder;
+    });
+
+    for (const emp of dailyOrder) {
       const key = `${emp.id}|${dateStr}`;
       const state = stateMap.get(emp.id)!;
 
@@ -416,6 +537,10 @@ function _pickWeekendShift(
   wKey: string
 ): string {
   const pref = emp.shiftPreference ?? null;
+
+  // Jornada (J): only works Mon–Fri, always rests on weekends/holidays
+  if (pref === "J") return "D";
+
   const mOpen = cov.M < 1;
   const tOpen = cov.T < 1;
 
@@ -458,15 +583,22 @@ function _pickWorkdayShift(
 ): string {
   const pref = emp.shiftPreference ?? null;
 
+  // Jornada (J): works Mon–Fri with J shift type, always rests on weekends/holidays.
+  // J does not count toward M/T coverage — handled by _pickWeekendShift returning "D".
+  if (pref === "J") return "J";
+
   // Weekly consistency: if already assigned M or T this week, prefer keeping same
   const weeklyShift = state.weekShift.get(wKey) ?? null;
 
-  // Hard minimum (RF-16): ≥1M and ≥1T — override only for employees without weekly commitment
+  // Hard minimum (RF-16): ≥1M and ≥1T — handle urgency first.
+  // BUG-30 fix: dailyOrder (see caller) processes preference-null employees first each day
+  // so urgency is resolved by neutral employees before preference employees arrive.
+  // These lines then almost never fire against preference, but must remain for the
+  // edge case where all neutral employees are in night blocks (RF-16 must hold).
   const urgentM = cov.M < 1;
   const urgentT = cov.T < 1;
   if (urgentM && !urgentT && weeklyShift === null) return "M";
   if (urgentT && !urgentM && weeklyShift === null) return "T";
-  // If all employees with remaining capacity already have a weeklyShift, force coverage anyway
   if (urgentM && !urgentT && weeklyShift !== "M") return "M";
   if (urgentT && !urgentM && weeklyShift !== "T") return "T";
 
@@ -474,14 +606,20 @@ function _pickWorkdayShift(
   if (weeklyShift === "M") return "M";
   if (weeklyShift === "T") return "T";
 
-  // Soft target ≥2M and ≥2T
-  const needM = cov.M < 2;
-  const needT = cov.T < 2;
+  // No weeklyShift yet for this week — seed it with the employee's preference
+  // when coverage is already satisfied, so the rest of the week stays consistent.
+  const softNeedM = cov.M < 2;
+  const softNeedT = cov.T < 2;
 
-  if (needM && !needT) return "M";
-  if (needT && !needM) return "T";
+  // Prefer seeding with employee's preference when possible
+  if (pref === "M" && !softNeedT) { state.weekShift.set(wKey, "M"); return "M"; }
+  if (pref === "T" && !softNeedM) { state.weekShift.set(wKey, "T"); return "T"; }
 
-  // Coverage met — preference then equitable
+  // Soft target ≥2M and ≥2T (best effort — do not override employee preference)
+  if (softNeedM && !softNeedT && pref !== "T") return "M";
+  if (softNeedT && !softNeedM && pref !== "M") return "T";
+
+  // Coverage met (or preference takes priority over soft target) — preference then equitable
   if (pref === "M") return "M";
   if (pref === "T") return "T";
   return state.mCount <= state.tCount ? "M" : "T";

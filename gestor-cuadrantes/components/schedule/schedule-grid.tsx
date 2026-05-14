@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { ShiftCell } from "@/components/schedule/shift-cell";
-import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
+import { ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleEmployee, ScheduleAssignment } from "@/lib/schedules/types";
 
 
@@ -14,6 +14,10 @@ interface ScheduleGridProps {
   holidayDates?: Map<string, string>;
   /** Si se provee, las celdas son clicables (modo edición ADMIN) */
   onCellClick?: (employeeId: string, date: string, currentShift?: string) => void;
+  /** Celdas bloqueadas por preparación manual: Set de "employeeId|YYYY-MM-DD" */
+  lockedCells?: Set<string>;
+  /** User.id del usuario autenticado — resalta su fila en el grid */
+  currentUserId?: string | null;
 }
 
 const DAY_NAMES = ["D", "L", "M", "X", "J", "V", "S"];
@@ -25,6 +29,8 @@ export function ScheduleGrid({
   assignments,
   holidayDates = new Map(),
   onCellClick,
+  lockedCells = new Set(),
+  currentUserId,
 }: ScheduleGridProps) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -56,7 +62,7 @@ export function ScheduleGrid({
 
   return (
     <>
-      <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+      <div className="overflow-x-auto w-fit rounded-lg border border-gray-200 shadow-sm">
       <table className="border-collapse text-xs min-w-max">
         <thead>
           {/* Fila de números de día */}
@@ -102,12 +108,28 @@ export function ScheduleGrid({
         </thead>
         <tbody>
           {employees.map((emp, rowIndex) => {
-            const rowBg = rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/50";
+            const isOwnRow = !!currentUserId && emp.userId === currentUserId;
+            const rowBg = isOwnRow
+              ? "bg-indigo-50"
+              : rowIndex % 2 === 0
+              ? "bg-white"
+              : "bg-gray-50/50";
 
             return (
-              <tr key={emp.id} className={`${rowBg} hover:bg-yellow-50/40 transition-colors`}>
+              <tr
+                key={emp.id}
+                data-testid={isOwnRow ? "own-row" : undefined}
+                className={`${rowBg} hover:bg-yellow-50/40 transition-colors ${
+                  isOwnRow ? "ring-2 ring-inset ring-indigo-300" : ""
+                }`}
+              >
                 {/* Nombre del empleado */}
-                <td className={`sticky left-0 z-10 ${rowBg} px-3 py-1 font-medium text-gray-700 border-r border-b border-gray-200 whitespace-nowrap`}>
+                <td className={`sticky left-0 z-10 ${rowBg} px-3 py-1 font-medium border-r border-b border-gray-200 whitespace-nowrap ${
+                  isOwnRow ? "text-indigo-700 font-semibold" : "text-gray-700"
+                }`}>
+                  {isOwnRow && (
+                    <span className="inline-block mr-1 text-indigo-400" aria-label="Tu fila">▶</span>
+                  )}
                   {emp.name}
                 </td>
 
@@ -118,16 +140,24 @@ export function ScheduleGrid({
                   const date = new Date(year, month - 1, day);
                   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                   const clickable = !!onCellClick;
+                  const isLocked = lockedCells.has(`${emp.id}|${dateStr}`);
 
                   return (
                     <td
                       key={day}
-                      onClick={clickable ? () => onCellClick(emp.id, dateStr, cell?.shiftType) : undefined}
-                      className={`w-9 h-8 p-0.5 border-r border-b border-gray-200 ${
+                      data-testid={`cell-${emp.id}-${dateStr}`}
+                      onClick={clickable && !isLocked ? () => onCellClick(emp.id, dateStr, cell?.shiftType) : undefined}
+                      data-locked={isLocked ? "true" : undefined}
+                      className={`w-9 h-8 p-0.5 border-r border-b border-gray-200 relative ${
                         isWeekend ? "bg-blue-50/30" : ""
-                      } ${clickable ? "cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset" : ""}`}
+                      } ${clickable && !isLocked ? "cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset" : ""} ${
+                        isLocked ? "ring-2 ring-inset ring-dashed ring-amber-400" : ""
+                      }`}
                     >
                       {cell ? <ShiftCell shiftType={cell.shiftType} /> : null}
+                      {isLocked && (
+                        <span className="absolute top-0 right-0 text-[8px] leading-none text-amber-500 pointer-events-none">🔒</span>
+                      )}
                     </td>
                   );
                 })}
