@@ -791,6 +791,43 @@ describe("resolveNightBlocks — invariante: máx 1 N por día tras resolución"
   });
 });
 
+describe("resolveNightBlocks — el empleado de reemplazo no recibe dos semanas consecutivas de noches", () => {
+  it("cuando A transfiere su bloque a B, el bloque propio de B también se transfiere", () => {
+    // Bug: cuando A (emp-1) tiene vacaciones, su bloque va a B (emp-2).
+    // B luego tiene su PROPIO bloque adyacente (7 días después) → eso es 14 noches seguidas.
+    // El fix debe detectar el solapamiento de bloques ya resueltos y transferir el bloque propio de B.
+    const ids = ["emp-1", "emp-2", "emp-3", "emp-4"];
+    const raw = computeNightBlocks(2026, 5, ids);
+    const sorted = [...raw].sort((a, b) => a.startFriday.getTime() - b.startFriday.getTime());
+
+    // Bloquear el primer bloque (del empleado al que le toca en la rotación)
+    const firstBlock = sorted[0];
+    const firstNDays = [...nightBlockDays(firstBlock).entries()]
+      .filter(([, s]) => s === "N")
+      .map(([d]) => d);
+    const existingDates = new Set(firstNDays.map((d) => `${firstBlock.employeeId}|${d}`));
+
+    const resolved = resolveNightBlocks(raw, existingDates, ids);
+
+    // Ningún empleado debe tener dos bloques cuyas N-days estén a menos de 7 días de distancia
+    const blocksByEmp = new Map<string, Date[]>();
+    for (const b of resolved) {
+      if (!blocksByEmp.has(b.employeeId)) blocksByEmp.set(b.employeeId, []);
+      blocksByEmp.get(b.employeeId)!.push(b.startFriday);
+    }
+    for (const [, fridays] of blocksByEmp) {
+      if (fridays.length < 2) continue;
+      const sortedFridays = [...fridays].sort((a, b) => a.getTime() - b.getTime());
+      for (let i = 1; i < sortedFridays.length; i++) {
+        const gap = (sortedFridays[i].getTime() - sortedFridays[i - 1].getTime()) / 86_400_000;
+        // Los N-days de dos bloques consecutivos del mismo empleado se solaparían si gap < 7.
+        // Un gap de exactamente 7 significa noches adyacentes (día 1-7 y día 8-14) → también inválido.
+        expect(gap).toBeGreaterThan(7);
+      }
+    }
+  });
+});
+
 describe("generateMonthSchedule — vacaciones en bloque de noches transfieren el bloque", () => {
   it("el empleado con vacaciones en su semana de noches no aparece como N", () => {
     const emps = make7Employees();
@@ -848,6 +885,159 @@ describe("generateMonthSchedule — vacaciones en bloque de noches transfieren e
     for (let d = 1; d <= 30; d++) {
       const ds = `2026-06-${String(d).padStart(2, "0")}`;
       expect(nightsByDate.get(ds) ?? 0).toBe(1);
+    }
+  });
+});
+
+// ─── BUG-35: preferencia M/T respetada en MF/TF ───────────────────────────────
+
+describe("generateMonthSchedule — BUG-35: preferencia M/T respetada en fines de semana", () => {
+  it("empleado con preferencia M solo recibe MF (nunca TF) en fines de semana", () => {
+    const emps: ScheduleEmployee[] = [
+      { id: "m1", rotationOrder: 0, shiftPreference: "M" },
+      { id: "t1", rotationOrder: 1, shiftPreference: "T" },
+      { id: "n1", rotationOrder: 2, shiftPreference: null },
+      { id: "n2", rotationOrder: 3, shiftPreference: null },
+      { id: "n3", rotationOrder: 4, shiftPreference: null },
+      { id: "n4", rotationOrder: 5, shiftPreference: null },
+      { id: "n5", rotationOrder: 6, shiftPreference: null },
+    ];
+    // Junio 2026: sin festivos, sin bloqueos
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], []);
+
+    const weekendShiftsM1 = result.filter(
+      (a) => a.employeeId === "m1" && (a.shiftType === "MF" || a.shiftType === "TF")
+    );
+    // El empleado M solo puede tener MF en fines de semana, nunca TF
+    expect(weekendShiftsM1.every((a) => a.shiftType === "MF")).toBe(true);
+  });
+
+  it("empleado con preferencia T solo recibe TF (nunca MF) en fines de semana", () => {
+    const emps: ScheduleEmployee[] = [
+      { id: "m1", rotationOrder: 0, shiftPreference: "M" },
+      { id: "t1", rotationOrder: 1, shiftPreference: "T" },
+      { id: "n1", rotationOrder: 2, shiftPreference: null },
+      { id: "n2", rotationOrder: 3, shiftPreference: null },
+      { id: "n3", rotationOrder: 4, shiftPreference: null },
+      { id: "n4", rotationOrder: 5, shiftPreference: null },
+      { id: "n5", rotationOrder: 6, shiftPreference: null },
+    ];
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], []);
+
+    const weekendShiftsT1 = result.filter(
+      (a) => a.employeeId === "t1" && (a.shiftType === "MF" || a.shiftType === "TF")
+    );
+    expect(weekendShiftsT1.every((a) => a.shiftType === "TF")).toBe(true);
+  });
+});
+
+// ─── BUG-36: máximo 5 días consecutivos con mezcla M/T y MF/TF ───────────────
+
+describe("generateMonthSchedule — BUG-36: máximo 5 días consecutivos con mezcla M/T y MF/TF", () => {
+  it("ningún empleado supera 5 días de trabajo consecutivo (M+T+MF+TF combinados)", () => {
+    const emps = make7Employees();
+    const result = generateMonthSchedule(emps, 2026, 5, new Set(), new Set(), [], []); // Mayo 31 días
+
+    // Para cada empleado, contar rachas de días de trabajo consecutivos
+    for (const emp of emps) {
+      const empAssignments = result
+        .filter((a) => a.employeeId === emp.id)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      let streak = 0;
+      for (const a of empAssignments) {
+        const base = normalizeShift(a.shiftType);
+        const isWork = base === "M" || base === "T";
+        if (isWork) {
+          streak++;
+          expect(streak).toBeLessThanOrEqual(5);
+        } else {
+          streak = 0;
+        }
+      }
+    }
+  });
+});
+
+// ─── BUG-37: paquete Sáb+Dom indivisible ─────────────────────────────────────
+
+describe("generateMonthSchedule — BUG-37: paquete Sáb+Dom indivisible", () => {
+  it("el mismo empleado cubre sábado y domingo con el mismo tipo MF o TF", () => {
+    const emps: ScheduleEmployee[] = [
+      { id: "m1", rotationOrder: 0, shiftPreference: "M" },
+      { id: "t1", rotationOrder: 1, shiftPreference: "T" },
+      { id: "n1", rotationOrder: 2, shiftPreference: null },
+      { id: "n2", rotationOrder: 3, shiftPreference: null },
+      { id: "n3", rotationOrder: 4, shiftPreference: null },
+      { id: "n4", rotationOrder: 5, shiftPreference: null },
+      { id: "n5", rotationOrder: 6, shiftPreference: null },
+    ];
+    // Junio 2026: primer fin de semana = Sáb 6 y Dom 7
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], []);
+
+    // Para cada par Sáb+Dom del mes, verificar que el mismo empleado cubre MF y TF
+    for (let day = 1; day <= 30; day++) {
+      const satDate = new Date(Date.UTC(2026, 5, day));
+      if (satDate.getUTCDay() !== 6) continue; // solo sábados
+      const sunDate = addDays(satDate, 1);
+      if (sunDate.getUTCMonth() !== 5) continue; // domingo fuera del mes → saltar
+
+      const satStr = toDateStr(satDate);
+      const sunStr = toDateStr(sunDate);
+
+      // Quién tiene MF/TF el sábado
+      const satMF = result.find((a) => toDateStr(a.date) === satStr && a.shiftType === "MF");
+      const satTF = result.find((a) => toDateStr(a.date) === satStr && a.shiftType === "TF");
+
+      // Quién tiene MF/TF el domingo
+      const sunMF = result.find((a) => toDateStr(a.date) === sunStr && a.shiftType === "MF");
+      const sunTF = result.find((a) => toDateStr(a.date) === sunStr && a.shiftType === "TF");
+
+      // El empleado MF del sábado debe ser el mismo que el del domingo
+      if (satMF && sunMF) {
+        expect(satMF.employeeId).toBe(sunMF.employeeId);
+      }
+      // El empleado TF del sábado debe ser el mismo que el del domingo
+      if (satTF && sunTF) {
+        expect(satTF.employeeId).toBe(sunTF.employeeId);
+      }
+    }
+  });
+
+  it("no hay empleado que tenga MF un sábado y TF el domingo del mismo fin de semana", () => {
+    const emps: ScheduleEmployee[] = [
+      { id: "m1", rotationOrder: 0, shiftPreference: "M" },
+      { id: "t1", rotationOrder: 1, shiftPreference: "T" },
+      { id: "n1", rotationOrder: 2, shiftPreference: null },
+      { id: "n2", rotationOrder: 3, shiftPreference: null },
+      { id: "n3", rotationOrder: 4, shiftPreference: null },
+      { id: "n4", rotationOrder: 5, shiftPreference: null },
+      { id: "n5", rotationOrder: 6, shiftPreference: null },
+    ];
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], []);
+
+    for (let day = 1; day <= 30; day++) {
+      const satDate = new Date(Date.UTC(2026, 5, day));
+      if (satDate.getUTCDay() !== 6) continue;
+      const sunDate = addDays(satDate, 1);
+      if (sunDate.getUTCMonth() !== 5) continue;
+
+      const satStr = toDateStr(satDate);
+      const sunStr = toDateStr(sunDate);
+
+      // Para cada empleado, si tiene MF el sábado no puede tener TF el domingo (y viceversa)
+      for (const emp of emps) {
+        const satShift = result.find((a) => a.employeeId === emp.id && toDateStr(a.date) === satStr);
+        const sunShift = result.find((a) => a.employeeId === emp.id && toDateStr(a.date) === sunStr);
+        if (!satShift || !sunShift) continue;
+
+        const satIsWork = satShift.shiftType === "MF" || satShift.shiftType === "TF";
+        const sunIsWork = sunShift.shiftType === "MF" || sunShift.shiftType === "TF";
+        if (satIsWork && sunIsWork) {
+          // Ambos días de trabajo → deben ser el mismo tipo
+          expect(satShift.shiftType).toBe(sunShift.shiftType);
+        }
+      }
     }
   });
 });

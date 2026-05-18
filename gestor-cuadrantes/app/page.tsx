@@ -117,19 +117,28 @@ export default function HomePage() {
       m.projectId === activeProjectId && m.role === "PROJECT_ADMIN"
   );
 
-  // Auto-seleccionar primer proyecto si no hay ninguno en localStorage
+  // Validar proyecto activo contra la API y auto-seleccionar el primero si no hay ninguno válido
   useEffect(() => {
-    if (activeProjectId !== null) return;
     fetch("/api/projects")
       .then((r) => (r.ok ? r.json() : []))
       .then((projects: { id: string; name: string; region?: string | null }[]) => {
-        if (projects.length > 0) {
-          const { id, name, region } = projects[0];
-          localStorage.setItem("activeProject", JSON.stringify({ id, name, region: region ?? null }));
-          window.dispatchEvent(new Event("activeProjectChanged"));
-          setActiveProjectId(id);
-          setActiveProjectRegion(region ?? null);
+        if (projects.length === 0) {
+          // No hay proyectos: limpiar selección obsoleta de localStorage
+          localStorage.removeItem("activeProject");
+          setActiveProjectId(null);
+          setActiveProjectRegion(null);
+          return;
         }
+        // Comprobar si el proyecto guardado sigue existiendo
+        const stored = projects.find((p) => p.id === activeProjectId);
+        if (stored) return; // sigue siendo válido, no hacer nada
+
+        // El proyecto guardado ya no existe → seleccionar el primero disponible
+        const { id, name, region } = projects[0];
+        localStorage.setItem("activeProject", JSON.stringify({ id, name, region: region ?? null }));
+        window.dispatchEvent(new Event("activeProjectChanged"));
+        setActiveProjectId(id);
+        setActiveProjectRegion(region ?? null);
       })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -521,7 +530,7 @@ export default function HomePage() {
         {/* Contenido principal: grid + panel de preparación */}
         <div className="flex gap-6 items-start">
           {/* Grid + contadores */}
-          <div className="flex-1 min-w-0 overflow-x-hidden">
+          <div className="flex-1 min-w-0 overflow-x-auto">
             {loading ? (
               <div className="flex items-center justify-center h-64 text-gray-400">
                 Cargando cuadrante...
