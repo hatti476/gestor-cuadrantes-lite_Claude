@@ -262,22 +262,49 @@ export default function HomePage() {
     // Modo preparación: asigna directamente V o D sin abrir el modal
     if (prepStep === "vacaciones" || prepStep === "libres") {
       const shiftType = prepStep === "vacaciones" ? "V" : "D";
-      // Toggle: si ya tiene ese tipo, limpiarlo
       const found = assignments.find(
         (a) => a.employeeId === employeeId && a.date.slice(0, 10) === date
       );
-      if (found?.shiftType === shiftType) {
-        // Quitar la asignación
-        if (found.id) {
-          await fetch(`/api/schedules?id=${found.id}`, { method: "DELETE" });
-        }
-      } else {
-        await fetch("/api/schedules", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ employeeId, date, shiftType }),
-        });
+
+      const isManualFreeDay = found?.shiftType === "D" && found.manual;
+      const shouldToggleOff =
+        (shiftType === "V" && found?.shiftType === "V") ||
+        (shiftType === "D" && isManualFreeDay);
+
+      if (shouldToggleOff) {
+        const res = await fetch(`/api/schedules?id=${found.id}`, { method: "DELETE" });
+        showToast(
+          res.ok
+            ? `${shiftType === "V" ? "Vacaciones" : "Día libre"} eliminado`
+            : "Error al eliminar la celda",
+          res.ok ? "success" : "error"
+        );
+        await loadSchedule();
+        return;
       }
+
+      if (found) {
+        const confirmed = window.confirm(
+          shiftType === "V"
+            ? "Esta celda tiene un turno asignado. ¿Sustituirlo por vacaciones?"
+            : "Esta celda tiene un turno asignado. ¿Sustituirlo por día libre?"
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+
+      const res = await fetch("/api/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId, date, shiftType }),
+      });
+      showToast(
+        res.ok
+          ? `${shiftType === "V" ? "Vacaciones" : "Día libre"} marcado`
+          : "Error al preparar la celda",
+        res.ok ? "success" : "error"
+      );
       await loadSchedule();
       return;
     }
@@ -545,6 +572,7 @@ export default function HomePage() {
                   holidayDates={holidayDates}
                   onCellClick={canEdit ? handleCellClick : undefined}
                   lockedCells={lockedCells}
+                  allowLockedCellClick={prepStep === "vacaciones" || prepStep === "libres"}
                   currentUserId={session?.user?.id ?? null}
                 />
                 {employees.length > 0 && (

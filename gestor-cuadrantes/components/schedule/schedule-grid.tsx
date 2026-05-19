@@ -16,6 +16,8 @@ interface ScheduleGridProps {
   onCellClick?: (employeeId: string, date: string, currentShift?: string) => void;
   /** Celdas bloqueadas por preparación manual: Set de "employeeId|YYYY-MM-DD" */
   lockedCells?: Set<string>;
+  /** Permite clicks sobre celdas bloqueadas en flujos controlados como PrepPanel */
+  allowLockedCellClick?: boolean;
   /** User.id del usuario autenticado — resalta su fila en el grid */
   currentUserId?: string | null;
 }
@@ -30,6 +32,7 @@ export function ScheduleGrid({
   holidayDates = new Map(),
   onCellClick,
   lockedCells = new Set(),
+  allowLockedCellClick = false,
   currentUserId,
 }: ScheduleGridProps) {
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -139,18 +142,18 @@ export function ScheduleGrid({
                   const cell = index[emp.id]?.[dateStr];
                   const date = new Date(year, month - 1, day);
                   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-                  const clickable = !!onCellClick;
                   const isLocked = lockedCells.has(`${emp.id}|${dateStr}`);
+                  const clickable = !!onCellClick && (!isLocked || allowLockedCellClick);
 
                   return (
                     <td
                       key={day}
                       data-testid={`cell-${emp.id}-${dateStr}`}
-                      onClick={clickable && !isLocked ? () => onCellClick(emp.id, dateStr, cell?.shiftType) : undefined}
+                      onClick={clickable ? () => onCellClick(emp.id, dateStr, cell?.shiftType) : undefined}
                       data-locked={isLocked ? "true" : undefined}
                       className={`w-9 h-8 p-0.5 border-r border-b border-gray-200 relative ${
                         isWeekend ? "bg-blue-50/30" : ""
-                      } ${clickable && !isLocked ? "cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset" : ""} ${
+                      } ${clickable ? "cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset" : ""} ${
                         isLocked ? "ring-2 ring-inset ring-dashed ring-amber-400" : ""
                       }`}
                     >
