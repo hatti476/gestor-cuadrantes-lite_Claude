@@ -26,29 +26,29 @@ metodología agile.
 ## Funcionalidades MVP
 
 ### Must Have
-- [ ] Autenticación con roles: admin y empleado
-- [ ] Vista mensual tipo grid (columnas = días, filas = empleados)
-- [ ] Celdas con código de turno (M/T/N/J/D/V/B) y color diferenciado
-- [ ] Generación automática del cuadrante mensual según reglas de negocio
-- [ ] Edición manual celda a celda (solo admin)
-- [ ] Fila de contadores por empleado (nº de M, T, N, D, V, B en el mes)
-- [ ] Navegación entre meses
-- [ ] Gestión de empleados: altas, bajas y orden de rotación de noches
-- [ ] Asignación de packs de fin de semana (Sáb+Dom) como unidad
+- [x] Autenticación con roles: admin y empleado
+- [x] Vista mensual tipo grid (columnas = días, filas = empleados)
+- [x] Celdas con código de turno (M/T/N/J/D/V/B/MF/TF/NF) y color diferenciado
+- [x] Generación automática del cuadrante mensual según reglas de negocio
+- [x] Edición manual celda a celda (solo admin)
+- [x] Fila de contadores por empleado (nº de M, T, N, D, V, B, MF, TF, NF en el mes)
+- [x] Navegación entre meses
+- [x] Gestión de empleados: altas, bajas y orden de rotación de noches
+- [x] Asignación de packs de fin de semana (Sáb+Dom) como unidad
 
 ### Nice to Have (v2)
-- [ ] Turnos especiales de fin de semana: MF, TF, NF con marcado visual diferente
-- [ ] Cálculo de remuneración extra por turnos de fin de semana y festivos
+- [x] Turnos especiales de fin de semana: MF, TF, NF con marcado visual diferente
+- [x] Cálculo de remuneración extra por turnos de fin de semana, festivos y noches
 - [ ] Branding corporativo EPAM (colores y logo)
-- [ ] Gestión de festivos nacionales/locales
-- [ ] Exportación a Excel/PDF
+- [x] Gestión de festivos nacionales/locales
+- [x] Exportación CSV e impresión/PDF desde navegador
 - [ ] Notificaciones al empleado cuando cambia su turno
 
 ### Fuera de Scope
 - [x] App móvil nativa
 - [x] Integración con sistemas de RRHH externos
 - [x] Gestión de nóminas o cálculo salarial completo
-- [x] Multiempresa o multi-equipo (de momento un solo equipo)
+- [x] Gestión de nóminas completa; Sprint 16 solo calcula complementos informativos por turno
 
 ## Tipos de Turno
 | Código | Nombre | Horario | Color |
@@ -64,34 +64,39 @@ metodología agile.
 | TF | Tarde Finde (v2) | 15:00–23:00 sáb/dom | Azul oscuro `#0D47A1` |
 | NF | Noche Finde (v2) | 23:00–7:00 sáb/dom | Índigo `#311B92` |
 
-## Reglas de Negocio para Auto-generación
+## Reglas de Negocio para Auto-generación <!-- Actualizado: 2026-05-19 -->
 1. **Bloque de noches**: `2D + 7N (Vie 23h → Jue 23h) + 3D` = 12 días por bloque
-2. **Rotación de noches**: orden configurable entre los 7 técnicos, cíclico
+2. **Rotación de noches**: orden configurable entre técnicos elegibles, cíclico; empleados con `shiftPreference = "J"` quedan excluidos de noches automáticas
 3. **Cobertura mínima laborable**: mínimo 2 personas en M y 2 en T de L-V
 4. **Consistencia semanal**: un empleado no cambia de M a T (ni viceversa) dentro de la misma semana
-5. **Máximo consecutivo**: 5 días seguidos de M o T → obligatorio 2D de descanso (configurable)
-6. **Fines de semana**: pack Sáb+Dom asignado como unidad, 1 persona, turno M o T
+5. **Descanso entre bloques**: 5 días consecutivos de trabajo fuerzan 2 días `D` consecutivos, también en cruce de mes
+6. **Fines de semana y festivos**: pack Sáb+Dom asignado como unidad; `weekendShift` mantiene MF/TF alineado con la pauta semanal M/T
 7. **Equidad**: distribución equilibrada de M y T entre empleados a lo largo del mes
 8. **Noches y fines de semana**: máximo 1 persona por turno siempre
+9. **Cumplimiento ET Art. 34.3**: la generación evita transiciones con menos de 12 h de descanso y devuelve warnings informativos
+10. **Asignaciones manuales**: el editor puede forzar turnos manuales, incluyendo noches en empleados `J`; las advertencias ET no bloquean la edición
 
-## Estado Actual <!-- Actualizado: 2026-05-18 -->
+## Estado Actual <!-- Actualizado: 2026-05-19 -->
 
 | Campo | Valor |
 |-------|-------|
-| Versión | 1.5 (Sprint 14 cerrado) |
-| Rama activa | `main` |
-| Sprints completados | 14 de 14 |
-| Tests unitarios | 146/146 ✅ |
-| Tests E2E | CP-01..CP-98 (todos en verde) |
-| Próximo paso | Sprint 15 — refinamiento del algoritmo de generación |
+| Versión funcional | 1.6 (Sprint 16 implementado) |
+| Rama activa | `feature/sprint-16-algorithm-fixes` |
+| Sprints completados | 16 de 16 |
+| Tests unitarios | 184/184 ✅ |
+| Tests E2E declarados | CP-01..CP-108 (108 tests) |
+| Última validación local | `npm run test:unit` ✅; `npx playwright test --list` ✅ 108 tests |
+| Próximo paso | Revisión pre-merge y PR contra `main` |
 
-### Bugs corregidos en Sprint 14 (testing manual post-Sprint 13)
-- ✅ BUG-32: Proyecto antiguo de localStorage persiste aunque no exista en la BD (`app/page.tsx`)
-- ✅ BUG-33: Empleado de reemplazo en semana de noches recibe dos bloques consecutivos (`lib/schedules/generate.ts`)
-- ✅ BUG-34: Día 31 no se muestra — `overflow-x-hidden` → `overflow-x-auto` en `app/page.tsx`
-- ✅ BUG-35: Preferencia M/T ignorada en MF/TF — `_pickWeekendShift` respeta estrictamente la preferencia (`lib/schedules/generate.ts`)
-- ✅ BUG-36: Máx. 5 días consecutivos roto al mezclar M/T con MF/TF — `_updateState` cuenta la racha de trabajo unificada (`lib/schedules/generate.ts`)
-- ✅ BUG-37: Paquete Sáb+Dom no era indivisible — pre-selección del paquete en cada sábado del bucle (`lib/schedules/generate.ts`)
+### Cambios completados en Sprint 16
+- ✅ PrepPanel permite toggle de `V` y `D` manual: segundo clic elimina la asignación bloqueada vía `DELETE /api/schedules`.
+- ✅ Empleados con preferencia `J` quedan fuera de la rotación automática de noches (`N`, `NF` y descansos de bloque).
+- ✅ El generador mantiene consistencia semanal también en `MF`/`TF` mediante `weekendShift`.
+- ✅ El descanso forzado exige 2 días `D` consecutivos entre bloques de trabajo, incluyendo cruce de mes.
+- ✅ `validateShiftTransition` aplica ET Art. 34.3 y evita transiciones automáticas con menos de 12 h de descanso.
+- ✅ `ShiftEditor` muestra advertencia visible por transiciones ET inválidas sin bloquear ediciones manuales.
+- ✅ Nueva tabla `Complementos económicos` con recuento MF/TF/N/NF y total por empleado.
+- ✅ Tests E2E Sprint 16 añadidos en `tests/e2e/sprint-16.spec.ts` (CP-99..CP-108).
 
 ## Stack Técnico
 | Capa | Tecnología | Justificación |
@@ -106,8 +111,9 @@ metodología agile.
 
 ## Arquitectura de Alto Nivel
 
-El algoritmo de generación vive en `/lib/scheduler/` completamente desacoplado 
-de la UI, lo que permite testearlo de forma independiente.
+El algoritmo de generación vive principalmente en `lib/schedules/generate.ts`
+y la lógica compartida en `lib/schedules/business-logic.ts`. Las funciones de
+negocio se mantienen desacopladas de la UI para poder testearlas con Vitest.
 
 ## Decisiones Técnicas Clave
 - **Next.js App Router sobre Pages Router**: más moderno, mejor soporte futuro,
@@ -136,6 +142,13 @@ de la UI, lo que permite testearlo de forma independiente.
 | 12 | Aislamiento y noches | ShiftAssignment.projectId, resolveNightBlocks, pref J, RF-19 |
 | 13 | CCAA + historial + docs | Festivos por CCAA (nager.at), historial paginado, /info Fase 2, deployment.md |
 | 14 | Estabilización | BUG-32..BUG-37: localStorage stale, doble bloque noches, día 31, pref M/T en MF/TF, consecutivos, pack Sáb+Dom |
+| 15 | Saneamiento técnico | Lint limpio, build sin Google Fonts, CP-01..CP-98 alineados, docs y versión npm 1.5.0 |
+| 16 | Correcciones algoritmo + extras | Toggle PrepPanel, preferencia J fuera de noches, consistencia MF/TF, 2D descanso, ET 12 h, complementos económicos, CP-99..CP-108 |
+
+## Historial de Decisiones <!-- Actualizado: 2026-05-19 -->
+- **Sprint 14**: se cerraron BUG-32..BUG-37 detectados en testing manual post-Sprint 13, incluyendo localStorage stale, doble bloque de noches, día 31, preferencia M/T en MF/TF, consecutivos y pack Sáb+Dom indivisible.
+- **Sprint 15**: se separó el saneamiento técnico/documental de los cambios funcionales para no mezclar recuperación de calidad con reglas de negocio.
+- **Sprint 16**: se corrigieron reglas críticas del generador y se añadió el contador económico; la gestión de nóminas completa sigue fuera de alcance.
 
 ## Restricciones y Requisitos No Funcionales
 - **Rendimiento**: uso interno, máx. ~20 usuarios concurrentes. Sin requisitos especiales
