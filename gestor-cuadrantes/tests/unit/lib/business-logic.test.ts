@@ -22,6 +22,10 @@ describe("isValidShiftType", () => {
     ["MF", "TF", "NF"].forEach((t) => expect(isValidShiftType(t)).toBe(true));
   });
 
+  it("acepta los 3 tipos especiales de Navidad", () => {
+    ["MN", "TN", "NN"].forEach((t) => expect(isValidShiftType(t)).toBe(true));
+  });
+
   it("rechaza tipos desconocidos", () => {
     expect(isValidShiftType("X")).toBe(false);
     expect(isValidShiftType("")).toBe(false);
@@ -88,6 +92,14 @@ describe("calculateExtraPay", () => {
 
   it("mantiene decimales correctamente", () => {
     expect(calculateExtraPay({ N: 1, NF: 1 })).toBe(88);
+  });
+
+  it("calcula turnos especiales de Navidad a 126,5 €", () => {
+    expect(calculateExtraPay({ MN: 1, TN: 1, NN: 1 })).toBe(379.5);
+  });
+
+  it("calcula complementos ordinarios y navideños juntos", () => {
+    expect(calculateExtraPay({ MF: 1, TF: 1, N: 1, NF: 1, MN: 1 })).toBe(280.5);
   });
 });
 
@@ -177,6 +189,9 @@ describe("removeHolidayRule", () => {
   it("MF → M", () => expect(removeHolidayRule("MF")).toBe("M"));
   it("TF → T", () => expect(removeHolidayRule("TF")).toBe("T"));
   it("NF → N", () => expect(removeHolidayRule("NF")).toBe("N"));
+  it("MN → M", () => expect(removeHolidayRule("MN")).toBe("M"));
+  it("TN → T", () => expect(removeHolidayRule("TN")).toBe("T"));
+  it("NN → N", () => expect(removeHolidayRule("NN")).toBe("N"));
   it("M no cambia", () => expect(removeHolidayRule("M")).toBe("M"));
   it("D no cambia", () => expect(removeHolidayRule("D")).toBe("D"));
 });
@@ -199,6 +214,18 @@ describe("validateShiftTransition", () => {
     ["T", "NF", 0],
     ["TF", "N", 0],
     ["TF", "NF", 0],
+    ["TN", "M", 8],
+    ["TN", "MF", 8],
+    ["TN", "MN", 8],
+    ["TN", "N", 0],
+    ["TN", "NF", 0],
+    ["TN", "NN", 0],
+    ["NN", "M", 0],
+    ["NN", "MF", 0],
+    ["NN", "MN", 0],
+    ["NN", "T", 8],
+    ["NN", "TF", 8],
+    ["NN", "TN", 8],
   ] as const)("prohíbe %s → %s por dejar %ih de descanso", (prevShift, nextShift, hoursGap) => {
     expect(validateShiftTransition(prevShift, nextShift)).toEqual({ valid: false, hoursGap });
   });
@@ -211,6 +238,9 @@ describe("validateShiftTransition", () => {
     ["T", "T", 16],
     ["N", "N", 16],
     ["NF", "NF", 16],
+    ["MN", "TN", 24],
+    ["TN", "TN", 16],
+    ["NN", "NN", 16],
   ] as const)("permite %s → %s con al menos 12h de descanso", (prevShift, nextShift, hoursGap) => {
     expect(validateShiftTransition(prevShift, nextShift)).toEqual({ valid: true, hoursGap });
   });

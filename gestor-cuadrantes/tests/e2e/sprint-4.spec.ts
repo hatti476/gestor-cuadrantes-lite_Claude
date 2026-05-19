@@ -81,7 +81,7 @@ test("CP-32 — La generación respeta los festivos (M→MF)", async ({ page }) 
 
     // Generar
     await generateScheduleAndWait(page);
-    await expect(page.locator('[data-testid="toast"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="toast"]').first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Verificar que el día 1 tiene MF, TF o NF (festivo) en al menos un empleado

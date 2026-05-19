@@ -3,7 +3,21 @@
  * Pensadas para ser fácilmente testeables con Vitest.
  */
 
-export const VALID_SHIFT_TYPES = ["M", "T", "N", "J", "D", "V", "B", "MF", "TF", "NF"] as const;
+export const VALID_SHIFT_TYPES = [
+  "M",
+  "T",
+  "N",
+  "J",
+  "D",
+  "V",
+  "B",
+  "MF",
+  "TF",
+  "NF",
+  "MN",
+  "TN",
+  "NN",
+] as const;
 export type ValidShiftType = (typeof VALID_SHIFT_TYPES)[number];
 
 /** Valida que el shiftType sea un código conocido */
@@ -35,6 +49,9 @@ export const EXTRA_PAY_RATES: Record<string, number> = {
   TF: 33,
   N: 38.5,
   NF: 49.5,
+  MN: 126.5,
+  TN: 126.5,
+  NN: 126.5,
 };
 
 export function calculateExtraPay(shiftCounts: Record<string, number>): number {
@@ -83,19 +100,22 @@ export function removeHolidayRule(shiftType: string): string {
   if (shiftType === "MF") return "M";
   if (shiftType === "TF") return "T";
   if (shiftType === "NF") return "N";
+  if (shiftType === "MN") return "M";
+  if (shiftType === "TN") return "T";
+  if (shiftType === "NN") return "N";
   return shiftType;
 }
 
 function isMorningShift(shiftType: ValidShiftType): boolean {
-  return shiftType === "M" || shiftType === "MF";
+  return shiftType === "M" || shiftType === "MF" || shiftType === "MN";
 }
 
 function isAfternoonShift(shiftType: ValidShiftType): boolean {
-  return shiftType === "T" || shiftType === "TF";
+  return shiftType === "T" || shiftType === "TF" || shiftType === "TN";
 }
 
 function isNightShift(shiftType: ValidShiftType): boolean {
-  return shiftType === "N" || shiftType === "NF";
+  return shiftType === "N" || shiftType === "NF" || shiftType === "NN";
 }
 
 function isTimedShift(shiftType: ValidShiftType): boolean {

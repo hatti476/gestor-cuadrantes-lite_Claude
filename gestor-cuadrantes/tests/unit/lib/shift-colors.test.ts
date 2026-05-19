@@ -9,6 +9,12 @@ describe("SHIFT_COLORS", () => {
     });
   });
 
+  it("contiene los turnos especiales de Navidad", () => {
+    ["MN", "TN", "NN"].forEach((key) => {
+      expect(SHIFT_COLORS).toHaveProperty(key);
+    });
+  });
+
   it("cada turno tiene color, textColor y label", () => {
     Object.entries(SHIFT_COLORS).forEach(([, config]) => {
       expect(config).toHaveProperty("color");

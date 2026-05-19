@@ -1,7 +1,20 @@
 // Colores asociados a cada tipo de turno del cuadrante.
 // Fuente de verdad para todos los componentes — no hardcodear en ningún otro lugar.
 
-export type ShiftType = "M" | "T" | "N" | "J" | "D" | "V" | "B" | "MF" | "TF" | "NF";
+export type ShiftType =
+  | "M"
+  | "T"
+  | "N"
+  | "J"
+  | "D"
+  | "V"
+  | "B"
+  | "MF"
+  | "TF"
+  | "NF"
+  | "MN"
+  | "TN"
+  | "NN";
 
 export interface ShiftConfig {
   label: string;
@@ -62,6 +75,22 @@ export const SHIFT_COLORS: Record<ShiftType, ShiftConfig> = {
   NF: {
     label: "Noche Finde",
     color: "#1B5E20",
+    textColor: "#FFFFFF",
+  },
+  // Turnos especiales de Navidad
+  MN: {
+    label: "Mañana Navidad",
+    color: "#BE123C",
+    textColor: "#FFFFFF",
+  },
+  TN: {
+    label: "Tarde Navidad",
+    color: "#047857",
+    textColor: "#FFFFFF",
+  },
+  NN: {
+    label: "Noche Navidad",
+    color: "#5B21B6",
     textColor: "#FFFFFF",
   },
 };

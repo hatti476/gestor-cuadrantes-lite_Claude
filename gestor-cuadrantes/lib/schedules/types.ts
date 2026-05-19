@@ -27,11 +27,11 @@ export type MonthStatus = "ungenerated" | "preparation" | "generated";
  * Calcula el estado del mes a partir de las asignaciones.
  * - "ungenerated": sin asignaciones
  * - "preparation": solo V/B/D manuales
- * - "generated": hay al menos un turno M/T/N/MF/TF/NF
+ * - "generated": hay al menos un turno M/T/N/MF/TF/NF/MN/TN/NN
  */
 export function computeMonthStatus(assignments: Pick<ScheduleAssignment, "shiftType">[]): MonthStatus {
   if (assignments.length === 0) return "ungenerated";
-  const GENERATED_TYPES = new Set(["M", "T", "N", "MF", "TF", "NF"]);
+  const GENERATED_TYPES = new Set(["M", "T", "N", "MF", "TF", "NF", "MN", "TN", "NN"]);
   const hasGenerated = assignments.some((a) => GENERATED_TYPES.has(a.shiftType));
   return hasGenerated ? "generated" : "preparation";
 }

@@ -10,7 +10,7 @@
  * CP-104 — no hay transición N→T ni N→M en días consecutivos tras generar
  * CP-105 — nunca aparece un único D entre dos bloques de trabajo
  * CP-106 — el modal manual muestra advertencia ET al asignar M después de T
- * CP-107 — tabla de complementos visible con columnas MF, TF, N, NF y Total €
+ * CP-107 — tabla de complementos visible con columnas MF, TF, N, NF, P. Extra y leyenda
  * CP-108 — total € de empleado calculado según tarifas definidas
  */
 
@@ -429,10 +429,11 @@ test("CP-107 — tabla de complementos visible con columnas esperadas", async ({
 
     const table = page.getByTestId("extra-pay-table");
     await expect(table).toBeVisible({ timeout: 10_000 });
-    await expect(table).toContainText("Complementos económicos");
-    for (const header of ["MF", "TF", "N", "NF", "Total €"]) {
+    await expect(table).not.toContainText("Complementos económicos");
+    for (const header of ["MF", "TF", "N", "NF", "P. Extra"]) {
       await expect(table).toContainText(header);
     }
+    await expect(page.getByTestId("extra-pay-legend")).toContainText("Paga/turno");
   } catch (err) {
     await screenshotOnFail(page, "CP-107");
     throw err;

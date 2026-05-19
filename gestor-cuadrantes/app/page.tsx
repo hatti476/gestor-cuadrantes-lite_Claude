@@ -9,6 +9,7 @@ import { ShiftEditor } from "@/components/schedule/shift-editor";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleAssignment, ScheduleEmployee, MonthStatus, computeMonthStatus } from "@/lib/schedules/types";
 import {
+  EXTRA_PAY_RATES,
   calculateExtraPay,
   countShifts,
   isValidShiftType,
@@ -22,8 +23,9 @@ const MONTH_NAMES = [
   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
 ];
 
-const COUNTER_SHIFTS: ShiftType[] = ["M", "T", "N", "MF", "TF", "NF", "J", "D", "V", "B"];
-const EXTRA_PAY_SHIFTS: ShiftType[] = ["MF", "TF", "N", "NF"];
+const BASE_COUNTER_SHIFTS: ShiftType[] = ["M", "T", "N", "MF", "TF", "NF", "J", "D", "V", "B"];
+const BASE_EXTRA_PAY_SHIFTS: ShiftType[] = ["MF", "TF", "N", "NF"];
+const CHRISTMAS_EXTRA_PAY_SHIFTS: ShiftType[] = ["MN", "TN", "NN"];
 
 function addDaysToDateString(date: string, days: number): string {
   const parsed = new Date(`${date}T00:00:00.000Z`);
@@ -41,10 +43,16 @@ function formatEuro(amount: number): string {
 function CountersTable({
   employees,
   assignments,
+  month,
 }: {
   employees: ScheduleEmployee[];
   assignments: ScheduleAssignment[];
+  month: number;
 }) {
+  const counterShifts = month === 12 || month === 1
+    ? [...BASE_COUNTER_SHIFTS.slice(0, 6), ...CHRISTMAS_EXTRA_PAY_SHIFTS, ...BASE_COUNTER_SHIFTS.slice(6)]
+    : BASE_COUNTER_SHIFTS;
+
   return (
     <div className="mt-2 w-fit overflow-x-auto rounded-lg border border-gray-200 shadow-sm" data-testid="counters-table">
       <table className="border-collapse text-xs min-w-max">
@@ -53,7 +61,7 @@ function CountersTable({
             <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-b border-r border-gray-200 min-w-[140px]">
               Empleado
             </th>
-            {COUNTER_SHIFTS.map((s) => (
+            {counterShifts.map((s) => (
               <th
                 key={s}
                 className="w-9 py-1 text-center border-b border-r border-gray-200"
@@ -80,7 +88,7 @@ function CountersTable({
                 <td className={`sticky left-0 z-10 ${rowBg} px-3 py-1 font-medium text-gray-700 border-r border-b border-gray-200 whitespace-nowrap`}>
                   {emp.name}
                 </td>
-                {COUNTER_SHIFTS.map((s) => {
+                {counterShifts.map((s) => {
                   const count = counters[s] ?? 0;
                   return (
                     <td
@@ -105,10 +113,15 @@ function CountersTable({
 function ExtraPayTable({
   employees,
   assignments,
+  month,
 }: {
   employees: ScheduleEmployee[];
   assignments: ScheduleAssignment[];
+  month: number;
 }) {
+  const extraPayShifts = month === 12 || month === 1
+    ? [...BASE_EXTRA_PAY_SHIFTS, ...CHRISTMAS_EXTRA_PAY_SHIFTS]
+    : BASE_EXTRA_PAY_SHIFTS;
   const rows = employees.map((emp) => {
     const empShifts = assignments
       .filter((a) => a.employeeId === emp.id)
@@ -123,10 +136,7 @@ function ExtraPayTable({
   const totalAmount = rows.reduce((total, row) => total + row.amount, 0);
 
   return (
-    <div className="w-fit" data-testid="extra-pay-table">
-      <h3 className="mb-1 px-1 text-xs font-semibold text-gray-600">
-        Complementos económicos
-      </h3>
+    <div className="mt-2 flex w-fit items-start gap-3" data-testid="extra-pay-table">
       <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
         <table className="border-collapse text-xs min-w-max">
           <thead>
@@ -134,7 +144,7 @@ function ExtraPayTable({
               <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-b border-r border-gray-200 min-w-[140px]">
                 Empleado
               </th>
-              {EXTRA_PAY_SHIFTS.map((shift) => (
+              {extraPayShifts.map((shift) => (
                 <th
                   key={shift}
                   className="w-9 py-1 text-center border-b border-r border-gray-200"
@@ -148,7 +158,7 @@ function ExtraPayTable({
                 </th>
               ))}
               <th className="px-3 py-2 text-right font-semibold text-gray-600 border-b border-r border-gray-200 min-w-[96px]">
-                Total €
+                P. Extra
               </th>
             </tr>
           </thead>
@@ -161,7 +171,7 @@ function ExtraPayTable({
                   <td className={`sticky left-0 z-10 ${rowBg} px-3 py-1 font-medium text-gray-700 border-r border-b border-gray-200 whitespace-nowrap`}>
                     {employee.name}
                   </td>
-                  {EXTRA_PAY_SHIFTS.map((shift) => {
+                  {extraPayShifts.map((shift) => {
                     const count = counters[shift] ?? 0;
                     return (
                       <td
@@ -188,7 +198,7 @@ function ExtraPayTable({
               <td className="sticky left-0 z-10 bg-gray-100 px-3 py-2 border-r border-gray-200 whitespace-nowrap">
                 TOTAL
               </td>
-              {EXTRA_PAY_SHIFTS.map((shift) => (
+              {extraPayShifts.map((shift) => (
                 <td key={shift} className="w-9 border-r border-gray-200" />
               ))}
               <td className="px-3 py-2 text-right border-r border-gray-200 font-mono tabular-nums">
@@ -197,6 +207,30 @@ function ExtraPayTable({
             </tr>
           </tfoot>
         </table>
+      </div>
+      <div
+        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600 shadow-sm"
+        data-testid="extra-pay-legend"
+      >
+        <div className="mb-1 font-semibold text-gray-700">Paga/turno</div>
+        <div className="space-y-1">
+          {extraPayShifts.map((shift) => (
+            <div key={shift} className="flex items-center justify-between gap-3 whitespace-nowrap">
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="flex h-5 w-7 items-center justify-center rounded-sm text-[10px] font-bold"
+                  style={{ backgroundColor: SHIFT_COLORS[shift].color, color: SHIFT_COLORS[shift].textColor }}
+                >
+                  {shift}
+                </span>
+                <span>{SHIFT_COLORS[shift].label}</span>
+              </span>
+              <span className="font-mono tabular-nums text-gray-800">
+                {formatEuro(EXTRA_PAY_RATES[shift] ?? 0)}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -756,8 +790,8 @@ export default function HomePage() {
                 />
                 {employees.length > 0 && (
                   <div className="mt-2 flex w-fit max-w-full items-start gap-4 overflow-x-auto">
-                    <CountersTable employees={employees} assignments={assignments} />
-                    <ExtraPayTable employees={employees} assignments={assignments} />
+                    <CountersTable employees={employees} assignments={assignments} month={month} />
+                    <ExtraPayTable employees={employees} assignments={assignments} month={month} />
                   </div>
                 )}
                 {monthStatus === "ungenerated" && (

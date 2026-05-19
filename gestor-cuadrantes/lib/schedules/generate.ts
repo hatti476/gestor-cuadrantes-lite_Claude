@@ -65,7 +65,21 @@ export interface PrevMonthTail {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-export const VALID_SHIFTS = ["M", "T", "N", "D", "MF", "TF", "NF", "V", "B", "J"] as const;
+export const VALID_SHIFTS = [
+  "M",
+  "T",
+  "N",
+  "D",
+  "MF",
+  "TF",
+  "NF",
+  "MN",
+  "TN",
+  "NN",
+  "V",
+  "B",
+  "J",
+] as const;
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -111,6 +125,24 @@ export function applySpecialDayRule(
     if (nextIsSpecial) return "NF";
   }
   return baseShift;
+}
+
+const CHRISTMAS_MORNING_DATES = new Set(["12-25", "01-01", "01-06"]);
+const CHRISTMAS_AFTERNOON_DATES = new Set(["12-24", "12-25", "12-31", "01-01", "01-05", "01-06"]);
+const CHRISTMAS_NIGHT_DATES = new Set(["12-24", "12-25", "12-31", "01-01", "01-05", "01-06"]);
+
+function monthDayKey(date: Date): string {
+  return `${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+export function applyChristmasSpecialRule(shift: string, date: Date): string {
+  const md = monthDayKey(date);
+  const base = normalizeShift(shift);
+
+  if (base === "M" && CHRISTMAS_MORNING_DATES.has(md)) return "MN";
+  if (base === "T" && CHRISTMAS_AFTERNOON_DATES.has(md)) return "TN";
+  if (base === "N" && CHRISTMAS_NIGHT_DATES.has(md)) return "NN";
+  return shift;
 }
 
 // ─── Night-block logic ───────────────────────────────────────────────────────
@@ -332,6 +364,9 @@ export function normalizeShift(shift: string): string {
   if (shift === "MF") return "M";
   if (shift === "TF") return "T";
   if (shift === "NF") return "N";
+  if (shift === "MN") return "M";
+  if (shift === "TN") return "T";
+  if (shift === "NN") return "N";
   return shift;
 }
 
@@ -530,9 +565,11 @@ export function generateMonthSchedule(
   // ── Day-by-day assignment ─────────────────────────────────────────────────
   const dayCoverage = new Map<string, { M: number; T: number }>();
 
-  // Weekend package plan: Saturday date string → { mfEmpId, tfEmpId }.
-  // Built lazily on each Saturday and reused for the following Sunday (BUG-37 fix).
-  const weekendPlan = new Map<string, { mfEmpId: string | null; tfEmpId: string | null }>();
+  type WeekendPackage = { mfEmpId: string | null; tfEmpId: string | null };
+
+  // Weekend package plan: Saturday date string → package owner for MF/TF.
+  // Friday/Monday holidays glued to that weekend reuse the same package.
+  const weekendPlan = new Map<string, WeekendPackage>();
 
   const getPreviousShift = (employeeId: string, date: Date): string | null => {
     const previousDateStr = toDateStr(addDays(date, -1));
@@ -586,10 +623,251 @@ export function generateMonthSchedule(
     _updateState(state, compliantShift, wKey, cov);
   };
 
+  const isInGeneratedMonth = (date: Date): boolean =>
+    date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month;
+
+  const getWeekendPackageDates = (satDate: Date): Date[] => {
+    const dates: Date[] = [];
+    const friDate = addDays(satDate, -1);
+    const sunDate = addDays(satDate, 1);
+    const monDate = addDays(satDate, 2);
+
+    if (isInGeneratedMonth(friDate) && holidayDates.has(toDateStr(friDate))) dates.push(friDate);
+    if (isInGeneratedMonth(satDate)) dates.push(satDate);
+    if (isInGeneratedMonth(sunDate)) dates.push(sunDate);
+    if (isInGeneratedMonth(monDate) && holidayDates.has(toDateStr(monDate))) dates.push(monDate);
+    return dates;
+  };
+
+  const getWeekendSaturdayForDate = (date: Date, isHolidayDay: boolean): Date | null => {
+    const dow = date.getUTCDay();
+    if (dow === 6) return date;
+    if (dow === 0) return addDays(date, -1);
+    if (dow === 5 && isHolidayDay) return addDays(date, 1);
+    if (dow === 1 && isHolidayDay) return addDays(date, -2);
+    return null;
+  };
+
+  const respectsPackageTransitions = (
+    employeeId: string,
+    targetShift: "MF" | "TF",
+    packageDates: Date[]
+  ): boolean => {
+    if (packageDates.length === 0) return false;
+    let previousShift = getPreviousShift(employeeId, packageDates[0]);
+
+    for (const packageDate of packageDates) {
+      const shift = applyChristmasSpecialRule(targetShift, packageDate);
+      if (previousShift && isValidShiftType(previousShift) && isValidShiftType(shift)) {
+        const transition = validateShiftTransition(previousShift, shift);
+        if (!transition.valid) return false;
+      }
+      previousShift = shift;
+    }
+
+    return true;
+  };
+
+  const wouldExceedWorkWindow = (
+    state: EmpState,
+    packageDates: Date[],
+    planningDate: Date
+  ): boolean => {
+    if (packageDates.length === 0 || !isDayWorkShift(state.consecutiveShift)) return false;
+    const firstPackageDate = packageDates[0];
+    const daysUntilPackage = Math.max(
+      0,
+      Math.round((firstPackageDate.getTime() - planningDate.getTime()) / 86_400_000)
+    );
+    return state.consecutiveCount + daysUntilPackage + packageDates.length > 5;
+  };
+
+  const ensureWeekendPlan = (satDate: Date, planningDate = satDate): WeekendPackage => {
+    const satStr = toDateStr(satDate);
+    const existingPlan = weekendPlan.get(satStr);
+    if (existingPlan) return existingPlan;
+
+    const packageDates = getWeekendPackageDates(satDate);
+    const packageWeekKey = weekKey(satDate);
+
+    const availableForPackage = (enforceRestWindow: boolean): ScheduleEmployee[] =>
+      sortedEmps.filter((e) => {
+        if (e.shiftPreference === "J") return false;
+        if (packageDates.length === 0) return false;
+
+        for (const packageDate of packageDates) {
+          const key = `${e.id}|${toDateStr(packageDate)}`;
+          if (existingDates.has(key) || nightPlan.has(key)) return false;
+        }
+
+        const s = stateMap.get(e.id)!;
+        if (s.forcedRestDaysRemaining > 0) return false;
+
+        if (enforceRestWindow && wouldExceedWorkWindow(s, packageDates, planningDate)) return false;
+
+        return true;
+      });
+
+    const pickEmployee = (
+      targetShift: "MF" | "TF",
+      candidates: ScheduleEmployee[],
+      excludedId?: string,
+      preferPreservingWeekdayCoverage = false
+    ): ScheduleEmployee | null =>
+      _pickWeekendPackageEmployee(
+        targetShift,
+        candidates.filter(
+          (candidate) =>
+            candidate.id !== excludedId &&
+            respectsPackageTransitions(candidate.id, targetShift, packageDates)
+        ),
+        stateMap,
+        packageWeekKey,
+        preferPreservingWeekdayCoverage
+      );
+
+    const strictAvailable = availableForPackage(true);
+    let mfEmp = pickEmployee("MF", strictAvailable);
+    let tfEmp = pickEmployee("TF", strictAvailable, mfEmp?.id);
+
+    if (!mfEmp || !tfEmp) {
+      const relaxedAvailable = availableForPackage(false);
+      mfEmp = mfEmp ?? pickEmployee("MF", relaxedAvailable, undefined, true);
+      tfEmp = tfEmp ?? pickEmployee("TF", relaxedAvailable, mfEmp?.id, true);
+    }
+
+    const plan = {
+      mfEmpId: mfEmp?.id ?? null,
+      tfEmpId: tfEmp?.id ?? null,
+    };
+    weekendPlan.set(satStr, plan);
+    return plan;
+  };
+
+  const getWeekendPackageShift = (
+    employeeId: string,
+    date: Date,
+    isHolidayDay: boolean
+  ): string | null => {
+    const satDate = getWeekendSaturdayForDate(date, isHolidayDay);
+    if (!satDate) return null;
+
+    const packageDates = getWeekendPackageDates(satDate).map(toDateStr);
+    if (!packageDates.includes(toDateStr(date))) return null;
+
+    const pkg = ensureWeekendPlan(satDate, date);
+    if (pkg.mfEmpId === employeeId) return "MF";
+    if (pkg.tfEmpId === employeeId) return "TF";
+    return "D";
+  };
+
+  const claimOpenWeekendPackageShift = (
+    employeeId: string,
+    date: Date,
+    isHolidayDay: boolean,
+    cov: { M: number; T: number }
+  ): string | null => {
+    const satDate = getWeekendSaturdayForDate(date, isHolidayDay);
+    if (!satDate) return null;
+
+    const packageDateStrs = getWeekendPackageDates(satDate).map(toDateStr);
+    if (!packageDateStrs.includes(toDateStr(date))) return null;
+
+    const pkg = ensureWeekendPlan(satDate, date);
+    if (pkg.mfEmpId === employeeId || pkg.tfEmpId === employeeId) return null;
+
+    const canClaim = (targetShift: "MF" | "TF"): boolean => {
+      const slotEmployeeId = targetShift === "MF" ? pkg.mfEmpId : pkg.tfEmpId;
+      if (slotEmployeeId !== null) {
+        const slotKey = `${slotEmployeeId}|${toDateStr(date)}`;
+        const slotState = stateMap.get(slotEmployeeId);
+        const slotUnavailable =
+          generatedShiftByKey.get(slotKey) === "D" ||
+          existingDates.has(slotKey) ||
+          nightPlan.has(slotKey) ||
+          (slotState?.forcedRestDaysRemaining ?? 0) > 0 ||
+          Boolean(slotState && slotState.consecutiveCount >= 5 && isDayWorkShift(slotState.consecutiveShift));
+
+        if (!slotUnavailable) return false;
+        if (targetShift === "MF") pkg.mfEmpId = null;
+        if (targetShift === "TF") pkg.tfEmpId = null;
+      }
+
+      if (targetShift === "MF" && cov.M >= 1) return false;
+      if (targetShift === "TF" && cov.T >= 1) return false;
+
+      const employee = sortedEmps.find((e) => e.id === employeeId);
+      if (!employee || employee.shiftPreference === "J") return false;
+
+      for (const packageDateStr of packageDateStrs) {
+        if (packageDateStr < toDateStr(date)) continue;
+        const key = `${employeeId}|${packageDateStr}`;
+        if (existingDates.has(key) || nightPlan.has(key)) return false;
+      }
+
+      const shift = applyChristmasSpecialRule(targetShift, date);
+      const previousShift = getPreviousShift(employeeId, date);
+      if (previousShift && isValidShiftType(previousShift) && isValidShiftType(shift)) {
+        return validateShiftTransition(previousShift, shift).valid;
+      }
+
+      return true;
+    };
+
+    if (canClaim("MF")) {
+      pkg.mfEmpId = employeeId;
+      return "MF";
+    }
+
+    if (canClaim("TF")) {
+      pkg.tfEmpId = employeeId;
+      return "TF";
+    }
+
+    return null;
+  };
+
+  const releaseWeekendPackageShift = (
+    employeeId: string,
+    date: Date,
+    isHolidayDay: boolean
+  ): void => {
+    const satDate = getWeekendSaturdayForDate(date, isHolidayDay);
+    if (!satDate) return;
+
+    const pkg = weekendPlan.get(toDateStr(satDate));
+    if (!pkg) return;
+    if (pkg.mfEmpId === employeeId) pkg.mfEmpId = null;
+    if (pkg.tfEmpId === employeeId) pkg.tfEmpId = null;
+  };
+
+  const getWeekendPackageShiftBySaturday = (
+    employeeId: string,
+    satDate: Date,
+    planningDate: Date
+  ): string | null => {
+    const pkg = ensureWeekendPlan(satDate, planningDate);
+    if (pkg.mfEmpId === employeeId) return "MF";
+    if (pkg.tfEmpId === employeeId) return "TF";
+    return null;
+  };
+
+  const getPrepRestSaturday = (date: Date, isHolidayDay: boolean): Date | null => {
+    const dow = date.getUTCDay();
+    const friday = dow === 3 ? addDays(date, 2) : dow === 4 ? addDays(date, 1) : date;
+
+    if ((dow === 3 || dow === 4) && holidayDates.has(toDateStr(friday))) {
+      return addDays(friday, 1);
+    }
+
+    if (dow === 4) return addDays(date, 2);
+    if (dow === 5 && !isHolidayDay) return addDays(date, 1);
+    return null;
+  };
+
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(Date.UTC(year, month - 1, day));
     const dateStr = toDateStr(date);
-    const isWeekendDay = isWeekend(date);
     const isHoliday = holidayDates.has(dateStr);
     const wKey = weekKey(date);
 
@@ -606,49 +884,39 @@ export function generateMonthSchedule(
       return aPref - bPref || a.rotationOrder - b.rotationOrder;
     });
 
-    // ── Weekend package selection (BUG-37: Sat+Sun as indivisible units) ─────────
-    // On each Saturday, pick one MF employee and one TF employee for the full
-    // Sat+Sun pair. Sunday reuses the same plan. This ensures the same person
-    // covers both days of the weekend in the same shift type.
-    if (date.getUTCDay() === 6) {
-      const sunDate = addDays(date, 1);
-      const sunStr = toDateStr(sunDate);
-      const sunInMonth =
-        sunDate.getUTCFullYear() === year && sunDate.getUTCMonth() + 1 === month;
+    const canLaterEmployeeCover = (targetBaseShift: "M" | "T", currentIndex: number): boolean =>
+      dailyOrder.slice(currentIndex + 1).some((candidate) => {
+        const candidateState = stateMap.get(candidate.id)!;
+        if (candidateState.weekShift.get(wKey) !== targetBaseShift) return false;
 
-      const pkgAvailable = sortedEmps.filter((e) => {
-        if (e.shiftPreference === "J") return false;
-        const satKey = `${e.id}|${dateStr}`;
-        if (existingDates.has(satKey) || nightPlan.has(satKey)) return false;
-        const s = stateMap.get(e.id)!;
-        const isWorkStreak = isDayWorkShift(s.consecutiveShift);
-        if (s.forcedRestDaysRemaining > 0) return false;
-        // Exclude if employee would need rest on Saturday OR on Sunday after Saturday work.
-        // After Saturday (work): count becomes isWorkStreak ? count+1 : 1.
-        // Rest triggers when count >= 5 → exclude if count >= 4 (would hit 5 on Sunday).
-        if (isWorkStreak && s.consecutiveCount >= 4) return false;
-        if (sunInMonth) {
-          const sunKey = `${e.id}|${sunStr}`;
-          if (existingDates.has(sunKey) || nightPlan.has(sunKey)) return false;
+        const candidateKey = `${candidate.id}|${dateStr}`;
+        if (existingDates.has(candidateKey) || nightPlan.has(candidateKey)) return false;
+
+        const candidateNeedsRest =
+          candidateState.forcedRestDaysRemaining > 0 ||
+          (candidateState.consecutiveCount >= 5 && isDayWorkShift(candidateState.consecutiveShift));
+        if (candidateNeedsRest) return false;
+
+        const candidatePrepRestSaturday = getPrepRestSaturday(date, isHoliday);
+        if (
+          candidatePrepRestSaturday &&
+          getWeekendPackageShiftBySaturday(candidate.id, candidatePrepRestSaturday, date) &&
+          wouldExceedWorkWindow(candidateState, getWeekendPackageDates(candidatePrepRestSaturday), date)
+        ) {
+          return false;
         }
+
+        const candidateShift = applyChristmasSpecialRule(targetBaseShift, date);
+        const previousShift = getPreviousShift(candidate.id, date);
+        if (previousShift && isValidShiftType(previousShift) && isValidShiftType(candidateShift)) {
+          return validateShiftTransition(previousShift, candidateShift).valid;
+        }
+
         return true;
       });
 
-      const mfEmp = _pickWeekendPackageEmployee("MF", pkgAvailable, stateMap, wKey);
-      const tfEmp = _pickWeekendPackageEmployee(
-        "TF",
-        pkgAvailable.filter((e) => e.id !== mfEmp?.id),
-        stateMap,
-        wKey
-      );
-
-      weekendPlan.set(dateStr, {
-        mfEmpId: mfEmp?.id ?? null,
-        tfEmpId: tfEmp?.id ?? null,
-      });
-    }
-
-    for (const emp of dailyOrder) {
+    for (let orderIndex = 0; orderIndex < dailyOrder.length; orderIndex++) {
+      const emp = dailyOrder[orderIndex];
       const key = `${emp.id}|${dateStr}`;
       const state = stateMap.get(emp.id)!;
 
@@ -664,9 +932,21 @@ export function generateMonthSchedule(
       if (nightPlan.has(key)) {
         const baseShift = nightPlan.get(key)!;
         const finalShift = baseShift === "N"
-          ? applySpecialDayRule("N", date, holidayDates)
+          ? applyChristmasSpecialRule(applySpecialDayRule("N", date, holidayDates), date)
           : "D";
         pushAssignment(emp.id, date, finalShift, state, wKey, cov);
+        continue;
+      }
+
+      const weekendPackageShift = getWeekendPackageShift(emp.id, date, isHoliday);
+      const prepRestSaturday = getPrepRestSaturday(date, isHoliday);
+      if (
+        prepRestSaturday &&
+        getWeekendPackageShiftBySaturday(emp.id, prepRestSaturday, date) &&
+        wouldExceedWorkWindow(state, getWeekendPackageDates(prepRestSaturday), date)
+      ) {
+        state.forcedRestDaysRemaining = Math.max(state.forcedRestDaysRemaining, 1);
+        pushAssignment(emp.id, date, "D", state, wKey, cov);
         continue;
       }
 
@@ -678,6 +958,9 @@ export function generateMonthSchedule(
         isDayWorkShift(state.consecutiveShift);
 
       if (state.forcedRestDaysRemaining > 0 || needsRest) {
+        if (weekendPackageShift && weekendPackageShift !== "D") {
+          releaseWeekendPackageShift(emp.id, date, isHoliday);
+        }
         if (state.forcedRestDaysRemaining > 0) {
           state.forcedRestDaysRemaining--;
         } else {
@@ -687,28 +970,40 @@ export function generateMonthSchedule(
         continue;
       }
 
-      // Weekend days: use pre-computed indivisible Sat+Sun package (BUG-37 fix)
-      if (isWeekendDay) {
-        const satStr = date.getUTCDay() === 6 ? dateStr : toDateStr(addDays(date, -1));
-        const pkg = weekendPlan.get(satStr);
-        const shift =
-          pkg?.mfEmpId === emp.id ? "MF"
-          : pkg?.tfEmpId === emp.id ? "TF"
-          : "D";
-        pushAssignment(emp.id, date, shift, state, wKey, cov);
+      const resolvedWeekendPackageShift =
+        weekendPackageShift === "D"
+          ? (claimOpenWeekendPackageShift(emp.id, date, isHoliday, cov) ?? weekendPackageShift)
+          : weekendPackageShift;
+
+      // Weekend days and adjacent Friday/Monday holidays share the same package.
+      if (resolvedWeekendPackageShift !== null) {
+        pushAssignment(
+          emp.id,
+          date,
+          resolvedWeekendPackageShift === "D"
+            ? "D"
+            : applyChristmasSpecialRule(resolvedWeekendPackageShift, date),
+          state,
+          wKey,
+          cov
+        );
         continue;
       }
 
       // Weekday holiday: per-employee assignment respecting preference (BUG-35 fix)
       if (isHoliday) {
         const shift = _pickWeekendShift(emp, state, cov, wKey);
-        pushAssignment(emp.id, date, shift, state, wKey, cov);
+        pushAssignment(emp.id, date, applyChristmasSpecialRule(shift, date), state, wKey, cov);
         continue;
       }
 
       // Workday (Mon–Fri, non-holiday)
-      const shift = _pickWorkdayShift(emp, state, cov, wKey);
-      pushAssignment(emp.id, date, shift, state, wKey, cov);
+      const weeklyShift = state.weekShift.get(wKey) ?? null;
+      const canPreserveWeeklyShift =
+        (weeklyShift === "M" && cov.M >= 1 && cov.T < 1 && canLaterEmployeeCover("T", orderIndex)) ||
+        (weeklyShift === "T" && cov.T >= 1 && cov.M < 1 && canLaterEmployeeCover("M", orderIndex));
+      const shift = _pickWorkdayShift(emp, state, cov, wKey, canPreserveWeeklyShift);
+      pushAssignment(emp.id, date, applyChristmasSpecialRule(shift, date), state, wKey, cov);
     }
   }
 
@@ -750,14 +1045,14 @@ function _updateState(
     state.mCount++;
     cov.M++;
     if (!state.weekShift.has(wKey)) state.weekShift.set(wKey, "M");
-    if (shift === "MF" && !state.weekendShift.has(wKey)) {
+    if ((shift === "MF" || shift === "MN") && !state.weekendShift.has(wKey)) {
       state.weekendShift.set(wKey, "MF");
     }
   } else if (base === "T") {
     state.tCount++;
     cov.T++;
     if (!state.weekShift.has(wKey)) state.weekShift.set(wKey, "T");
-    if (shift === "TF" && !state.weekendShift.has(wKey)) {
+    if ((shift === "TF" || shift === "TN") && !state.weekendShift.has(wKey)) {
       state.weekendShift.set(wKey, "TF");
     }
   }
@@ -819,7 +1114,8 @@ function _pickWeekendPackageEmployee(
     weekShift: Map<string, string>;
     weekendShift: Map<string, "MF" | "TF">;
   }>,
-  wKey: string
+  wKey: string,
+  preferPreservingWeekdayCoverage = false
 ): ScheduleEmployee | null {
   const targetBase = targetShift === "MF" ? "M" : "T";
 
@@ -836,6 +1132,8 @@ function _pickWeekendPackageEmployee(
     const bState = stateMap.get(b.id)!;
     const aWeeklyShift = aState.weekShift.get(wKey) ?? null;
     const bWeeklyShift = bState.weekShift.get(wKey) ?? null;
+    const aCoveragePenalty = preferPreservingWeekdayCoverage && aWeeklyShift === targetBase ? 1 : 0;
+    const bCoveragePenalty = preferPreservingWeekdayCoverage && bWeeklyShift === targetBase ? 1 : 0;
     const aWeeklyPenalty = aWeeklyShift !== null && aWeeklyShift !== targetBase ? 1 : 0;
     const bWeeklyPenalty = bWeeklyShift !== null && bWeeklyShift !== targetBase ? 1 : 0;
     const aPreferencePenalty =
@@ -846,6 +1144,7 @@ function _pickWeekendPackageEmployee(
     const bCount = targetBase === "M" ? bState.mCount : bState.tCount;
 
     return (
+      aCoveragePenalty - bCoveragePenalty ||
       aWeeklyPenalty - bWeeklyPenalty ||
       aPreferencePenalty - bPreferencePenalty ||
       aCount - bCount ||
@@ -865,7 +1164,8 @@ function _pickWorkdayShift(
     consecutiveCount: number;
   },
   cov: { M: number; T: number },
-  wKey: string
+  wKey: string,
+  preserveWeeklyShiftForLaterCoverage = false
 ): string {
   const pref = emp.shiftPreference ?? null;
 
@@ -875,6 +1175,9 @@ function _pickWorkdayShift(
 
   // Weekly consistency: if already assigned M or T this week, prefer keeping same
   const weeklyShift = state.weekShift.get(wKey) ?? null;
+  if (preserveWeeklyShiftForLaterCoverage && (weeklyShift === "M" || weeklyShift === "T")) {
+    return weeklyShift;
+  }
 
   // Hard minimum (RF-16): ≥1M and ≥1T — handle urgency first.
   // BUG-30 fix: dailyOrder (see caller) processes preference-null employees first each day

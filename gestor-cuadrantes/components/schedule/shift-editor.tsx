@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 
-const SHIFT_OPTIONS: ShiftType[] = ["M", "T", "N", "J", "D", "V", "B", "MF", "TF", "NF"];
+const SHIFT_OPTIONS: ShiftType[] = ["M", "T", "N", "J", "D", "V", "B", "MF", "TF", "NF", "MN", "TN", "NN"];
 
 interface ShiftEditorProps {
   date: string; // "YYYY-MM-DD"

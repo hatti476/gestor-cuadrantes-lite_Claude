@@ -10,6 +10,7 @@ import {
   resolveNightBlocks,
   generateMonthSchedule,
   applySpecialDayRule,
+  applyChristmasSpecialRule,
   isWeekend,
   weekKey,
   isPostRestDay,
@@ -169,6 +170,26 @@ describe("applySpecialDayRule", () => {
   });
 });
 
+describe("applyChristmasSpecialRule", () => {
+  it("convierte mañana, tarde y noche de los festivos navideños configurados", () => {
+    expect(applyChristmasSpecialRule("M", fromDateStr("2026-12-25"))).toBe("MN");
+    expect(applyChristmasSpecialRule("T", fromDateStr("2026-12-25"))).toBe("TN");
+    expect(applyChristmasSpecialRule("N", fromDateStr("2026-12-25"))).toBe("NN");
+    expect(applyChristmasSpecialRule("MF", fromDateStr("2027-01-06"))).toBe("MN");
+    expect(applyChristmasSpecialRule("TF", fromDateStr("2027-01-06"))).toBe("TN");
+    expect(applyChristmasSpecialRule("NF", fromDateStr("2027-01-06"))).toBe("NN");
+  });
+
+  it("solo convierte tarde y noche en 24/12, 31/12 y 05/01", () => {
+    expect(applyChristmasSpecialRule("M", fromDateStr("2026-12-24"))).toBe("M");
+    expect(applyChristmasSpecialRule("T", fromDateStr("2026-12-24"))).toBe("TN");
+    expect(applyChristmasSpecialRule("N", fromDateStr("2026-12-24"))).toBe("NN");
+    expect(applyChristmasSpecialRule("M", fromDateStr("2027-01-05"))).toBe("M");
+    expect(applyChristmasSpecialRule("T", fromDateStr("2027-01-05"))).toBe("TN");
+    expect(applyChristmasSpecialRule("N", fromDateStr("2027-01-05"))).toBe("NN");
+  });
+});
+
 // ─── generateMonthSchedule — reglas fundamentales ─────────────────────────────
 
 describe("generateMonthSchedule — mes completo con 7 técnicos", () => {
@@ -189,7 +210,7 @@ describe("generateMonthSchedule — mes completo con 7 técnicos", () => {
   });
 
   it("todos los shiftType son válidos", () => {
-    const valid = new Set(["M", "T", "N", "D", "MF", "TF", "NF"]);
+    const valid = new Set(["M", "T", "N", "D", "MF", "TF", "NF", "MN", "TN", "NN"]);
     const result = generateMonthSchedule(emps, 2026, 5);
     for (const a of result) {
       expect(valid.has(a.shiftType)).toBe(true);
@@ -384,6 +405,20 @@ describe("generateMonthSchedule — RF-16 cobertura mínima garantizada", () => 
       const tfCount = shifts.filter((s) => s === "TF").length;
       expect(mfCount).toBeGreaterThanOrEqual(1);
       expect(tfCount).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("no deja fines de semana sin MF/TF cuando hay técnicos disponibles", () => {
+    const emps = [
+      ...make7Employees(),
+      { id: "emp-8", rotationOrder: 7, shiftPreference: null },
+    ];
+    const result = generateMonthSchedule(emps, 2026, 7, new Set(), new Set(), [], emps.map((e) => e.id));
+
+    for (const dateStr of ["2026-07-25", "2026-07-26"]) {
+      const shifts = result.filter((a) => toDateStr(a.date) === dateStr).map((a) => a.shiftType);
+      expect(shifts.filter((s) => s === "MF")).toHaveLength(1);
+      expect(shifts.filter((s) => s === "TF")).toHaveLength(1);
     }
   });
 
@@ -742,6 +777,9 @@ describe("normalizeShift", () => {
   it("MF → M", () => expect(normalizeShift("MF")).toBe("M"));
   it("TF → T", () => expect(normalizeShift("TF")).toBe("T"));
   it("NF → N", () => expect(normalizeShift("NF")).toBe("N"));
+  it("MN → M", () => expect(normalizeShift("MN")).toBe("M"));
+  it("TN → T", () => expect(normalizeShift("TN")).toBe("T"));
+  it("NN → N", () => expect(normalizeShift("NN")).toBe("N"));
   it("D → D", () => expect(normalizeShift("D")).toBe("D"));
   it("V → V", () => expect(normalizeShift("V")).toBe("V"));
 });
@@ -1250,5 +1288,24 @@ describe("generateMonthSchedule — consistencia semanal de fines de semana y fe
         }
       }
     }
+  });
+
+  it("festivo viernes pegado al fin de semana usa el mismo pack MF/TF", () => {
+    const emps = make7Employees();
+    const holidays = new Set(["2026-06-05"]);
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), holidays, [], emps.map((e) => e.id));
+    const packageDates = ["2026-06-05", "2026-06-06", "2026-06-07"];
+
+    const mfAssignments = packageDates.map((dateStr) =>
+      result.find((a) => toDateStr(a.date) === dateStr && a.shiftType === "MF")
+    );
+    const tfAssignments = packageDates.map((dateStr) =>
+      result.find((a) => toDateStr(a.date) === dateStr && a.shiftType === "TF")
+    );
+
+    expect(mfAssignments.every(Boolean)).toBe(true);
+    expect(tfAssignments.every(Boolean)).toBe(true);
+    expect(new Set(mfAssignments.map((a) => a?.employeeId)).size).toBe(1);
+    expect(new Set(tfAssignments.map((a) => a?.employeeId)).size).toBe(1);
   });
 });
