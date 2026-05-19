@@ -18,6 +18,11 @@
  * Sin dependencias de BD ni HTTP — completamente testeable con Vitest.
  */
 
+import {
+  isValidShiftType,
+  validateShiftTransition,
+} from "./business-logic";
+
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export interface ScheduleEmployee {
@@ -32,6 +37,20 @@ export interface GeneratedAssignment {
   employeeId: string;
   date: Date; // UTC midnight
   shiftType: string;
+}
+
+export interface GenerationWarning {
+  employeeId: string;
+  date: string;
+  prevShift: string;
+  nextShift: string;
+  hoursGap: number;
+  reason: string;
+}
+
+export interface GenerateMonthScheduleOptions {
+  existingAssignments?: Map<string, string>;
+  warnings?: GenerationWarning[];
 }
 
 /**
@@ -404,12 +423,20 @@ export function generateMonthSchedule(
   existingDates: Set<string> = new Set(),
   holidayDates: Set<string> = new Set(),
   prevMonthTail: PrevMonthTail[] = [],
-  nightRotationIds?: string[]
+  nightRotationIds?: string[],
+  options: GenerateMonthScheduleOptions = {}
 ): GeneratedAssignment[] {
   if (employees.length === 0) return [];
 
   const daysInMonth = new Date(year, month, 0).getDate();
   const result: GeneratedAssignment[] = [];
+  const generatedShiftByKey = new Map<string, string>();
+  const previousMonthShiftByKey = new Map<string, string>(
+    prevMonthTail.map((assignment) => [
+      `${assignment.employeeId}|${assignment.date}`,
+      assignment.shiftType,
+    ])
+  );
 
   // Sort employees by rotationOrder
   const sortedEmps = [...employees].sort((a, b) => a.rotationOrder - b.rotationOrder);
@@ -507,6 +534,58 @@ export function generateMonthSchedule(
   // Built lazily on each Saturday and reused for the following Sunday (BUG-37 fix).
   const weekendPlan = new Map<string, { mfEmpId: string | null; tfEmpId: string | null }>();
 
+  const getPreviousShift = (employeeId: string, date: Date): string | null => {
+    const previousDateStr = toDateStr(addDays(date, -1));
+    const key = `${employeeId}|${previousDateStr}`;
+    return (
+      generatedShiftByKey.get(key) ??
+      options.existingAssignments?.get(key) ??
+      previousMonthShiftByKey.get(key) ??
+      null
+    );
+  };
+
+  const applyTransitionCompliance = (
+    employeeId: string,
+    date: Date,
+    shiftType: string
+  ): { shiftType: string; adjusted: boolean } => {
+    if (!isValidShiftType(shiftType)) return { shiftType, adjusted: false };
+    const prevShift = getPreviousShift(employeeId, date);
+    if (!prevShift || !isValidShiftType(prevShift)) return { shiftType, adjusted: false };
+
+    const transition = validateShiftTransition(prevShift, shiftType);
+    if (transition.valid) return { shiftType, adjusted: false };
+
+    options.warnings?.push({
+      employeeId,
+      date: toDateStr(date),
+      prevShift,
+      nextShift: shiftType,
+      hoursGap: transition.hoursGap,
+      reason: `Transición ${prevShift}→${shiftType} deja ${transition.hoursGap}h de descanso`,
+    });
+    return { shiftType: "D", adjusted: true };
+  };
+
+  const pushAssignment = (
+    employeeId: string,
+    date: Date,
+    shiftType: string,
+    state: EmpState,
+    wKey: string,
+    cov: { M: number; T: number }
+  ): void => {
+    const compliance = applyTransitionCompliance(employeeId, date, shiftType);
+    const compliantShift = compliance.shiftType;
+    if (compliance.adjusted && shiftType !== "D") {
+      state.forcedRestDaysRemaining = Math.max(state.forcedRestDaysRemaining, 1);
+    }
+    result.push({ employeeId, date, shiftType: compliantShift });
+    generatedShiftByKey.set(`${employeeId}|${toDateStr(date)}`, compliantShift);
+    _updateState(state, compliantShift, wKey, cov);
+  };
+
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(Date.UTC(year, month - 1, day));
     const dateStr = toDateStr(date);
@@ -587,8 +666,7 @@ export function generateMonthSchedule(
         const finalShift = baseShift === "N"
           ? applySpecialDayRule("N", date, holidayDates)
           : "D";
-        result.push({ employeeId: emp.id, date, shiftType: finalShift });
-        _updateState(state, finalShift, wKey, cov);
+        pushAssignment(emp.id, date, finalShift, state, wKey, cov);
         continue;
       }
 
@@ -605,8 +683,7 @@ export function generateMonthSchedule(
         } else {
           state.forcedRestDaysRemaining = 1;
         }
-        result.push({ employeeId: emp.id, date, shiftType: "D" });
-        _updateState(state, "D", wKey, cov);
+        pushAssignment(emp.id, date, "D", state, wKey, cov);
         continue;
       }
 
@@ -618,23 +695,20 @@ export function generateMonthSchedule(
           pkg?.mfEmpId === emp.id ? "MF"
           : pkg?.tfEmpId === emp.id ? "TF"
           : "D";
-        result.push({ employeeId: emp.id, date, shiftType: shift });
-        _updateState(state, shift, wKey, cov);
+        pushAssignment(emp.id, date, shift, state, wKey, cov);
         continue;
       }
 
       // Weekday holiday: per-employee assignment respecting preference (BUG-35 fix)
       if (isHoliday) {
         const shift = _pickWeekendShift(emp, state, cov, wKey);
-        result.push({ employeeId: emp.id, date, shiftType: shift });
-        _updateState(state, shift, wKey, cov);
+        pushAssignment(emp.id, date, shift, state, wKey, cov);
         continue;
       }
 
       // Workday (Mon–Fri, non-holiday)
       const shift = _pickWorkdayShift(emp, state, cov, wKey);
-      result.push({ employeeId: emp.id, date, shiftType: shift });
-      _updateState(state, shift, wKey, cov);
+      pushAssignment(emp.id, date, shift, state, wKey, cov);
     }
   }
 

@@ -1072,6 +1072,46 @@ describe("generateMonthSchedule — BUG-36: máximo 5 días consecutivos con mez
   });
 });
 
+// ─── Sprint 16: cumplimiento ET Art. 34.3 ───────────────────────────────────
+
+describe("generateMonthSchedule — descanso mínimo ET entre turnos", () => {
+  it("ajusta a D una transición prohibida T→M y registra warning", () => {
+    const emps = make7Employees();
+    const warnings: {
+      employeeId: string;
+      date: string;
+      prevShift: string;
+      nextShift: string;
+      hoursGap: number;
+      reason: string;
+    }[] = [];
+    const result = generateMonthSchedule(
+      emps,
+      2026,
+      6,
+      new Set(),
+      new Set(),
+      [{ employeeId: "emp-4", date: "2026-05-31", shiftType: "T" }],
+      emps.map((e) => e.id),
+      { warnings }
+    );
+
+    const adjusted = result.find((a) => a.employeeId === "emp-4" && toDateStr(a.date) === "2026-06-01");
+    expect(adjusted?.shiftType).toBe("D");
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          employeeId: "emp-4",
+          date: "2026-06-01",
+          prevShift: "T",
+          nextShift: "M",
+          hoursGap: 8,
+        }),
+      ])
+    );
+  });
+});
+
 // ─── BUG-37: paquete Sáb+Dom indivisible ─────────────────────────────────────
 
 describe("generateMonthSchedule — BUG-37: paquete Sáb+Dom indivisible", () => {

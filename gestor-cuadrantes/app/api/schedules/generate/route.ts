@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { generateMonthSchedule, PrevMonthTail } from "@/lib/schedules/generate";
+import { generateMonthSchedule, type GenerationWarning, type PrevMonthTail } from "@/lib/schedules/generate";
 import { getMonthRange } from "@/lib/schedules/business-logic";
 
 // POST /api/schedules/generate
@@ -73,6 +73,9 @@ export async function POST(req: NextRequest) {
       .filter((a) => a.manual || ALWAYS_LOCKED.has(a.shiftType))
       .map((a) => `${a.employeeId}|${a.date.toISOString().slice(0, 10)}`)
   );
+  const existingAssignments = new Map<string, string>(
+    existing.map((a) => [`${a.employeeId}|${a.date.toISOString().slice(0, 10)}`, a.shiftType])
+  );
 
   // Obtener los últimos 7 días del mes anterior para continuidad — solo empleados del proyecto
   const prevMonthEnd = new Date(start.getTime() - 1); // last ms of prev month
@@ -105,6 +108,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Generar nuevas asignaciones con el algoritmo Phase 2
+  const warnings: GenerationWarning[] = [];
   const toCreate = generateMonthSchedule(
     employees,
     year,
@@ -112,7 +116,8 @@ export async function POST(req: NextRequest) {
     existingSet,
     holidaySet,
     prevMonthTail,
-    nightRotationIds
+    nightRotationIds,
+    { existingAssignments, warnings }
   );
 
   // Insertar en BD — una sola transacción para máximo rendimiento con SQLite
@@ -131,5 +136,5 @@ export async function POST(req: NextRequest) {
     })
   );
 
-  return NextResponse.json({ created: toCreate.length });
+  return NextResponse.json({ created: toCreate.length, warnings });
 }

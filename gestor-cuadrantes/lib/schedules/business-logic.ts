@@ -72,6 +72,64 @@ export function removeHolidayRule(shiftType: string): string {
   return shiftType;
 }
 
+function isMorningShift(shiftType: ValidShiftType): boolean {
+  return shiftType === "M" || shiftType === "MF";
+}
+
+function isAfternoonShift(shiftType: ValidShiftType): boolean {
+  return shiftType === "T" || shiftType === "TF";
+}
+
+function isNightShift(shiftType: ValidShiftType): boolean {
+  return shiftType === "N" || shiftType === "NF";
+}
+
+function isTimedShift(shiftType: ValidShiftType): boolean {
+  return isMorningShift(shiftType) || isAfternoonShift(shiftType) || isNightShift(shiftType);
+}
+
+function shiftEndHourFromDayStart(shiftType: ValidShiftType): number {
+  if (isMorningShift(shiftType)) return 15;
+  if (isAfternoonShift(shiftType)) return 23;
+  if (isNightShift(shiftType)) return 31; // 07:00 del día siguiente
+  return 0;
+}
+
+function nextShiftStartHourFromPreviousDayStart(shiftType: ValidShiftType): number {
+  if (isMorningShift(shiftType)) return 31; // día siguiente 07:00
+  if (isAfternoonShift(shiftType)) return 39; // día siguiente 15:00
+  if (isNightShift(shiftType)) return 47; // día siguiente 23:00
+  return 24;
+}
+
+export function validateShiftTransition(
+  prevShift: ValidShiftType | null,
+  nextShift: ValidShiftType
+): { valid: boolean; hoursGap: number } {
+  if (!prevShift || !isTimedShift(prevShift) || !isTimedShift(nextShift)) {
+    return { valid: true, hoursGap: 24 };
+  }
+
+  if (isAfternoonShift(prevShift) && isMorningShift(nextShift)) {
+    return { valid: false, hoursGap: 8 };
+  }
+
+  if (isAfternoonShift(prevShift) && isNightShift(nextShift)) {
+    return { valid: false, hoursGap: 0 };
+  }
+
+  if (isNightShift(prevShift) && isMorningShift(nextShift)) {
+    return { valid: false, hoursGap: 0 };
+  }
+
+  if (isNightShift(prevShift) && isAfternoonShift(nextShift)) {
+    return { valid: false, hoursGap: 8 };
+  }
+
+  const hoursGap = nextShiftStartHourFromPreviousDayStart(nextShift) - shiftEndHourFromDayStart(prevShift);
+  return { valid: hoursGap >= 12, hoursGap };
+}
+
 /** Valida el body de un POST /api/schedules */
 export function validateScheduleBody(body: unknown): {
   valid: boolean;

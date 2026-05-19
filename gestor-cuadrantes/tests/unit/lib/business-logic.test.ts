@@ -7,6 +7,7 @@ import {
   validateScheduleBody,
   applyHolidayRule,
   removeHolidayRule,
+  validateShiftTransition,
 } from "@/lib/schedules/business-logic";
 
 describe("isValidShiftType", () => {
@@ -155,4 +156,45 @@ describe("removeHolidayRule", () => {
   it("NF → N", () => expect(removeHolidayRule("NF")).toBe("N"));
   it("M no cambia", () => expect(removeHolidayRule("M")).toBe("M"));
   it("D no cambia", () => expect(removeHolidayRule("D")).toBe("D"));
+});
+
+describe("validateShiftTransition", () => {
+  it.each([
+    ["T", "M", 8],
+    ["T", "MF", 8],
+    ["TF", "M", 8],
+    ["TF", "MF", 8],
+    ["N", "T", 8],
+    ["N", "TF", 8],
+    ["N", "M", 0],
+    ["N", "MF", 0],
+    ["NF", "T", 8],
+    ["NF", "TF", 8],
+    ["NF", "M", 0],
+    ["NF", "MF", 0],
+    ["T", "N", 0],
+    ["T", "NF", 0],
+    ["TF", "N", 0],
+    ["TF", "NF", 0],
+  ] as const)("prohíbe %s → %s por dejar %ih de descanso", (prevShift, nextShift, hoursGap) => {
+    expect(validateShiftTransition(prevShift, nextShift)).toEqual({ valid: false, hoursGap });
+  });
+
+  it.each([
+    ["M", "M", 16],
+    ["M", "T", 24],
+    ["M", "N", 32],
+    ["MF", "TF", 24],
+    ["T", "T", 16],
+    ["N", "N", 16],
+    ["NF", "NF", 16],
+  ] as const)("permite %s → %s con al menos 12h de descanso", (prevShift, nextShift, hoursGap) => {
+    expect(validateShiftTransition(prevShift, nextShift)).toEqual({ valid: true, hoursGap });
+  });
+
+  it("permite transiciones hacia descanso o sin turno anterior", () => {
+    expect(validateShiftTransition(null, "M")).toEqual({ valid: true, hoursGap: 24 });
+    expect(validateShiftTransition("N", "D")).toEqual({ valid: true, hoursGap: 24 });
+    expect(validateShiftTransition("T", "V")).toEqual({ valid: true, hoursGap: 24 });
+  });
 });

@@ -8,7 +8,7 @@ import { Header } from "@/components/layout/header";
 import { ShiftEditor } from "@/components/schedule/shift-editor";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleAssignment, ScheduleEmployee, MonthStatus, computeMonthStatus } from "@/lib/schedules/types";
-import { countShifts } from "@/lib/schedules/business-logic";
+import { countShifts, isValidShiftType, validateShiftTransition } from "@/lib/schedules/business-logic";
 import { PrepPanel, MonthStatusBadge, PrepStep } from "@/components/schedule/prep-panel";
 import { useToast } from "@/components/ui/toast-provider";
 
@@ -18,6 +18,12 @@ const MONTH_NAMES = [
 ];
 
 const COUNTER_SHIFTS: ShiftType[] = ["M", "T", "N", "MF", "TF", "NF", "J", "D", "V", "B"];
+
+function addDaysToDateString(date: string, days: number): string {
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
 
 function CountersTable({
   employees,
@@ -351,6 +357,40 @@ export default function HomePage() {
     await loadSchedule();
   }
 
+  function getAssignmentShift(employeeId: string, date: string): string | null {
+    return assignments.find(
+      (a) => a.employeeId === employeeId && a.date.slice(0, 10) === date
+    )?.shiftType ?? null;
+  }
+
+  function getTransitionWarning(shiftType: string): string | null {
+    if (!editingCell || !isValidShiftType(shiftType)) return null;
+    const previousShift = getAssignmentShift(
+      editingCell.employeeId,
+      addDaysToDateString(editingCell.date, -1)
+    );
+    const nextShift = getAssignmentShift(
+      editingCell.employeeId,
+      addDaysToDateString(editingCell.date, 1)
+    );
+
+    if (previousShift && isValidShiftType(previousShift)) {
+      const previousTransition = validateShiftTransition(previousShift, shiftType);
+      if (!previousTransition.valid) {
+        return "⚠️ Este turno deja menos de 12h de descanso respecto al turno del día anterior. ¿Continuar?";
+      }
+    }
+
+    if (nextShift && isValidShiftType(nextShift)) {
+      const nextTransition = validateShiftTransition(shiftType, nextShift);
+      if (!nextTransition.valid) {
+        return "⚠️ Este turno deja menos de 12h de descanso respecto al turno del día siguiente. ¿Continuar?";
+      }
+    }
+
+    return null;
+  }
+
   // ---------------------------------------------------------------------------
   // Generación automática (con confirmación si ya hay datos)
   // ---------------------------------------------------------------------------
@@ -374,8 +414,17 @@ export default function HomePage() {
         body: JSON.stringify({ year, month, projectId: activeProjectId }),
       });
       if (!res.ok) throw new Error();
-      const { created } = await res.json();
+      const { created, warnings } = await res.json() as {
+        created: number;
+        warnings?: { employeeId: string; date: string; prevShift: string; nextShift: string; hoursGap: number }[];
+      };
       showToast(`Cuadrante generado — ${created} turnos asignados`, "success");
+      if (warnings && warnings.length > 0) {
+        showToast(
+          `${warnings.length} turnos ajustados por cumplimiento del Estatuto de los Trabajadores`,
+          "info"
+        );
+      }
       await loadSchedule();
     } catch {
       showToast("Error al generar el cuadrante", "error");
@@ -639,6 +688,7 @@ export default function HomePage() {
           onSave={handleSaveShift}
           onDelete={editingCell.assignmentId ? handleDeleteShift : undefined}
           onClose={() => setEditingCell(null)}
+          getTransitionWarning={getTransitionWarning}
         />
       )}
 
