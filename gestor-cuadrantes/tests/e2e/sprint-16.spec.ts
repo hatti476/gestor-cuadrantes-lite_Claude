@@ -12,6 +12,7 @@
  * CP-106 — el modal manual muestra advertencia ET al asignar M después de T
  * CP-107 — tabla de complementos visible con columnas MF, TF, N, NF, P. Extra y leyenda
  * CP-108 — total € de empleado calculado según tarifas definidas
+ * CP-109 — PrepPanel permite marcar y eliminar bajas B
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -207,6 +208,40 @@ test("CP-100 — PrepPanel elimina D manual al hacer toggle sobre la celda", asy
     expect(assignments.find((a) => a.employeeId === employee.id && a.date.slice(0, 10) === date)).toBeUndefined();
   } catch (err) {
     await screenshotOnFail(page, "CP-100");
+    throw err;
+  }
+});
+
+// ===========================================================================
+// CP-109 — PrepPanel permite marcar y eliminar bajas B
+// ===========================================================================
+test("CP-109 — PrepPanel marca y elimina B al hacer toggle sobre la celda", async ({ page }) => {
+  try {
+    await loginAsAdmin(page);
+    const project = await getDefaultProject(page);
+    const [employee] = await getProjectEmployees(page, project.id);
+    const date = `${DEFAULT_MONTH_PREFIX}-04`;
+
+    await deleteAssignmentIfExists(page, project.id, employee.id, date);
+    await selectProjectOnHome(page, project);
+
+    await page.getByTestId("prep-step-bajas").click();
+    const cell = page.getByTestId(`cell-${employee.id}-${date}`);
+    await cell.click();
+    await expect(cell).toHaveAttribute("data-locked", "true", { timeout: 10_000 });
+    await expect(cell).toContainText("B");
+
+    let assignments = await getAssignments(page, project.id, DEFAULT_YEAR, DEFAULT_MONTH);
+    expect(assignments.find((a) => a.employeeId === employee.id && a.date.slice(0, 10) === date)?.shiftType).toBe("B");
+
+    await cell.click();
+    await expect(cell).not.toHaveAttribute("data-locked", "true", { timeout: 10_000 });
+    await expect(cell).not.toContainText("B");
+
+    assignments = await getAssignments(page, project.id, DEFAULT_YEAR, DEFAULT_MONTH);
+    expect(assignments.find((a) => a.employeeId === employee.id && a.date.slice(0, 10) === date)).toBeUndefined();
+  } catch (err) {
+    await screenshotOnFail(page, "CP-109");
     throw err;
   }
 });

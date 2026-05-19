@@ -90,7 +90,7 @@ export const SHIFT_COLORS: Record<ShiftType, ShiftConfig> = {
   },
   NN: {
     label: "Noche Navidad",
-    color: "#5B21B6",
+    color: "#0B6B2B",
     textColor: "#FFFFFF",
   },
 };

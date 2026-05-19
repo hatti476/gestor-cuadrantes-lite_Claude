@@ -11,7 +11,7 @@ test("CP-40 — El admin ve la guía de administrador", async ({ page }) => {
   // Debe mostrar secciones específicas del admin
   await expect(page.locator("text=Gestión de proyectos")).toBeVisible();
   await expect(page.locator("text=Preparar el cuadrante")).toBeVisible();
-  await expect(page.locator("text=Festivos automáticos")).toBeVisible();
+  await expect(page.locator("text=Festivos precargados")).toBeVisible();
   await expect(page.locator("text=Super Admin")).toBeVisible();
 });
 
@@ -28,7 +28,7 @@ test("CP-41 — El técnico ve la guía de empleado", async ({ page }) => {
 
   // NO debe mostrar secciones de admin
   await expect(page.locator("text=Gestión de proyectos")).not.toBeVisible();
-  await expect(page.locator("text=Festivos automáticos")).not.toBeVisible();
+  await expect(page.locator("text=Festivos precargados")).not.toBeVisible();
 });
 
 // ─── CP-42 — La página /info redirige a login si no autenticado ───────────────

@@ -605,6 +605,24 @@ export function generateMonthSchedule(
     return { shiftType: "D", adjusted: true };
   };
 
+  const wouldBreakTransition = (employeeId: string, date: Date, shiftType: string): boolean => {
+    if (!isValidShiftType(shiftType)) return false;
+    const prevShift = getPreviousShift(employeeId, date);
+    if (!prevShift || !isValidShiftType(prevShift)) return false;
+    return !validateShiftTransition(prevShift, shiftType).valid;
+  };
+
+  const ensureSecondRestAfterWork = (
+    employeeId: string,
+    date: Date,
+    state: EmpState
+  ): void => {
+    const previousShift = getPreviousShift(employeeId, date);
+    if (previousShift && isDayWorkShift(previousShift)) {
+      state.forcedRestDaysRemaining = Math.max(state.forcedRestDaysRemaining, 1);
+    }
+  };
+
   const pushAssignment = (
     employeeId: string,
     date: Date,
@@ -740,6 +758,22 @@ export function generateMonthSchedule(
       mfEmpId: mfEmp?.id ?? null,
       tfEmpId: tfEmp?.id ?? null,
     };
+
+    const reserveWeekendPattern = (employeeId: string | null, targetShift: "MF" | "TF"): void => {
+      if (!employeeId) return;
+      const state = stateMap.get(employeeId);
+      if (!state) return;
+      if (!state.weekendShift.has(packageWeekKey)) {
+        state.weekendShift.set(packageWeekKey, targetShift);
+      }
+      const targetBase = targetShift === "MF" ? "M" : "T";
+      if (!state.weekShift.has(packageWeekKey)) {
+        state.weekShift.set(packageWeekKey, targetBase);
+      }
+    };
+
+    reserveWeekendPattern(plan.mfEmpId, "MF");
+    reserveWeekendPattern(plan.tfEmpId, "TF");
     weekendPlan.set(satStr, plan);
     return plan;
   };
@@ -781,10 +815,14 @@ export function generateMonthSchedule(
       if (slotEmployeeId !== null) {
         const slotKey = `${slotEmployeeId}|${toDateStr(date)}`;
         const slotState = stateMap.get(slotEmployeeId);
+        const generatedSlotShift = generatedShiftByKey.get(slotKey);
+        const targetShiftForDate = applyChristmasSpecialRule(targetShift, date);
         const slotUnavailable =
-          generatedShiftByKey.get(slotKey) === "D" ||
+          generatedSlotShift === "D" ||
+          Boolean(generatedSlotShift && generatedSlotShift !== targetShiftForDate) ||
           existingDates.has(slotKey) ||
           nightPlan.has(slotKey) ||
+          wouldBreakTransition(slotEmployeeId, date, targetShiftForDate) ||
           (slotState?.forcedRestDaysRemaining ?? 0) > 0 ||
           Boolean(slotState && slotState.consecutiveCount >= 5 && isDayWorkShift(slotState.consecutiveShift));
 
@@ -865,6 +903,20 @@ export function generateMonthSchedule(
     return null;
   };
 
+  const needsWeekendPrepRest = (
+    state: EmpState,
+    packageShift: string | null,
+    satDate: Date,
+    planningDate: Date
+  ): boolean => {
+    if (packageShift !== "MF" && packageShift !== "TF") return false;
+    if (wouldExceedWorkWindow(state, getWeekendPackageDates(satDate), planningDate)) return true;
+
+    const targetBase = packageShift === "MF" ? "M" : "T";
+    const packageWeeklyShift = state.weekShift.get(weekKey(satDate)) ?? null;
+    return packageWeeklyShift !== null && packageWeeklyShift !== targetBase;
+  };
+
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(Date.UTC(year, month - 1, day));
     const dateStr = toDateStr(date);
@@ -898,10 +950,13 @@ export function generateMonthSchedule(
         if (candidateNeedsRest) return false;
 
         const candidatePrepRestSaturday = getPrepRestSaturday(date, isHoliday);
+        const candidatePackageShift = candidatePrepRestSaturday
+          ? getWeekendPackageShiftBySaturday(candidate.id, candidatePrepRestSaturday, date)
+          : null;
         if (
           candidatePrepRestSaturday &&
-          getWeekendPackageShiftBySaturday(candidate.id, candidatePrepRestSaturday, date) &&
-          wouldExceedWorkWindow(candidateState, getWeekendPackageDates(candidatePrepRestSaturday), date)
+          candidatePackageShift &&
+          needsWeekendPrepRest(candidateState, candidatePackageShift, candidatePrepRestSaturday, date)
         ) {
           return false;
         }
@@ -940,10 +995,13 @@ export function generateMonthSchedule(
 
       const weekendPackageShift = getWeekendPackageShift(emp.id, date, isHoliday);
       const prepRestSaturday = getPrepRestSaturday(date, isHoliday);
+      const prepRestPackageShift = prepRestSaturday
+        ? getWeekendPackageShiftBySaturday(emp.id, prepRestSaturday, date)
+        : null;
       if (
         prepRestSaturday &&
-        getWeekendPackageShiftBySaturday(emp.id, prepRestSaturday, date) &&
-        wouldExceedWorkWindow(state, getWeekendPackageDates(prepRestSaturday), date)
+        prepRestPackageShift &&
+        needsWeekendPrepRest(state, prepRestPackageShift, prepRestSaturday, date)
       ) {
         state.forcedRestDaysRemaining = Math.max(state.forcedRestDaysRemaining, 1);
         pushAssignment(emp.id, date, "D", state, wKey, cov);
@@ -977,6 +1035,9 @@ export function generateMonthSchedule(
 
       // Weekend days and adjacent Friday/Monday holidays share the same package.
       if (resolvedWeekendPackageShift !== null) {
+        if (resolvedWeekendPackageShift === "D") {
+          ensureSecondRestAfterWork(emp.id, date, state);
+        }
         pushAssignment(
           emp.id,
           date,
@@ -993,7 +1054,11 @@ export function generateMonthSchedule(
       // Weekday holiday: per-employee assignment respecting preference (BUG-35 fix)
       if (isHoliday) {
         const shift = _pickWeekendShift(emp, state, cov, wKey);
-        pushAssignment(emp.id, date, applyChristmasSpecialRule(shift, date), state, wKey, cov);
+        const holidayShift = applyChristmasSpecialRule(shift, date);
+        if (holidayShift === "D") {
+          ensureSecondRestAfterWork(emp.id, date, state);
+        }
+        pushAssignment(emp.id, date, holidayShift, state, wKey, cov);
         continue;
       }
 
@@ -1006,6 +1071,301 @@ export function generateMonthSchedule(
       pushAssignment(emp.id, date, applyChristmasSpecialRule(shift, date), state, wKey, cov);
     }
   }
+
+  const resultByKey = new Map(result.map((assignment) => [
+    `${assignment.employeeId}|${toDateStr(assignment.date)}`,
+    assignment,
+  ]));
+
+  const getGeneratedOrExistingShift = (employeeId: string, date: Date): string | null => {
+    const dateKey = toDateStr(date);
+    const key = `${employeeId}|${dateKey}`;
+    return (
+      resultByKey.get(key)?.shiftType ??
+      options.existingAssignments?.get(key) ??
+      previousMonthShiftByKey.get(key) ??
+      null
+    );
+  };
+
+  const canRepairCoverageWithShift = (
+    employeeId: string,
+    date: Date,
+    targetShift: string
+  ): boolean => {
+    const dateKey = toDateStr(date);
+    const key = `${employeeId}|${dateKey}`;
+    const assignment = resultByKey.get(key);
+    if (!assignment || assignment.shiftType !== "D") return false;
+    if (existingDates.has(key) || nightPlan.has(key)) return false;
+
+    const employee = sortedEmps.find((e) => e.id === employeeId);
+    if (!employee || employee.shiftPreference === "J") return false;
+
+    const previousShift = getGeneratedOrExistingShift(employeeId, addDays(date, -1));
+    if (previousShift && isDayWorkShift(previousShift)) {
+      return false;
+    }
+
+    if (previousShift && isValidShiftType(previousShift) && isValidShiftType(targetShift)) {
+      const previousTransition = validateShiftTransition(previousShift, targetShift);
+      if (!previousTransition.valid) return false;
+    }
+
+    const nextShift = getGeneratedOrExistingShift(employeeId, addDays(date, 1));
+    if (nextShift && isValidShiftType(nextShift) && isValidShiftType(targetShift)) {
+      const nextTransition = validateShiftTransition(targetShift, nextShift);
+      if (!nextTransition.valid) return false;
+    }
+
+    return true;
+  };
+
+  const repairHolidayCoverage = (date: Date, targetShift: string): void => {
+    const dateKey = toDateStr(date);
+    const targetBase = normalizeShift(targetShift);
+    const currentCount = sortedEmps.filter((employee) => {
+      const shift = getGeneratedOrExistingShift(employee.id, date);
+      return shift !== null && normalizeShift(shift) === targetBase;
+    }).length;
+    if (currentCount >= 1) return;
+
+    const candidates = sortedEmps.filter((employee) =>
+      canRepairCoverageWithShift(employee.id, date, targetShift)
+    );
+
+    const scoredCandidates = candidates.map((employee) => {
+      const previousShift = getGeneratedOrExistingShift(employee.id, addDays(date, -1));
+      const nextShift = getGeneratedOrExistingShift(employee.id, addDays(date, 1));
+      const adjacentSameBase =
+        (previousShift && normalizeShift(previousShift) === targetBase) ||
+        (nextShift && normalizeShift(nextShift) === targetBase);
+      const previousRestPair =
+        previousShift === "D" &&
+        getGeneratedOrExistingShift(employee.id, addDays(date, -2)) === "D";
+      return {
+        employee,
+        score:
+          (adjacentSameBase ? 0 : 10) +
+          (previousRestPair ? 0 : 3) +
+          employee.rotationOrder,
+      };
+    }).sort((a, b) => a.score - b.score);
+
+    const selected = scoredCandidates[0]?.employee;
+    if (!selected) return;
+
+    const key = `${selected.id}|${dateKey}`;
+    const assignment = resultByKey.get(key);
+    if (!assignment) return;
+    assignment.shiftType = targetShift;
+    generatedShiftByKey.set(key, targetShift);
+  };
+
+  const setGeneratedShift = (employeeId: string, date: Date, shiftType: string): void => {
+    const key = `${employeeId}|${toDateStr(date)}`;
+    const assignment = resultByKey.get(key);
+    if (!assignment) return;
+    assignment.shiftType = shiftType;
+    generatedShiftByKey.set(key, shiftType);
+  };
+
+  const repairWeekendPackageConsistency = (satDate: Date): void => {
+    const packageDates = getWeekendPackageDates(satDate);
+    if (packageDates.length < 2) return;
+
+    for (const targetBase of ["M", "T"] as const) {
+      const ownerCounts = new Map<string, number>();
+
+      for (const packageDate of packageDates) {
+        for (const employee of sortedEmps) {
+          const shift = getGeneratedOrExistingShift(employee.id, packageDate);
+          if (shift !== null && normalizeShift(shift) === targetBase) {
+            ownerCounts.set(employee.id, (ownerCounts.get(employee.id) ?? 0) + 1);
+          }
+        }
+      }
+
+      const ownerId = [...ownerCounts.entries()]
+        .sort((a, b) => {
+          const aState = stateMap.get(a[0]);
+          const bState = stateMap.get(b[0]);
+          const aCount = targetBase === "M" ? aState?.mCount ?? 0 : aState?.tCount ?? 0;
+          const bCount = targetBase === "M" ? bState?.mCount ?? 0 : bState?.tCount ?? 0;
+          return b[1] - a[1] || aCount - bCount;
+        })
+        [0]?.[0];
+      if (!ownerId) continue;
+
+      for (const packageDate of packageDates) {
+        const targetShift = applyChristmasSpecialRule(targetBase === "M" ? "MF" : "TF", packageDate);
+        const ownerKey = `${ownerId}|${toDateStr(packageDate)}`;
+        const ownerAssignment = resultByKey.get(ownerKey);
+        if (
+          ownerAssignment &&
+          normalizeShift(ownerAssignment.shiftType) !== targetBase &&
+          canRepairCoverageWithShift(ownerId, packageDate, targetShift)
+        ) {
+          setGeneratedShift(ownerId, packageDate, targetShift);
+        }
+
+        if (normalizeShift(getGeneratedOrExistingShift(ownerId, packageDate) ?? "") !== targetBase) {
+          continue;
+        }
+
+        for (const employee of sortedEmps) {
+          if (employee.id === ownerId) continue;
+          const key = `${employee.id}|${toDateStr(packageDate)}`;
+          const assignment = resultByKey.get(key);
+          if (
+            assignment &&
+            !existingDates.has(key) &&
+            !nightPlan.has(key) &&
+            normalizeShift(assignment.shiftType) === targetBase
+          ) {
+            setGeneratedShift(employee.id, packageDate, "D");
+          }
+        }
+      }
+    }
+  };
+
+  const canConvertGeneratedWorkToRest = (employeeId: string, date: Date): boolean => {
+    const dateKey = toDateStr(date);
+    const key = `${employeeId}|${dateKey}`;
+    const assignment = resultByKey.get(key);
+    if (!assignment || existingDates.has(key) || nightPlan.has(key)) return false;
+    if (!isDayWorkShift(assignment.shiftType)) return false;
+
+    const base = normalizeShift(assignment.shiftType);
+    if (base !== "M" && base !== "T") return true;
+
+    const sameBaseCoverage = sortedEmps.filter((employee) => {
+      if (employee.id === employeeId) return false;
+      const shift = getGeneratedOrExistingShift(employee.id, date);
+      return shift !== null && normalizeShift(shift) === base;
+    }).length;
+
+    return sameBaseCoverage >= 1;
+  };
+
+  const convertGeneratedWorkToRest = (employeeId: string, date: Date): void => {
+    const key = `${employeeId}|${toDateStr(date)}`;
+    const assignment = resultByKey.get(key);
+    if (!assignment) return;
+    assignment.shiftType = "D";
+    generatedShiftByKey.set(key, "D");
+  };
+
+  const movePackageShiftFromEmployee = (
+    employeeId: string,
+    packageDate: Date,
+    shiftType: string
+  ): boolean => {
+    const targetBase = normalizeShift(shiftType);
+    if (targetBase !== "M" && targetBase !== "T") return false;
+
+    const satDate = getWeekendSaturdayForDate(packageDate, holidayDates.has(toDateStr(packageDate)));
+    if (!satDate) return false;
+
+    const packageDates = getWeekendPackageDates(satDate);
+    if (packageDates.length < 2) return false;
+
+    const candidate = sortedEmps.find((employee) => {
+      if (employee.id === employeeId || employee.shiftPreference === "J") return false;
+      return packageDates.every((date) => {
+        const targetShift = applyChristmasSpecialRule(targetBase === "M" ? "MF" : "TF", date);
+        return canRepairCoverageWithShift(employee.id, date, targetShift);
+      });
+    });
+
+    if (!candidate) return false;
+
+    for (const date of packageDates) {
+      const targetShift = applyChristmasSpecialRule(targetBase === "M" ? "MF" : "TF", date);
+      setGeneratedShift(candidate.id, date, targetShift);
+
+      const originalKey = `${employeeId}|${toDateStr(date)}`;
+      const originalAssignment = resultByKey.get(originalKey);
+      if (
+        originalAssignment &&
+        !existingDates.has(originalKey) &&
+        !nightPlan.has(originalKey) &&
+        normalizeShift(originalAssignment.shiftType) === targetBase
+      ) {
+        setGeneratedShift(employeeId, date, "D");
+      }
+    }
+
+    return true;
+  };
+
+  const repairSingleRestDays = (): void => {
+    let changed = true;
+    let guard = 0;
+
+    while (changed && guard < daysInMonth * sortedEmps.length) {
+      changed = false;
+      guard++;
+
+      for (const employee of sortedEmps) {
+        const employeeAssignments = result
+          .filter((assignment) => assignment.employeeId === employee.id)
+          .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        for (let i = 1; i < employeeAssignments.length - 1; i++) {
+          const previous = employeeAssignments[i - 1];
+          const current = employeeAssignments[i];
+          const next = employeeAssignments[i + 1];
+
+          if (
+            current.shiftType !== "D" ||
+            !isDayWorkShift(previous.shiftType) ||
+            !isDayWorkShift(next.shiftType)
+          ) {
+            continue;
+          }
+
+          if (movePackageShiftFromEmployee(employee.id, next.date, next.shiftType)) {
+            changed = true;
+            break;
+          }
+
+          if (canConvertGeneratedWorkToRest(employee.id, previous.date)) {
+            convertGeneratedWorkToRest(employee.id, previous.date);
+            changed = true;
+            break;
+          }
+
+          if (canConvertGeneratedWorkToRest(employee.id, next.date)) {
+            convertGeneratedWorkToRest(employee.id, next.date);
+            changed = true;
+            break;
+          }
+        }
+
+        if (changed) break;
+      }
+    }
+  };
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(Date.UTC(year, month - 1, day));
+    const dateStr = toDateStr(date);
+    if (!isWeekend(date) && !holidayDates.has(dateStr)) continue;
+
+    repairHolidayCoverage(date, applyChristmasSpecialRule("MF", date));
+    repairHolidayCoverage(date, applyChristmasSpecialRule("TF", date));
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCDay() === 6) {
+      repairWeekendPackageConsistency(date);
+    }
+  }
+
+  repairSingleRestDays();
 
   return result;
 }

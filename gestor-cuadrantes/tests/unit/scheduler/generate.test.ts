@@ -35,8 +35,7 @@ function make7Employees(pref?: string | null): ScheduleEmployee[] {
 }
 
 function isGeneratedWork(shiftType: string): boolean {
-  const base = normalizeShift(shiftType);
-  return base === "M" || base === "T" || base === "J";
+  return !["D", "V", "B"].includes(shiftType);
 }
 
 // ─── nightBlockDays ────────────────────────────────────────────────────────────
@@ -419,6 +418,28 @@ describe("generateMonthSchedule — RF-16 cobertura mínima garantizada", () => 
       const shifts = result.filter((a) => toDateStr(a.date) === dateStr).map((a) => a.shiftType);
       expect(shifts.filter((s) => s === "MF")).toHaveLength(1);
       expect(shifts.filter((s) => s === "TF")).toHaveLength(1);
+    }
+  });
+
+  it("cubre mañana y tarde en todos los fines de semana y festivos de enero con un técnico J", () => {
+    const emps = [
+      { id: "emp-J", rotationOrder: 0, shiftPreference: "J" as const },
+      ...make7Employees().map((employee, index) => ({
+        ...employee,
+        rotationOrder: index + 1,
+      })),
+    ];
+    const holidays = new Set(["2026-01-01", "2026-01-06"]);
+    const result = generateMonthSchedule(emps, 2026, 1, new Set(), holidays, [], emps.map((e) => e.id));
+
+    for (let day = 1; day <= 31; day++) {
+      const dateStr = `2026-01-${String(day).padStart(2, "0")}`;
+      const date = fromDateStr(dateStr);
+      if (!isWeekend(date) && !holidays.has(dateStr)) continue;
+
+      const shifts = result.filter((assignment) => toDateStr(assignment.date) === dateStr);
+      expect(shifts.filter((assignment) => normalizeShift(assignment.shiftType) === "M")).toHaveLength(1);
+      expect(shifts.filter((assignment) => normalizeShift(assignment.shiftType) === "T")).toHaveLength(1);
     }
   });
 
@@ -1093,6 +1114,69 @@ describe("generateMonthSchedule — BUG-36: máximo 5 días consecutivos con mez
 
     for (const emp of emps) {
       const empAssignments = result
+        .filter((a) => a.employeeId === emp.id)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      for (let i = 1; i < empAssignments.length - 1; i++) {
+        const previous = empAssignments[i - 1];
+        const current = empAssignments[i];
+        const next = empAssignments[i + 1];
+        if (current.shiftType === "D" && isGeneratedWork(previous.shiftType) && isGeneratedWork(next.shiftType)) {
+          throw new Error(
+            `${emp.id} has a single rest day between work blocks on ${toDateStr(current.date)}`
+          );
+        }
+      }
+    }
+  });
+
+  it("nunca hay un único D entre bloques de trabajo en enero con festivos navideños", () => {
+    const emps = [
+      { id: "emp-J", rotationOrder: 0, shiftPreference: "J" as const },
+      ...make7Employees().map((employee, index) => ({
+        ...employee,
+        rotationOrder: index + 1,
+      })),
+    ];
+    const holidays = new Set(["2026-01-01", "2026-01-06"]);
+    const result = generateMonthSchedule(emps, 2026, 1, new Set(), holidays, [], emps.map((e) => e.id));
+
+    for (const emp of emps) {
+      const empAssignments = result
+        .filter((a) => a.employeeId === emp.id)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      for (let i = 1; i < empAssignments.length - 1; i++) {
+        const previous = empAssignments[i - 1];
+        const current = empAssignments[i];
+        const next = empAssignments[i + 1];
+        if (current.shiftType === "D" && isGeneratedWork(previous.shiftType) && isGeneratedWork(next.shiftType)) {
+          throw new Error(
+            `${emp.id} has a single rest day between work blocks on ${toDateStr(current.date)}`
+          );
+        }
+      }
+    }
+  });
+
+  it("recoloca el pack de fin de semana si evita un D aislado con cola del mes anterior", () => {
+    const emps = [
+      { id: "admin", rotationOrder: 0, shiftPreference: null },
+      ...make7Employees().map((employee, index) => ({
+        ...employee,
+        rotationOrder: index + 1,
+      })),
+    ];
+    const may = generateMonthSchedule(emps, 2028, 5, new Set(), new Set(), [], emps.map((e) => e.id));
+    const prevTail = may.map((assignment) => ({
+      employeeId: assignment.employeeId,
+      date: toDateStr(assignment.date),
+      shiftType: assignment.shiftType,
+    }));
+    const june = generateMonthSchedule(emps, 2028, 6, new Set(), new Set(), prevTail, emps.map((e) => e.id));
+
+    for (const emp of emps) {
+      const empAssignments = june
         .filter((a) => a.employeeId === emp.id)
         .sort((a, b) => a.date.getTime() - b.date.getTime());
 

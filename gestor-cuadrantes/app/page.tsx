@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { ScheduleGrid } from "@/components/schedule/schedule-grid";
@@ -339,6 +339,7 @@ export default function HomePage() {
   const [prepStep, setPrepStep] = useState<PrepStep>(null);
   const [showConfirmGenerate, setShowConfirmGenerate] = useState(false);
   const [loadingHolidays, setLoadingHolidays] = useState(false);
+  const autoHolidayLoadKeysRef = useRef<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<{
     employeeId: string;
     date: string;
@@ -429,9 +430,32 @@ export default function HomePage() {
   // Clic en celda — normal o en modo prep
   // ---------------------------------------------------------------------------
   async function handleCellClick(employeeId: string, date: string, currentShift?: string) {
-    // Modo preparación: asigna directamente V o D sin abrir el modal
-    if (prepStep === "vacaciones" || prepStep === "libres") {
-      const shiftType = prepStep === "vacaciones" ? "V" : "D";
+    // Modo preparación: asigna directamente V, D o B sin abrir el modal
+    if (prepStep === "vacaciones" || prepStep === "libres" || prepStep === "bajas") {
+      const prepConfig = {
+        vacaciones: {
+          shiftType: "V",
+          label: "Vacaciones",
+          marked: "Vacaciones marcadas",
+          removed: "Vacaciones eliminadas",
+          confirm: "Esta celda tiene un turno asignado. ¿Sustituirlo por vacaciones?",
+        },
+        libres: {
+          shiftType: "D",
+          label: "Día libre",
+          marked: "Día libre marcado",
+          removed: "Día libre eliminado",
+          confirm: "Esta celda tiene un turno asignado. ¿Sustituirlo por día libre?",
+        },
+        bajas: {
+          shiftType: "B",
+          label: "Baja",
+          marked: "Baja marcada",
+          removed: "Baja eliminada",
+          confirm: "Esta celda tiene un turno asignado. ¿Sustituirlo por baja?",
+        },
+      }[prepStep];
+      const shiftType = prepConfig.shiftType;
       const found = assignments.find(
         (a) => a.employeeId === employeeId && a.date.slice(0, 10) === date
       );
@@ -439,14 +463,13 @@ export default function HomePage() {
       const isManualFreeDay = found?.shiftType === "D" && found.manual;
       const shouldToggleOff =
         (shiftType === "V" && found?.shiftType === "V") ||
-        (shiftType === "D" && isManualFreeDay);
+        (shiftType === "D" && isManualFreeDay) ||
+        (shiftType === "B" && found?.shiftType === "B");
 
       if (shouldToggleOff) {
         const res = await fetch(`/api/schedules?id=${found.id}`, { method: "DELETE" });
         showToast(
-          res.ok
-            ? `${shiftType === "V" ? "Vacaciones" : "Día libre"} eliminado`
-            : "Error al eliminar la celda",
+          res.ok ? prepConfig.removed : "Error al eliminar la celda",
           res.ok ? "success" : "error"
         );
         await loadSchedule();
@@ -454,11 +477,7 @@ export default function HomePage() {
       }
 
       if (found) {
-        const confirmed = window.confirm(
-          shiftType === "V"
-            ? "Esta celda tiene un turno asignado. ¿Sustituirlo por vacaciones?"
-            : "Esta celda tiene un turno asignado. ¿Sustituirlo por día libre?"
-        );
+        const confirmed = window.confirm(prepConfig.confirm);
         if (!confirmed) {
           return;
         }
@@ -470,9 +489,7 @@ export default function HomePage() {
         body: JSON.stringify({ employeeId, date, shiftType }),
       });
       showToast(
-        res.ok
-          ? `${shiftType === "V" ? "Vacaciones" : "Día libre"} marcado`
-          : "Error al preparar la celda",
+        res.ok ? prepConfig.marked : "Error al preparar la celda",
         res.ok ? "success" : "error"
       );
       await loadSchedule();
@@ -600,14 +617,15 @@ export default function HomePage() {
   // Guardar preparación (marca el badge como "En preparación")
   function handleSavePreparation() {
     showToast("Preparación guardada", "success");
-    // El estado ya refleja la preparación porque las celdas V/D existen en BD
+    // El estado ya refleja la preparación porque las celdas V/D/B existen en BD
     // Solo necesitamos recargar para asegurar el badge correcto
     void loadSchedule();
   }
 
-  // Cargar festivos automáticamente desde la API pública (nager.at) filtrada por CCAA
-  async function handleAutoLoadHolidays() {
+  // Precargar festivos desde la API pública (nager.at) filtrada por CCAA
+  const handleAutoLoadHolidays = useCallback(async (options?: { quietInfo?: boolean }) => {
     if (!activeProjectRegion) return;
+    const quietInfo = options?.quietInfo ?? false;
     setLoadingHolidays(true);
     try {
       const res = await fetch(
@@ -626,7 +644,7 @@ export default function HomePage() {
       );
 
       if (monthHolidays.length === 0) {
-        showToast("No hay festivos públicos este mes para la región seleccionada.", "info");
+        if (!quietInfo) showToast("No hay festivos públicos este mes para la región seleccionada.", "info");
         return;
       }
 
@@ -643,17 +661,49 @@ export default function HomePage() {
       }
 
       if (added > 0) {
-        showToast(`${added} festivo${added > 1 ? "s" : ""} añadido${added > 1 ? "s" : ""} correctamente`, "success");
+        showToast(`${added} festivo${added > 1 ? "s" : ""} añadido${added > 1 ? "s" : ""} automáticamente`, "success");
         await loadSchedule(); // refresca contadores y holidayDates
       } else {
-        showToast("Los festivos de este mes ya estaban registrados.", "info");
+        if (!quietInfo) showToast("Los festivos de este mes ya estaban registrados.", "info");
       }
     } catch {
       showToast("No se pudieron cargar los festivos. Puedes añadirlos manualmente.", "error");
     } finally {
       setLoadingHolidays(false);
     }
-  }
+  }, [activeProjectRegion, year, month, showToast, loadSchedule]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      loadingHolidays ||
+      !session?.user ||
+      !projectSelectionReady ||
+      !activeProjectId ||
+      !activeProjectRegion ||
+      monthStatus !== "ungenerated" ||
+      holidayDates.size > 0
+    ) {
+      return;
+    }
+
+    const autoLoadKey = `${activeProjectId}|${activeProjectRegion}|${year}|${month}`;
+    if (autoHolidayLoadKeysRef.current.has(autoLoadKey)) return;
+    autoHolidayLoadKeysRef.current.add(autoLoadKey);
+    void handleAutoLoadHolidays({ quietInfo: true });
+  }, [
+    activeProjectId,
+    activeProjectRegion,
+    handleAutoLoadHolidays,
+    holidayDates.size,
+    loading,
+    loadingHolidays,
+    month,
+    monthStatus,
+    projectSelectionReady,
+    session?.user,
+    year,
+  ]);
 
   // ---------------------------------------------------------------------------
   // Exportar CSV
@@ -695,14 +745,20 @@ export default function HomePage() {
   // ---------------------------------------------------------------------------
   // Render helpers
   // ---------------------------------------------------------------------------
-  // Celdas bloqueadas por preparación manual (V manual o D manual)
+  // Celdas bloqueadas por preparación manual (V, B o D manual)
   const lockedCells = new Set<string>(
     assignments
-      .filter((a) => (a.shiftType === "V" || (a.shiftType === "D" && a.manual)))
+      .filter((a) => (a.shiftType === "V" || a.shiftType === "B" || (a.shiftType === "D" && a.manual)))
       .map((a) => `${a.employeeId}|${a.date.slice(0, 10)}`)
   );
   const vacacionesCount = assignments.filter((a) => a.shiftType === "V").length;
   const libresCount = assignments.filter((a) => a.shiftType === "D" && a.manual).length;
+  const bajasCount = assignments.filter((a) => a.shiftType === "B").length;
+  const activePrepShiftLabel =
+    prepStep === "vacaciones" ? "V" :
+    prepStep === "libres" ? "D" :
+    prepStep === "bajas" ? "B" :
+    null;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -732,12 +788,12 @@ export default function HomePage() {
           </button>
           {/* Badge de estado del mes */}
           {!loading && <MonthStatusBadge status={monthStatus} />}
-          {canEdit && prepStep && (
+          {canEdit && activePrepShiftLabel && (
             <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-1 print:hidden">
-              Modo preparación — clic en celda para asignar {prepStep === "vacaciones" ? "V" : "D"}
+              Modo preparación — clic en celda para asignar {activePrepShiftLabel}
             </span>
           )}
-          {canEdit && !prepStep && (
+          {canEdit && !activePrepShiftLabel && (
             <span className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1 print:hidden">
               Modo edición — clic en celda para asignar turno
             </span>
@@ -785,7 +841,7 @@ export default function HomePage() {
                   holidayDates={holidayDates}
                   onCellClick={canEdit ? handleCellClick : undefined}
                   lockedCells={lockedCells}
-                  allowLockedCellClick={prepStep === "vacaciones" || prepStep === "libres"}
+                  allowLockedCellClick={prepStep === "vacaciones" || prepStep === "libres" || prepStep === "bajas"}
                   currentUserId={session?.user?.id ?? null}
                 />
                 {employees.length > 0 && (
@@ -813,6 +869,7 @@ export default function HomePage() {
                 onStepChange={setPrepStep}
                 vacacionesCount={vacacionesCount}
                 libresCount={libresCount}
+                bajasCount={bajasCount}
                 holidaysCount={holidayDates.size}
                 onSavePreparation={handleSavePreparation}
                 onGenerate={requestGenerate}
@@ -821,7 +878,6 @@ export default function HomePage() {
                 onManageHolidays={() => router.push("/holidays")}
                 projectRegion={activeProjectRegion}
                 projectId={activeProjectId}
-                onAutoLoadHolidays={handleAutoLoadHolidays}
                 loadingHolidays={loadingHolidays}
               />
             </div>

@@ -34,6 +34,10 @@ describe("SHIFT_COLORS", () => {
   it("N es verde (#4CAF50)", () => {
     expect(SHIFT_COLORS.N.color).toBe("#4CAF50");
   });
+
+  it("NN usa fondo verde para mantener la familia de noches", () => {
+    expect(SHIFT_COLORS.NN.color).toBe("#0B6B2B");
+  });
 });
 
 describe("getShiftConfig", () => {
