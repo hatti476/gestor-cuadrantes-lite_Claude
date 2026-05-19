@@ -1088,3 +1088,61 @@ describe("generateMonthSchedule — BUG-37: paquete Sáb+Dom indivisible", () =>
     }
   });
 });
+
+// ─── Sprint 16: consistencia MF/TF con patrón semanal M/T ───────────────────
+
+describe("generateMonthSchedule — consistencia semanal de fines de semana y festivos", () => {
+  it("empleado con weeklyShift M recibe MF en fin de semana de la misma semana, no TF", () => {
+    const emps = make7Employees();
+    const result = generateMonthSchedule(emps, 2026, 1, new Set(), new Set(), [], emps.map((e) => e.id));
+    const weekStart = "2025-12-29";
+    let foundAlignedWeekend = false;
+
+    for (const emp of emps) {
+      const weekdayBaseShifts = new Set(
+        result
+          .filter((a) => a.employeeId === emp.id && weekKey(a.date) === weekStart && !isWeekend(a.date))
+          .map((a) => normalizeShift(a.shiftType))
+          .filter((shift) => shift === "M" || shift === "T")
+      );
+      const weekendShifts = result.filter(
+        (a) =>
+          a.employeeId === emp.id &&
+          weekKey(a.date) === weekStart &&
+          (a.shiftType === "MF" || a.shiftType === "TF")
+      );
+
+      if (weekdayBaseShifts.has("M") && !weekdayBaseShifts.has("T") && weekendShifts.length > 0) {
+        expect(weekendShifts.every((a) => a.shiftType === "MF")).toBe(true);
+        foundAlignedWeekend = true;
+      }
+    }
+
+    expect(foundAlignedWeekend).toBe(true);
+  });
+
+  it("no hay cambio abrupto MF↔TF entre días consecutivos del mismo empleado", () => {
+    const emps = make7Employees();
+    const holidays = new Set(["2026-06-05"]); // viernes festivo antes del fin de semana
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), holidays, [], emps.map((e) => e.id));
+    const consecutiveDates = [
+      ["2026-06-05", "2026-06-06"],
+      ["2026-06-06", "2026-06-07"],
+    ];
+
+    for (const emp of emps) {
+      for (const [firstDate, secondDate] of consecutiveDates) {
+        const first = result.find((a) => a.employeeId === emp.id && toDateStr(a.date) === firstDate);
+        const second = result.find((a) => a.employeeId === emp.id && toDateStr(a.date) === secondDate);
+        if (
+          first &&
+          second &&
+          (first.shiftType === "MF" || first.shiftType === "TF") &&
+          (second.shiftType === "MF" || second.shiftType === "TF")
+        ) {
+          expect(second.shiftType).toBe(first.shiftType);
+        }
+      }
+    }
+  });
+});

@@ -419,6 +419,7 @@ export function generateMonthSchedule(
     consecutiveShift: string | null;
     consecutiveCount: number;
     weekShift: Map<string, string>; // weekKey → "M" | "T"
+    weekendShift: Map<string, "MF" | "TF">; // weekKey → "MF" | "TF"
     mCount: number;
     tCount: number;
   }
@@ -430,6 +431,7 @@ export function generateMonthSchedule(
       consecutiveShift: prev?.shift ?? null,
       consecutiveCount: prev?.count ?? 0,
       weekShift: new Map(),
+      weekendShift: new Map(),
       mCount: 0,
       tCount: 0,
     });
@@ -489,27 +491,13 @@ export function generateMonthSchedule(
         return true;
       });
 
-      // Pick MF employee: prefer M preference, then lowest mCount, then rotationOrder
-      const mfCandidates = [...pkgAvailable].sort((a, b) => {
-        const aPref = a.shiftPreference === "M" ? 0 : 1;
-        const bPref = b.shiftPreference === "M" ? 0 : 1;
-        const aS = stateMap.get(a.id)!;
-        const bS = stateMap.get(b.id)!;
-        return aPref - bPref || aS.mCount - bS.mCount || a.rotationOrder - b.rotationOrder;
-      });
-      const mfEmp = mfCandidates[0] ?? null;
-
-      // Pick TF employee: prefer T preference, exclude MF employee, then lowest tCount
-      const tfCandidates = pkgAvailable
-        .filter((e) => e.id !== mfEmp?.id)
-        .sort((a, b) => {
-          const aPref = a.shiftPreference === "T" ? 0 : 1;
-          const bPref = b.shiftPreference === "T" ? 0 : 1;
-          const aS = stateMap.get(a.id)!;
-          const bS = stateMap.get(b.id)!;
-          return aPref - bPref || aS.tCount - bS.tCount || a.rotationOrder - b.rotationOrder;
-        });
-      const tfEmp = tfCandidates[0] ?? null;
+      const mfEmp = _pickWeekendPackageEmployee("MF", pkgAvailable, stateMap, wKey);
+      const tfEmp = _pickWeekendPackageEmployee(
+        "TF",
+        pkgAvailable.filter((e) => e.id !== mfEmp?.id),
+        stateMap,
+        wKey
+      );
 
       weekendPlan.set(dateStr, {
         mfEmpId: mfEmp?.id ?? null,
@@ -590,6 +578,7 @@ function _updateState(
     consecutiveShift: string | null;
     consecutiveCount: number;
     weekShift: Map<string, string>;
+    weekendShift: Map<string, "MF" | "TF">;
     mCount: number;
     tCount: number;
   },
@@ -616,16 +605,28 @@ function _updateState(
     state.mCount++;
     cov.M++;
     if (!state.weekShift.has(wKey)) state.weekShift.set(wKey, "M");
+    if (shift === "MF" && !state.weekendShift.has(wKey)) {
+      state.weekendShift.set(wKey, "MF");
+    }
   } else if (base === "T") {
     state.tCount++;
     cov.T++;
     if (!state.weekShift.has(wKey)) state.weekShift.set(wKey, "T");
+    if (shift === "TF" && !state.weekendShift.has(wKey)) {
+      state.weekendShift.set(wKey, "TF");
+    }
   }
 }
 
 function _pickWeekendShift(
   emp: ScheduleEmployee,
-  state: { pref?: string | null; mCount: number; tCount: number; weekShift: Map<string, string> },
+  state: {
+    pref?: string | null;
+    mCount: number;
+    tCount: number;
+    weekShift: Map<string, string>;
+    weekendShift: Map<string, "MF" | "TF">;
+  },
   cov: { M: number; T: number },
   wKey: string
 ): string {
@@ -639,6 +640,10 @@ function _pickWeekendShift(
 
   // Hard minimum: both slots filled → rest
   if (!mOpen && !tOpen) return "D";
+
+  const fixedWeekendShift = state.weekendShift.get(wKey) ?? null;
+  if (fixedWeekendShift === "MF") return mOpen ? "MF" : "D";
+  if (fixedWeekendShift === "TF") return tOpen ? "TF" : "D";
 
   // Weekly consistency: honor the weekly pattern strictly.
   // If the employee's preferred slot is already covered, they rest rather than
@@ -658,6 +663,50 @@ function _pickWeekendShift(
   }
   if (mOpen) return "MF";
   return "TF";
+}
+
+function _pickWeekendPackageEmployee(
+  targetShift: "MF" | "TF",
+  candidates: ScheduleEmployee[],
+  stateMap: Map<string, {
+    mCount: number;
+    tCount: number;
+    weekShift: Map<string, string>;
+    weekendShift: Map<string, "MF" | "TF">;
+  }>,
+  wKey: string
+): ScheduleEmployee | null {
+  const targetBase = targetShift === "MF" ? "M" : "T";
+
+  const compatibleCandidates = candidates.filter((candidate) => {
+    const state = stateMap.get(candidate.id)!;
+    const fixedWeekendShift = state.weekendShift.get(wKey) ?? null;
+    return fixedWeekendShift === null || fixedWeekendShift === targetShift;
+  });
+
+  if (compatibleCandidates.length === 0) return null;
+
+  return [...compatibleCandidates].sort((a, b) => {
+    const aState = stateMap.get(a.id)!;
+    const bState = stateMap.get(b.id)!;
+    const aWeeklyShift = aState.weekShift.get(wKey) ?? null;
+    const bWeeklyShift = bState.weekShift.get(wKey) ?? null;
+    const aWeeklyPenalty = aWeeklyShift !== null && aWeeklyShift !== targetBase ? 1 : 0;
+    const bWeeklyPenalty = bWeeklyShift !== null && bWeeklyShift !== targetBase ? 1 : 0;
+    const aPreferencePenalty =
+      a.shiftPreference === null || a.shiftPreference === undefined || a.shiftPreference === targetBase ? 0 : 1;
+    const bPreferencePenalty =
+      b.shiftPreference === null || b.shiftPreference === undefined || b.shiftPreference === targetBase ? 0 : 1;
+    const aCount = targetBase === "M" ? aState.mCount : aState.tCount;
+    const bCount = targetBase === "M" ? bState.mCount : bState.tCount;
+
+    return (
+      aWeeklyPenalty - bWeeklyPenalty ||
+      aPreferencePenalty - bPreferencePenalty ||
+      aCount - bCount ||
+      a.rotationOrder - b.rotationOrder
+    );
+  })[0] ?? null;
 }
 
 function _pickWorkdayShift(
