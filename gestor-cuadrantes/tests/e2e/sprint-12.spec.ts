@@ -123,9 +123,7 @@ test("CP-87 — preferencia Jornada aparece en formulario y tabla de empleados",
     const editBtn = page.getByRole("button", { name: "Editar" }).first();
     await expect(editBtn).toBeVisible({ timeout: 10_000 });
 
-    // Obtener el id del empleado antes de abrir el modal
-    const firstRow = page.locator("table tbody tr").first();
-    const editLink = firstRow.getByRole("button", { name: "Editar" });
+    const editLink = page.getByRole("button", { name: "Editar" }).first();
     await editLink.click();
 
     // El select de preferencia debe contener la opción "Jornada (L-V 9:00–18:00)"

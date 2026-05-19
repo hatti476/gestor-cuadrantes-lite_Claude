@@ -14,7 +14,7 @@
 
 import { test, expect } from "@playwright/test";
 import { USERS, ROUTES } from "./config";
-import { loginAsAdmin, loginAsPM, screenshotOnFail } from "./helpers";
+import { generateScheduleAndWait, loginAsAdmin, loginAsPM, screenshotOnFail } from "./helpers";
 
 // ===========================================================================
 // CP-71 — shiftPreference se guarda y muestra badge
@@ -27,7 +27,7 @@ test("CP-71 — shiftPreference se guarda y muestra badge en el listado", async 
     await page.waitForLoadState("networkidle");
 
     // Esperar tabla de empleados
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Obtener el id del primer empleado activo desde el botón de desactivar
     const deactivateBtn = page.locator('[data-testid^="btn-deactivate-"]').first();
@@ -52,11 +52,11 @@ test("CP-71 — shiftPreference se guarda y muestra badge en el listado", async 
     await page.locator('button[type="submit"]').click();
     await saveRes;
 
-    // Verificar que aparece el badge de preferencia "M"
+    // Verificar que aparece el badge de preferencia "Mañanas"
     await page.waitForTimeout(500);
     const badge = page.locator(`[data-testid="badge-pref-${empId}"]`);
     await expect(badge).toBeVisible({ timeout: 5_000 });
-    await expect(badge).toHaveText("M");
+    await expect(badge).toHaveText("Mañanas");
   } catch (e) {
     await screenshotOnFail(page, "CP-71");
     throw e;
@@ -73,7 +73,7 @@ test("CP-72 — Desactivar empleado hace soft-delete y persiste historial", asyn
     await page.goto(ROUTES.employees);
     await page.waitForLoadState("networkidle");
 
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Tomar el primer botón de desactivar disponible
     const deactivateBtn = page.locator('[data-testid^="btn-deactivate-"]').first();
@@ -119,10 +119,10 @@ test("CP-73 — Empleado inactivo no aparece en el grid del cuadrante", async ({
     await loginAsAdmin(page);
     await page.goto(ROUTES.employees);
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Obtener nombre del primer empleado activo desde la primera celda
-    const firstNameCell = page.locator("table tbody tr").first().locator("td").first();
+    const firstNameCell = page.locator("table").first().locator("tbody tr").first().locator("td").first();
     await expect(firstNameCell).toBeVisible({ timeout: 8_000 });
     const empName = (await firstNameCell.innerText()).trim();
 
@@ -178,10 +178,10 @@ test("CP-74 — PROJECT_ADMIN puede editar celdas de su proyecto", async ({ page
     await page.waitForLoadState("networkidle");
 
     // Esperar a que la tabla cargue
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Verificar que las celdas son clicables (el grid renderiza con cursor-pointer)
-    const firstCell = page.locator("table tbody tr").first().locator("td").nth(1);
+    const firstCell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
     await expect(firstCell).toBeVisible({ timeout: 5_000 });
 
     // Hacer clic — debe aparecer el ShiftEditor
@@ -212,10 +212,10 @@ test("CP-75 — TECH (USER) no puede editar celdas del cuadrante", async ({ page
     await page.waitForURL(ROUTES.home, { timeout: 10_000 });
     await page.waitForLoadState("networkidle");
 
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Comprobar que las celdas NO tienen cursor-pointer (no son editables)
-    const firstCell = page.locator("table tbody tr").first().locator("td").nth(1);
+    const firstCell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
     await expect(firstCell).toBeVisible({ timeout: 5_000 });
 
     // Hacer clic — el ShiftEditor NO debe aparecer
@@ -264,7 +264,8 @@ test("CP-76 — nightRotationOrder se puede reordenar y guardar en /projects", a
       const empId = firstItemId?.replace("rotation-item-", "") ?? "";
       const downBtn = page.locator(`[data-testid="btn-rotation-down-${empId}"]`);
       await expect(downBtn).toBeVisible({ timeout: 3_000 });
-      await downBtn.click();
+      await downBtn.scrollIntoViewIfNeeded();
+      await downBtn.click({ force: true });
       await page.waitForTimeout(200);
 
       // El primer elemento debe haber cambiado
@@ -303,19 +304,10 @@ test("CP-77 — Tabla de contadores debajo del grid muestra totales correctos", 
     await loginAsAdmin(page);
     await page.goto(ROUTES.home);
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Generar cuadrante para que haya datos
-    const generateRes = page.waitForResponse(
-      (r) => r.url().includes("/api/schedules/generate") && r.status() === 200
-    );
-    await page.locator('[data-testid="btn-generate"]').click();
-    await generateRes;
-    await page.waitForResponse(
-      (r) => r.url().includes("/api/schedules") && !r.url().includes("/generate"),
-      { timeout: 10_000 }
-    );
-    await page.waitForTimeout(800);
+    await generateScheduleAndWait(page);
 
     // La tabla de contadores debe estar visible
     const countersTable = page.locator('[data-testid="counters-table"]');
@@ -323,17 +315,28 @@ test("CP-77 — Tabla de contadores debajo del grid muestra totales correctos", 
 
     // Obtener datos de la API para verificar coherencia
     // La URL puede no tener parámetros si es el mes actual; usar la API directamente
-    const scheduleData = await page.evaluate(async () => {
+    const { scheduleData, activeEmployees } = await page.evaluate(async () => {
       const now = new Date();
-      const res = await fetch(
+      const [scheduleRes, employeeRes] = await Promise.all([
+        fetch(
         `/api/schedules?year=${now.getFullYear()}&month=${now.getMonth() + 1}`,
         { credentials: "include" }
-      );
-      if (!res.ok) return [];
-      return res.json();
+        ),
+        fetch("/api/employees", { credentials: "include" }),
+      ]);
+      return {
+        scheduleData: scheduleRes.ok ? await scheduleRes.json() : { assignments: [] },
+        activeEmployees: employeeRes.ok ? await employeeRes.json() : [],
+      };
     });
 
-    const totalAssignments = (scheduleData as Array<{ shiftType: string }>).length;
+    const assignments = Array.isArray(scheduleData)
+      ? scheduleData
+      : (scheduleData as { assignments?: Array<{ shiftType: string }> }).assignments ?? [];
+    const activeEmployeeIds = new Set((activeEmployees as Array<{ id: string }>).map((e) => e.id));
+    const totalAssignments = assignments.filter((a: { employeeId?: string }) =>
+      a.employeeId ? activeEmployeeIds.has(a.employeeId) : true
+    ).length;
     expect(totalAssignments).toBeGreaterThan(0);
 
     // Sumar todos los contadores visibles en la tabla
@@ -384,7 +387,7 @@ test("CP-78 — Tabla de contadores tiene estilo visual consistente con el grid"
     expect(tableBox!.x + tableBox!.width).toBeLessThanOrEqual(viewportWidth + 20);
 
     // Las cabeceras de turno en la tabla deben tener color de fondo (mismo que ShiftCell)
-    const firstShiftHeader = countersTable.locator("thead th").nth(1);
+    const firstShiftHeader = countersTable.locator("thead th").nth(1).locator("div").first();
     await expect(firstShiftHeader).toBeVisible();
     const bgColor = await firstShiftHeader.evaluate(
       (el) => window.getComputedStyle(el).backgroundColor

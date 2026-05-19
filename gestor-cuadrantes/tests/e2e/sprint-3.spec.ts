@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { loginAsAdmin, screenshotOnFail } from "./helpers";
+import { generateScheduleAndWait, loginAsAdmin, screenshotOnFail } from "./helpers";
 
 // ─── CP-23 — Admin puede cambiar la contraseña de un empleado ─────────────────
 test("CP-23 — Admin puede cambiar la contraseña de un empleado", async ({ page }) => {
@@ -7,7 +7,7 @@ test("CP-23 — Admin puede cambiar la contraseña de un empleado", async ({ pag
   try {
     await loginAsAdmin(page);
     await page.goto("/employees");
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     // Pulsar "Clave" en el ÚLTIMO empleado (técnico, no el admin)
     const claveBtns = page.locator("button").filter({ hasText: /Clave/i });
@@ -32,7 +32,7 @@ test("CP-24 — Cambio de contraseña valida requisitos", async ({ page }) => {
   try {
     await loginAsAdmin(page);
     await page.goto("/employees");
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     // Abrir modal de contraseña
     await page.locator("button").filter({ hasText: /Clave/i }).first().click();
@@ -58,10 +58,10 @@ test("CP-24 — Cambio de contraseña valida requisitos", async ({ page }) => {
 test("CP-25 — Turnos MF/TF/NF disponibles en el selector", async ({ page }) => {
   try {
     await loginAsAdmin(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Abrir ShiftEditor haciendo clic en cualquier celda
-    const cell = page.locator("table tbody tr").first().locator("td").nth(1);
+    const cell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
     await cell.click();
     await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
 
@@ -82,7 +82,7 @@ test("CP-25 — Turnos MF/TF/NF disponibles en el selector", async ({ page }) =>
 test("CP-26 — Admin puede generar el cuadrante automáticamente", async ({ page }) => {
   try {
     await loginAsAdmin(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Ir a Octubre 2026 (5 nexts, seguro sin datos al inicio del sprint)
     for (let i = 0; i < 5; i++) {
@@ -92,13 +92,13 @@ test("CP-26 — Admin puede generar el cuadrante automáticamente", async ({ pag
     await page.waitForTimeout(1_000);
 
     // Pulsar "Generar cuadrante" (funciona tanto si está vacío como si ya tiene datos)
-    await page.locator('[data-testid="btn-generate"]').click();
+    await generateScheduleAndWait(page);
 
     // Esperar confirmación de generate (toast de éxito) antes de verificar tabla
-    await expect(page.locator('[data-testid="toast"]')).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('[data-testid="toast"]').first()).toBeVisible({ timeout: 20_000 });
     // El grid debe mostrar la tabla con empleados
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
-    const rows = page.locator("table tbody tr");
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
+    const rows = page.locator("table").first().locator("tbody tr");
     expect(await rows.count()).toBeGreaterThan(0);
   } catch (e) {
     await screenshotOnFail(page, "CP-26");
@@ -110,7 +110,7 @@ test("CP-26 — Admin puede generar el cuadrante automáticamente", async ({ pag
 test("CP-27 — La generación respeta los turnos manuales", async ({ page }) => {
   try {
     await loginAsAdmin(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Ir a Septiembre 2026 (4 nexts desde Mayo)
     for (let i = 0; i < 4; i++) {
@@ -119,13 +119,13 @@ test("CP-27 — La generación respeta los turnos manuales", async ({ page }) =>
     }
 
     // Generar primero para que haya tabla con celdas
-    await page.locator('[data-testid="btn-generate"]').click();
+    await generateScheduleAndWait(page);
     await expect(page.locator('[data-testid="toast"]').first()).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
     await page.waitForTimeout(500);
 
     // Asignar manualmente turno V (vacaciones) en día 1 del primer empleado
-    const targetCell = page.locator("table tbody tr").first().locator("td").nth(1);
+    const targetCell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
     await targetCell.click();
     await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
     await page.locator('[data-testid="shift-btn-V"]').click();
@@ -133,14 +133,14 @@ test("CP-27 — La generación respeta los turnos manuales", async ({ page }) =>
     await page.waitForTimeout(500);
 
     // Generar de nuevo
-    await page.locator('[data-testid="btn-generate"]').click();
+    await generateScheduleAndWait(page);
     // Usar .first() para evitar strict mode si hay varios toasts visibles
     await expect(page.locator('[data-testid="toast"]').first()).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     // La celda día 1 primer empleado debe seguir siendo V
     await expect(
-      page.locator("table tbody tr").first().locator("td").nth(1).locator('[data-testid="shift-cell-V"]')
+      page.locator("table").first().locator("tbody tr").first().locator("td").nth(1).locator('[data-testid="shift-cell-V"]')
     ).toBeVisible({ timeout: 5_000 });
   } catch (e) {
     await screenshotOnFail(page, "CP-27");
@@ -152,7 +152,7 @@ test("CP-27 — La generación respeta los turnos manuales", async ({ page }) =>
 test("CP-28 — Botón Imprimir está disponible en el cuadrante", async ({ page }) => {
   try {
     await loginAsAdmin(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // El botón Imprimir debe estar visible
     const printBtn = page.locator('[data-testid="btn-print"]');

@@ -130,7 +130,10 @@ export default function EmployeesPage() {
     setHistoryLoading(true);
     setHistoryLogs([]);
     const res = await fetch(`/api/employees/${emp.id}/history`);
-    if (res.ok) setHistoryLogs(await res.json());
+    if (res.ok) {
+      const body = await res.json();
+      setHistoryLogs(Array.isArray(body) ? body : body.data ?? []);
+    }
     setHistoryLoading(false);
   }
 

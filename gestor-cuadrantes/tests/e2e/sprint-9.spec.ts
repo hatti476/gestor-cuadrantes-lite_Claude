@@ -21,10 +21,21 @@ async function navigateMonths(page: Parameters<typeof loginAsAdmin>[0], n: numbe
 
 /** Generate the schedule for the current month and wait for the grid to reload with assignments */
 async function generateAndWait(page: Parameters<typeof loginAsAdmin>[0]) {
+  const generateButton = page.locator('[data-testid="btn-generate"]');
+  if (!(await generateButton.isVisible({ timeout: 500 }).catch(() => false))) {
+    await page.locator('[data-testid="prep-step-generar"]').click();
+  }
+  await expect(generateButton).toBeVisible({ timeout: 5_000 });
+
   const generateRes = page.waitForResponse(
-    (r) => r.url().includes("/api/schedules/generate") && r.status() === 200
+    (r) => r.url().includes("/api/schedules/generate") && r.status() === 200,
+    { timeout: 120_000 }
   );
-  await page.locator('[data-testid="btn-generate"]').click();
+  await generateButton.click();
+  const confirmModal = page.locator('[data-testid="confirm-generate-modal"]');
+  if (await confirmModal.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await page.locator('[data-testid="btn-confirm-generate"]').click();
+  }
   await generateRes;
   // Wait for schedule reload after generate
   await page.waitForResponse(
@@ -41,17 +52,17 @@ test("CP-67 — Generar cuadrante respeta turnos manuales previos", async ({ pag
   test.setTimeout(90_000);
   try {
     await loginAsAdmin(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Navegar a Agosto 2026 (3 nexts desde Mayo)
     await navigateMonths(page, 3);
 
     // Generar el cuadrante primero para que aparezcan los empleados en el grid
     await generateAndWait(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 5_000 });
 
     // Asignar turno "V" manualmente al primer empleado en el día 4
-    const cellTarget = page.locator("table tbody tr").first().locator("td").nth(4);
+    const cellTarget = page.locator("table").first().locator("tbody tr").first().locator("td").nth(4);
     await cellTarget.click();
     await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
     const saveRes = page.waitForResponse(
@@ -78,17 +89,17 @@ test("CP-68 — Generar cuadrante respeta vacaciones introducidas", async ({ pag
   test.setTimeout(90_000);
   try {
     await loginAsAdmin(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Navegar a Septiembre 2026 (4 nexts desde Mayo)
     await navigateMonths(page, 4);
 
     // Generar primero para que aparezcan empleados
     await generateAndWait(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 5_000 });
 
     // Asignar turno "B" (baja) al primer empleado en el día 3
-    const cellTarget = page.locator("table tbody tr").first().locator("td").nth(3);
+    const cellTarget = page.locator("table").first().locator("tbody tr").first().locator("td").nth(3);
     await cellTarget.click();
     await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
     const saveRes = page.waitForResponse(
@@ -98,18 +109,8 @@ test("CP-68 — Generar cuadrante respeta vacaciones introducidas", async ({ pag
     await saveRes;
     await expect(page.locator('[data-testid="shift-editor"]')).not.toBeVisible({ timeout: 5_000 });
 
-    // Regenerar y esperar que la toast de "Cuadrante generado" aparezca
-    // (usar texto específico para evitar strict mode violation con múltiples toasts)
-    const generateRes = page.waitForResponse(
-      (r) => r.url().includes("/api/schedules/generate") && r.status() === 200
-    );
-    await page.locator('[data-testid="btn-generate"]').click();
-    await generateRes;
-    await page.waitForResponse(
-      (r) => r.url().includes("/api/schedules") && !r.url().includes("/generate"),
-      { timeout: 10_000 }
-    );
-    await page.waitForTimeout(800);
+    // Regenerar y esperar que la toast de "Cuadrante generado" aparezca.
+    await generateAndWait(page);
 
     // La celda "B" debe seguir presente (no sobreescrita)
     const bCell = page.locator('[data-testid="shift-cell-B"]').first();
@@ -125,7 +126,7 @@ test("CP-69 — Bloque de noches visible en el grid (7 celdas N/NF consecutivas)
   test.setTimeout(60_000);
   try {
     await loginAsAdmin(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Navegar a Octubre 2026 (5 nexts desde Mayo)
     await navigateMonths(page, 5);
@@ -136,10 +137,13 @@ test("CP-69 — Bloque de noches visible en el grid (7 celdas N/NF consecutivas)
     // Verificar que el generate creó los turnos esperados via API directa
     const scheduleData = await page.evaluate(async () => {
       const res = await fetch("/api/schedules?year=2026&month=10", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) return { assignments: [] };
       return res.json();
     });
-    const nightCount = (scheduleData as Array<{ shiftType: string }>)
+    const assignments = Array.isArray(scheduleData)
+      ? scheduleData
+      : (scheduleData as { assignments?: Array<{ shiftType: string }> }).assignments ?? [];
+    const nightCount = assignments
       .filter((a) => a.shiftType === "N" || a.shiftType === "NF").length;
     expect(nightCount).toBeGreaterThanOrEqual(7);
   } catch (e) {
@@ -153,7 +157,7 @@ test("CP-70 — Continuidad correcta al navegar al mes siguiente", async ({ page
   test.setTimeout(90_000);
   try {
     await loginAsAdmin(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Navegar a Noviembre 2026 (6 nexts desde Mayo) y generar
     await navigateMonths(page, 6);

@@ -22,17 +22,19 @@ export function Header() {
     session?.user?.projectMemberships?.some((m) => m.role === "PROJECT_ADMIN") ?? false;
   const canAccessProjects = isSuperAdmin || isProjectAdmin;
 
-  const [activeProjectName, setActiveProjectName] = useState<string | null>(
-    () => getActiveProjectName()
-  );
+  const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
 
   function readActiveProject() {
     setActiveProjectName(getActiveProjectName());
   }
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(readActiveProject, 0);
     window.addEventListener("activeProjectChanged", readActiveProject);
-    return () => window.removeEventListener("activeProjectChanged", readActiveProject);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("activeProjectChanged", readActiveProject);
+    };
   }, []);
 
   function navClass(href: string) {

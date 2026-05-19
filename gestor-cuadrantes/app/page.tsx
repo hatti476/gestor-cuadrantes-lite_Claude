@@ -229,6 +229,7 @@ export default function HomePage() {
       return null;
     }
   });
+  const [projectSelectionReady, setProjectSelectionReady] = useState(false);
 
   // PROJECT_ADMIN también puede editar celdas de su proyecto
   const canEdit = isAdmin || (session?.user?.projectMemberships ?? []).some(
@@ -238,19 +239,28 @@ export default function HomePage() {
 
   // Validar proyecto activo contra la API y auto-seleccionar el primero si no hay ninguno válido
   useEffect(() => {
+    if (!session?.user) return;
+    let cancelled = false;
+
     fetch("/api/projects")
       .then((r) => (r.ok ? r.json() : []))
       .then((projects: { id: string; name: string; region?: string | null }[]) => {
+        if (cancelled) return;
         if (projects.length === 0) {
           // No hay proyectos: limpiar selección obsoleta de localStorage
           localStorage.removeItem("activeProject");
           setActiveProjectId(null);
           setActiveProjectRegion(null);
+          setProjectSelectionReady(true);
           return;
         }
         // Comprobar si el proyecto guardado sigue existiendo
         const stored = projects.find((p) => p.id === activeProjectId);
-        if (stored) return; // sigue siendo válido, no hacer nada
+        if (stored) {
+          setActiveProjectRegion(stored.region ?? null);
+          setProjectSelectionReady(true);
+          return; // sigue siendo válido, no hacer nada
+        }
 
         // El proyecto guardado ya no existe → seleccionar el primero disponible
         const { id, name, region } = projects[0];
@@ -258,10 +268,16 @@ export default function HomePage() {
         window.dispatchEvent(new Event("activeProjectChanged"));
         setActiveProjectId(id);
         setActiveProjectRegion(region ?? null);
+        setProjectSelectionReady(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setProjectSelectionReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Solo al montar
+  }, [session?.user?.email]); // Al iniciar sesión
 
   // Sincronizar región cuando cambie el proyecto activo desde otra ventana/tab
   useEffect(() => {
@@ -358,8 +374,9 @@ export default function HomePage() {
   }, [year, month, activeProjectId]);
 
   useEffect(() => {
+    if (!session?.user || !projectSelectionReady) return;
     void Promise.resolve().then(loadSchedule);
-  }, [loadSchedule]);
+  }, [loadSchedule, projectSelectionReady, session?.user]);
 
   // ---------------------------------------------------------------------------
   // Navegación de mes
@@ -743,7 +760,7 @@ export default function HomePage() {
                     <ExtraPayTable employees={employees} assignments={assignments} />
                   </div>
                 )}
-                {employees.length === 0 && monthStatus === "ungenerated" && (
+                {monthStatus === "ungenerated" && (
                   <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2 mt-4">
                     <span className="text-4xl">📋</span>
                     <p className="text-sm">Sin turnos asignados este mes. Usa el panel para preparar y generar.</p>

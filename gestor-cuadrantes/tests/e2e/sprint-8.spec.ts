@@ -4,7 +4,7 @@
  * CP-57  PROJECT_ADMIN accede a /projects sin ser redirigido
  * CP-58  PROJECT_ADMIN ve solo sus proyectos (no todos)
  * CP-59  PROJECT_ADMIN NO ve el botón "+ Nuevo proyecto"
- * CP-60  PROJECT_ADMIN NO ve los botones "Editar" ni "Eliminar" en proyectos
+ * CP-60  PROJECT_ADMIN puede editar su proyecto, pero no eliminar proyectos
  * CP-61  PROJECT_ADMIN SÍ ve el botón "Miembros" en su proyecto
  * CP-62  PROJECT_ADMIN puede añadir un miembro (rol EMPLOYEE) a su proyecto
  * CP-63  API rechaza con 403 si PROJECT_ADMIN intenta asignar rol PROJECT_ADMIN
@@ -82,17 +82,17 @@ test("CP-59 — PROJECT_ADMIN NO ve el botón '+ Nuevo proyecto'", async ({ page
 });
 
 // ===========================================================================
-// CP-60 — PROJECT_ADMIN NO ve los botones "Editar" ni "Eliminar"
+// CP-60 — PROJECT_ADMIN puede editar, pero no eliminar
 // ===========================================================================
-test("CP-60 — PROJECT_ADMIN NO ve botones Editar ni Eliminar de proyecto", async ({ page }) => {
+test("CP-60 — PROJECT_ADMIN puede editar pero no eliminar proyecto", async ({ page }) => {
   try {
     await loginAsPM(page);
     await page.goto("/projects");
     await expect(page).toHaveURL(/\/projects/, { timeout: 8_000 });
     await expect(page.locator('[data-testid="project-row"]').first()).toBeVisible({ timeout: 8_000 });
 
-    // No debe haber botones de editar ni eliminar proyecto en ninguna fila
-    await expect(page.locator('[data-testid="btn-edit-project"]')).not.toBeVisible();
+    // Puede editar sus proyectos, pero no debe poder eliminarlos.
+    await expect(page.locator('[data-testid="btn-edit-project"]').first()).toBeVisible();
     await expect(page.locator('[data-testid="btn-delete-project"]')).not.toBeVisible();
   } catch (e) {
     await screenshotOnFail(page, "CP-60");

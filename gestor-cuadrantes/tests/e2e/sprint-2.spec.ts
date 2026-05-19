@@ -11,10 +11,10 @@ const loginAs = login;
 test("CP-12 — Grid carga datos reales de BD", async ({ page }) => {
   try {
     await loginAs(page, ADMIN.email, ADMIN.password);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("text=Vista de ejemplo")).not.toBeVisible();
     // Debe haber al menos una fila de empleado
-    const rows = page.locator("table tbody tr");
+    const rows = page.locator("table").first().locator("tbody tr");
     expect(await rows.count()).toBeGreaterThan(0);
   } catch (e) {
     await screenshotOnFail(page, "CP-12");
@@ -26,11 +26,30 @@ test("CP-12 — Grid carga datos reales de BD", async ({ page }) => {
 test("CP-13 — Mes sin datos muestra grid vacío", async ({ page }) => {
   try {
     await loginAs(page, ADMIN.email, ADMIN.password);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
-    // Pulsar btn-next-month para ir a Junio 2026 (sin seed)
-    await page.locator('[data-testid="btn-next-month"]').click();
-    await page.waitForTimeout(2_000);
+    const emptyMonthOffset = await page.evaluate(async () => {
+      const stored = localStorage.getItem("activeProject");
+      const project = stored ? (JSON.parse(stored) as { id: string }) : null;
+      const projectParam = project?.id ? `&projectId=${project.id}` : "";
+      for (let offset = 1; offset <= 24; offset++) {
+        const date = new Date(Date.UTC(2026, 4 + offset, 1));
+        const year = date.getUTCFullYear();
+        const month = date.getUTCMonth() + 1;
+        const res = await fetch(`/api/schedules?year=${year}&month=${month}${projectParam}`, {
+          credentials: "include",
+        });
+        const data = await res.json();
+        if (!Array.isArray(data.assignments) || data.assignments.length === 0) {
+          return offset;
+        }
+      }
+      return 1;
+    });
+
+    for (let i = 0; i < emptyMonthOffset; i++) {
+      await page.locator('[data-testid="btn-next-month"]').click();
+    }
 
     // Debe aparecer mensaje de sin turnos
     await expect(
@@ -47,10 +66,10 @@ test("CP-14 — Admin puede asignar un turno", async ({ page }) => {
   try {
     await loginAs(page, ADMIN.email, ADMIN.password);
     // Quedarse en Mayo 2026 (tiene empleados y celdas)
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Hacer clic en la primera celda de día (columna 1 = día 1) del primer empleado
-    const firstDayCell = page.locator("table tbody tr").first().locator("td").nth(1);
+    const firstDayCell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
     await firstDayCell.click();
 
     // Debe aparecer el modal ShiftEditor
@@ -71,10 +90,10 @@ test("CP-14 — Admin puede asignar un turno", async ({ page }) => {
 test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
   try {
     await loginAs(page, ADMIN.email, ADMIN.password);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Clic en segunda celda de día del primer empleado (Mayo 2026, día 2)
-    const secondDayCell = page.locator("table tbody tr").first().locator("td").nth(2);
+    const secondDayCell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(2);
     await secondDayCell.click();
 
     // Debe aparecer el modal
@@ -95,16 +114,16 @@ test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
 test("CP-16 — Admin puede eliminar un turno", async ({ page }) => {
   try {
     await loginAs(page, ADMIN.email, ADMIN.password);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Primero asignar un turno para asegurarnos de que hay algo que borrar
-    const targetCell = page.locator("table tbody tr").first().locator("td").nth(3);
+    const targetCell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(4);
     await targetCell.click();
     await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
-    await page.locator('[data-testid="shift-btn-N"]').click();
+    await page.locator('[data-testid="shift-btn-J"]').click();
     await expect(page.locator('[data-testid="shift-editor"]')).not.toBeVisible({ timeout: 5_000 });
 
-    // Reabrir la misma celda (ahora tiene turno N) y limpiar
+    // Reabrir la misma celda (ahora tiene turno J) y limpiar
     await targetCell.click();
     await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
     await page.locator('[data-testid="shift-editor"]').getByText(/Limpiar celda/i).click();
@@ -119,10 +138,10 @@ test("CP-16 — Admin puede eliminar un turno", async ({ page }) => {
 test("CP-17 — Empleado no puede editar turnos", async ({ page }) => {
   try {
     await loginAs(page, TECH.email, TECH.password);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Intentar clic en una celda
-    const firstDayCell = page.locator("table tbody tr").first().locator("td").nth(1);
+    const firstDayCell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
     await firstDayCell.click();
 
     // El modal NO debe aparecer
@@ -151,14 +170,14 @@ test("CP-19 — Listado de empleados visible para ADMIN", async ({ page }) => {
   try {
     await loginAs(page, ADMIN.email, ADMIN.password);
     await page.goto(ROUTES.employees);
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     // Al menos 1 fila de empleado
-    const rows = page.locator("table tbody tr");
+    const rows = page.locator("table").first().locator("tbody tr");
     expect(await rows.count()).toBeGreaterThan(0);
 
     // El admin debe aparecer en la tabla (buscar dentro de la tabla para evitar ambigüedad con el header)
-    await expect(page.locator('table').getByText(ADMIN.email)).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('table').first().getByText(ADMIN.email)).toBeVisible({ timeout: 5_000 });
   } catch (e) {
     await screenshotOnFail(page, "CP-19");
     throw e;
@@ -194,7 +213,7 @@ test("CP-21 — Admin puede crear un empleado", async ({ page }) => {
   try {
     await loginAs(page, ADMIN.email, ADMIN.password);
     await page.goto(ROUTES.employees);
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     // Pulsar botón de crear
     await page.locator("button").filter({ hasText: /Nuevo empleado|Añadir|Crear/i }).click();
@@ -223,7 +242,7 @@ test("CP-22 — Admin puede editar un empleado", async ({ page }) => {
   try {
     await loginAs(page, ADMIN.email, ADMIN.password);
     await page.goto(ROUTES.employees);
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     // Pulsar primer botón Editar
     await page.locator("button").filter({ hasText: /Editar/i }).first().click();

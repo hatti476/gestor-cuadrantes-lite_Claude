@@ -161,7 +161,7 @@ export function PrepPanel({
       )}
 
       {/* Generar step */}
-      {activeStep === "generar" && (
+      {(activeStep === "generar" || activeStep === null) && (
         <div className="mx-3 mb-3 space-y-2">
           <div className="text-xs text-gray-500 space-y-1">
             <div>🏖️ <strong>{vacacionesCount}</strong> días de vacaciones bloqueados</div>

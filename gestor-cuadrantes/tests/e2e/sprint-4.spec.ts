@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { USERS, ROUTES } from "./config";
-import { loginAsAdmin, screenshotOnFail } from "./helpers";
+import { generateScheduleAndWait, loginAsAdmin, screenshotOnFail } from "./helpers";
 
 const { tech: TECH } = USERS;
 
@@ -73,20 +73,20 @@ test("CP-32 — La generación respeta los festivos (M→MF)", async ({ page }) 
 
     // Ir al cuadrante de Noviembre 2026 (6 nexts desde Mayo)
     await page.goto("/");
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
     for (let i = 0; i < 6; i++) {
       await page.locator('[data-testid="btn-next-month"]').click();
       await page.waitForTimeout(400);
     }
 
     // Generar
-    await page.locator('[data-testid="btn-generate"]').click();
+    await generateScheduleAndWait(page);
     await expect(page.locator('[data-testid="toast"]')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Verificar que el día 1 tiene MF, TF o NF (festivo) en al menos un empleado
     // (puede ser D si ese empleado descansa, lo cual también es válido)
-    const day1Cells = page.locator("table tbody tr").first().locator("td").nth(1);
+    const day1Cells = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
     await expect(day1Cells).toBeVisible({ timeout: 5_000 });
     // MF, TF, NF o D (válidos todos para un festivo)
     const validOnHoliday = ["MF", "TF", "NF", "D", ""];
@@ -106,7 +106,7 @@ test("CP-32 — La generación respeta los festivos (M→MF)", async ({ page }) 
 test("CP-33 — Exportar CSV descarga el fichero correcto", async ({ page }) => {
   try {
     await loginAsAdmin(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Interceptar la descarga
     const downloadPromise = page.waitForEvent("download", { timeout: 8_000 });
@@ -125,13 +125,13 @@ test("CP-34 — Historial registra cambios de turno", async ({ page }) => {
   test.setTimeout(45_000);
   try {
     await loginAsAdmin(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
     // Esperar que el cuadrante cargue: al menos 1 fila con empleado
-    await expect(page.locator("table tbody tr").first().locator("td").first()).not.toBeEmpty({ timeout: 8_000 });
+    await expect(page.locator("table").first().locator("tbody tr").first().locator("td").first()).not.toBeEmpty({ timeout: 8_000 });
 
     // Asignar turno V al empleado 1, día 2 del cuadrante activo (Mayo 2026)
     // Usamos día 2 para evitar conflictos con otros tests que usan día 1
-    const cell = page.locator("table tbody tr").first().locator("td").nth(2);
+    const cell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(2);
     await cell.click();
     await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
     // Esperar respuesta del servidor antes de navegar
@@ -144,7 +144,7 @@ test("CP-34 — Historial registra cambios de turno", async ({ page }) => {
 
     // Ir a /employees y pulsar historial del empleado que TIENE turnos
     await page.goto("/employees");
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
     // Usar el data-testid del botón historial con el ID del empleado guardado
     await page.locator(`[data-testid="btn-history-${savedEmployeeId}"]`).click();
 
@@ -191,7 +191,7 @@ test("CP-35 — Solo el admin ve el historial", async ({ page }) => {
 test("CP-36 — Las notificaciones toast aparecen y desaparecen", async ({ page }) => {
   try {
     await loginAsAdmin(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Generar cuadrante para disparar un toast de éxito
     // Ir a un mes sin datos previos de este sprint (Diciembre 2026, 7 nexts)
@@ -199,14 +199,14 @@ test("CP-36 — Las notificaciones toast aparecen y desaparecen", async ({ page 
       await page.locator('[data-testid="btn-next-month"]').click();
       await page.waitForTimeout(400);
     }
-    await page.locator('[data-testid="btn-generate"]').click();
+    await generateScheduleAndWait(page);
 
     // El toast aparece
-    const toast = page.locator('[data-testid="toast"]');
+    const toast = page.locator('[data-testid="toast"]').first();
     await expect(toast).toBeVisible({ timeout: 10_000 });
 
     // El toast desaparece automáticamente en ~4s (esperamos hasta 7s)
-    await expect(toast).not.toBeVisible({ timeout: 7_000 });
+    await expect(page.locator('[data-testid="toast"]')).toHaveCount(0, { timeout: 7_000 });
   } catch (e) {
     await screenshotOnFail(page, "CP-36");
     throw e;
@@ -218,7 +218,7 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
   test.setTimeout(60_000);
   try {
     await loginAsAdmin(page);
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Ir a Febrero 2027 (9 nexts desde Mayo 2026) — mes limpio
     for (let i = 0; i < 9; i++) {
@@ -227,9 +227,9 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
     }
 
     // Generar el cuadrante para que haya turnos
-    await page.locator('[data-testid="btn-generate"]').click();
+    await generateScheduleAndWait(page);
     await expect(page.locator('[data-testid="toast"]')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(800);
 
     // Encontrar un día que tenga turno N para saber qué día es la víspera
@@ -238,7 +238,7 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
     // (si el 15 era N antes, ahora debe ser NF)
 
     // Leer el turno actual del primer empleado en día 15
-    const cell15 = page.locator("table tbody tr").first().locator("td").nth(15);
+    const cell15 = page.locator("table").first().locator("tbody tr").first().locator("td").nth(15);
     const shiftBefore = await cell15.locator("[data-testid^='shift-cell-']").getAttribute("data-testid").catch(() => null);
 
     // Añadir festivo el día 16 de Febrero 2027
@@ -252,12 +252,12 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
 
     // Volver al cuadrante de Febrero 2027
     await page.goto("/");
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
     for (let i = 0; i < 9; i++) {
       await page.locator('[data-testid="btn-next-month"]').click();
       await page.waitForTimeout(400);
     }
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     // Si el turno del día 15 era N, ahora debe ser NF
     const shiftAfter = await cell15.locator("[data-testid^='shift-cell-']").getAttribute("data-testid").catch(() => null);
@@ -279,12 +279,12 @@ test("CP-38 — El grid muestra cabecera roja con letra del día en festivos", a
     await loginAsAdmin(page);
 
     // Ir a Noviembre 2026 (tiene festivo del 1-Nov añadido en CP-32)
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
     for (let i = 0; i < 6; i++) {
       await page.locator('[data-testid="btn-next-month"]').click();
       await page.waitForTimeout(400);
     }
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     await page.waitForTimeout(500); // dar tiempo a que carguen los festivos
 
@@ -309,12 +309,12 @@ test("CP-39 — Pulsar la cabecera de un festivo muestra su nombre en un popover
     await loginAsAdmin(page);
 
     // Ir a Noviembre 2026 (festivo 1-Nov: "Festivo test generación")
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
     for (let i = 0; i < 6; i++) {
       await page.locator('[data-testid="btn-next-month"]').click();
       await page.waitForTimeout(400);
     }
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     await page.waitForTimeout(500); // dar tiempo a que carguen los festivos
 
