@@ -8,6 +8,7 @@ import {
   applyHolidayRule,
   removeHolidayRule,
   validateShiftTransition,
+  calculateExtraPay,
 } from "@/lib/schedules/business-logic";
 
 describe("isValidShiftType", () => {
@@ -65,6 +66,28 @@ describe("countShifts", () => {
 
   it("devuelve objeto vacío para array vacío", () => {
     expect(countShifts([])).toEqual({});
+  });
+});
+
+describe("calculateExtraPay", () => {
+  it("empleado sin turnos extra devuelve 0 €", () => {
+    expect(calculateExtraPay({ M: 10, T: 8, D: 4 })).toBe(0);
+  });
+
+  it("calcula solo turnos MF a 33 €", () => {
+    expect(calculateExtraPay({ MF: 3 })).toBe(99);
+  });
+
+  it("calcula solo turnos N a 38,5 €", () => {
+    expect(calculateExtraPay({ N: 4 })).toBe(154);
+  });
+
+  it("calcula combinación de MF, TF, N y NF", () => {
+    expect(calculateExtraPay({ MF: 2, TF: 1, N: 7, NF: 1 })).toBe(418);
+  });
+
+  it("mantiene decimales correctamente", () => {
+    expect(calculateExtraPay({ N: 1, NF: 1 })).toBe(88);
   });
 });
 

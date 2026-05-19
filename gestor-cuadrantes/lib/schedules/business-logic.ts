@@ -30,6 +30,20 @@ export interface ShiftCounter {
   [shiftType: string]: number;
 }
 
+export const EXTRA_PAY_RATES: Record<string, number> = {
+  MF: 33,
+  TF: 33,
+  N: 38.5,
+  NF: 49.5,
+};
+
+export function calculateExtraPay(shiftCounts: Record<string, number>): number {
+  return Object.entries(EXTRA_PAY_RATES).reduce(
+    (total, [shift, rate]) => total + (shiftCounts[shift] ?? 0) * rate,
+    0
+  );
+}
+
 /**
  * Calcula cuántos turnos de cada tipo tiene un empleado en una lista de asignaciones.
  * Las asignaciones deben ser ya del empleado concreto.

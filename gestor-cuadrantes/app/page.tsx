@@ -8,7 +8,12 @@ import { Header } from "@/components/layout/header";
 import { ShiftEditor } from "@/components/schedule/shift-editor";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleAssignment, ScheduleEmployee, MonthStatus, computeMonthStatus } from "@/lib/schedules/types";
-import { countShifts, isValidShiftType, validateShiftTransition } from "@/lib/schedules/business-logic";
+import {
+  calculateExtraPay,
+  countShifts,
+  isValidShiftType,
+  validateShiftTransition,
+} from "@/lib/schedules/business-logic";
 import { PrepPanel, MonthStatusBadge, PrepStep } from "@/components/schedule/prep-panel";
 import { useToast } from "@/components/ui/toast-provider";
 
@@ -18,11 +23,19 @@ const MONTH_NAMES = [
 ];
 
 const COUNTER_SHIFTS: ShiftType[] = ["M", "T", "N", "MF", "TF", "NF", "J", "D", "V", "B"];
+const EXTRA_PAY_SHIFTS: ShiftType[] = ["MF", "TF", "N", "NF"];
 
 function addDaysToDateString(date: string, days: number): string {
   const parsed = new Date(`${date}T00:00:00.000Z`);
   parsed.setUTCDate(parsed.getUTCDate() + days);
   return parsed.toISOString().slice(0, 10);
+}
+
+function formatEuro(amount: number): string {
+  return `${amount.toLocaleString("es-ES", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} €`;
 }
 
 function CountersTable({
@@ -85,6 +98,106 @@ function CountersTable({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function ExtraPayTable({
+  employees,
+  assignments,
+}: {
+  employees: ScheduleEmployee[];
+  assignments: ScheduleAssignment[];
+}) {
+  const rows = employees.map((emp) => {
+    const empShifts = assignments
+      .filter((a) => a.employeeId === emp.id)
+      .map((a) => a.shiftType);
+    const counters = countShifts(empShifts);
+    return {
+      employee: emp,
+      counters,
+      amount: calculateExtraPay(counters),
+    };
+  });
+  const totalAmount = rows.reduce((total, row) => total + row.amount, 0);
+
+  return (
+    <div className="w-fit" data-testid="extra-pay-table">
+      <h3 className="mb-1 px-1 text-xs font-semibold text-gray-600">
+        Complementos económicos
+      </h3>
+      <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+        <table className="border-collapse text-xs min-w-max">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-b border-r border-gray-200 min-w-[140px]">
+                Empleado
+              </th>
+              {EXTRA_PAY_SHIFTS.map((shift) => (
+                <th
+                  key={shift}
+                  className="w-9 py-1 text-center border-b border-r border-gray-200"
+                >
+                  <div
+                    className="flex items-center justify-center w-7 h-7 mx-auto rounded-sm text-xs font-bold select-none"
+                    style={{ backgroundColor: SHIFT_COLORS[shift].color, color: SHIFT_COLORS[shift].textColor }}
+                  >
+                    {shift}
+                  </div>
+                </th>
+              ))}
+              <th className="px-3 py-2 text-right font-semibold text-gray-600 border-b border-r border-gray-200 min-w-[96px]">
+                Total €
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ employee, counters, amount }, rowIndex) => {
+              const rowBg = rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/50";
+
+              return (
+                <tr key={employee.id} className={`${rowBg} hover:bg-yellow-50/40 transition-colors`}>
+                  <td className={`sticky left-0 z-10 ${rowBg} px-3 py-1 font-medium text-gray-700 border-r border-b border-gray-200 whitespace-nowrap`}>
+                    {employee.name}
+                  </td>
+                  {EXTRA_PAY_SHIFTS.map((shift) => {
+                    const count = counters[shift] ?? 0;
+                    return (
+                      <td
+                        key={shift}
+                        className="w-9 h-8 py-1 text-center border-r border-b border-gray-200 font-mono tabular-nums"
+                        style={{ color: count === 0 ? "#9E9E9E" : undefined }}
+                      >
+                        {count}
+                      </td>
+                    );
+                  })}
+                  <td
+                    className="h-8 px-3 py-1 text-right border-r border-b border-gray-200 font-mono tabular-nums font-semibold text-gray-700"
+                    data-testid={`extra-pay-${employee.id}-total`}
+                  >
+                    {formatEuro(amount)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="bg-gray-100 font-semibold text-gray-700">
+              <td className="sticky left-0 z-10 bg-gray-100 px-3 py-2 border-r border-gray-200 whitespace-nowrap">
+                TOTAL
+              </td>
+              {EXTRA_PAY_SHIFTS.map((shift) => (
+                <td key={shift} className="w-9 border-r border-gray-200" />
+              ))}
+              <td className="px-3 py-2 text-right border-r border-gray-200 font-mono tabular-nums">
+                {formatEuro(totalAmount)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   );
 }
@@ -625,7 +738,10 @@ export default function HomePage() {
                   currentUserId={session?.user?.id ?? null}
                 />
                 {employees.length > 0 && (
-                  <CountersTable employees={employees} assignments={assignments} />
+                  <div className="mt-2 flex w-fit max-w-full items-start gap-4 overflow-x-auto">
+                    <CountersTable employees={employees} assignments={assignments} />
+                    <ExtraPayTable employees={employees} assignments={assignments} />
+                  </div>
                 )}
                 {employees.length === 0 && monthStatus === "ungenerated" && (
                   <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2 mt-4">
