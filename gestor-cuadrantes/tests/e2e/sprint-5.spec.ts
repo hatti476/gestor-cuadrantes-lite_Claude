@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { USERS, ROUTES } from "./config";
+import { ROUTES } from "./config";
 import { loginAsAdmin, loginAsTech } from "./helpers";
 
 // ─── CP-40 — El admin ve la guía de administrador ────────────────────────────

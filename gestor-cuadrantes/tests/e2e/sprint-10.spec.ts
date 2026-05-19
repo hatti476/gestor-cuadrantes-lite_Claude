@@ -322,8 +322,6 @@ test("CP-77 — Tabla de contadores debajo del grid muestra totales correctos", 
     await expect(countersTable).toBeVisible({ timeout: 8_000 });
 
     // Obtener datos de la API para verificar coherencia
-    const url = page.url();
-    const urlParams = new URL(url);
     // La URL puede no tener parámetros si es el mes actual; usar la API directamente
     const scheduleData = await page.evaluate(async () => {
       const now = new Date();

@@ -13,7 +13,7 @@
 
 import { test, expect } from "@playwright/test";
 import { ROUTES } from "./config";
-import { loginAsAdmin, loginAsTech, screenshotOnFail } from "./helpers";
+import { loginAsAdmin, screenshotOnFail } from "./helpers";
 
 // ===========================================================================
 // CP-86 — Nuevo proyecto no hereda asignaciones de proyectos anteriores
@@ -112,7 +112,6 @@ test("CP-87 — preferencia Jornada aparece en formulario y tabla de empleados",
   page,
 }) => {
   test.setTimeout(60_000);
-  let targetEmployeeId: string | null = null;
   let originalPreference: string | null = null;
 
   try {

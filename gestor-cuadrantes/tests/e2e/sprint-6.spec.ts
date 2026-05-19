@@ -8,7 +8,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { USERS, ROUTES } from "./config";
+import { USERS } from "./config";
 import { login, screenshotOnFail } from "./helpers";
 
 const { admin: ADMIN, tech: TECH } = USERS;

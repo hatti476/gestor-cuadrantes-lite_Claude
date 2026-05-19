@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { USERS, SHIFT_COLORS, ROUTES } from "./config";
+import { USERS, SHIFT_COLORS } from "./config";
 import { login, screenshotOnFail } from "./helpers";
 
 const { admin: ADMIN, tech: TECH } = USERS;

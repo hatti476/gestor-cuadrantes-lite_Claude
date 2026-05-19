@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { USERS, ROUTES } from "./config";
 import { loginAsAdmin, screenshotOnFail } from "./helpers";
 
 // ─── CP-23 — Admin puede cambiar la contraseña de un empleado ─────────────────
@@ -169,6 +168,23 @@ test("CP-28 — Botón Imprimir está disponible en el cuadrante", async ({ page
     expect(printCalled).toBe(true);
   } catch (e) {
     await screenshotOnFail(page, "CP-28");
+    throw e;
+  }
+});
+
+// ─── CP-29 — El contador muestra MF, TF y NF ─────────────────────────────────
+test("CP-29 — El contador muestra los turnos especiales MF, TF y NF", async ({ page }) => {
+  try {
+    await loginAsAdmin(page);
+    const countersTable = page.locator('[data-testid="counters-table"]');
+    await expect(countersTable).toBeVisible({ timeout: 10_000 });
+
+    for (const shiftType of ["MF", "TF", "NF"]) {
+      await expect(countersTable.getByText(shiftType, { exact: true })).toBeVisible();
+      await expect(countersTable.locator(`td[data-testid$="-${shiftType}"]`).first()).toBeVisible();
+    }
+  } catch (e) {
+    await screenshotOnFail(page, "CP-29");
     throw e;
   }
 });

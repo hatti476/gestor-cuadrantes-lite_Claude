@@ -14,7 +14,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { USERS, ROUTES } from "./config";
+import { USERS } from "./config";
 import { login, screenshotOnFail } from "./helpers";
 
 const { admin: ADMIN, tech: TECH } = USERS;
@@ -218,7 +218,7 @@ test("CP-53 — SUPER_ADMIN elimina miembro del proyecto", async ({ page }) => {
     const createRes = await page.request.post("/api/projects", {
       data: { name: projectName },
     });
-    const project = await createRes.json();
+    expect(createRes.ok()).toBeTruthy();
 
     // Navegar al proyecto recién creado
     await page.goto("/projects");

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { USERS, ROUTES } from "./config";
-import { loginAsAdmin, login, screenshotOnFail } from "./helpers";
+import { loginAsAdmin, screenshotOnFail } from "./helpers";
 
 const { tech: TECH } = USERS;
 
@@ -88,8 +88,6 @@ test("CP-32 — La generación respeta los festivos (M→MF)", async ({ page }) 
     // (puede ser D si ese empleado descansa, lo cual también es válido)
     const day1Cells = page.locator("table tbody tr").first().locator("td").nth(1);
     await expect(day1Cells).toBeVisible({ timeout: 5_000 });
-    // Al menos debe contener algún turno
-    const cellText = await day1Cells.innerText().catch(() => "");
     // MF, TF, NF o D (válidos todos para un festivo)
     const validOnHoliday = ["MF", "TF", "NF", "D", ""];
     const shiftCell = day1Cells.locator("[data-testid^='shift-cell-']");

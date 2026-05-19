@@ -652,10 +652,6 @@ function _pickWeekendShift(
   return "TF";
 }
 
-function _currentWeekKey(_state: unknown): string {
-  return "";
-}
-
 function _pickWorkdayShift(
   emp: ScheduleEmployee,
   state: {

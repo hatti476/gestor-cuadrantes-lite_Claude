@@ -92,7 +92,7 @@ export default function EmployeeHistoryPage() {
 
   useEffect(() => {
     if (status !== "authenticated" || !canAccess) return;
-    void loadHistory(1, "");
+    void Promise.resolve().then(() => loadHistory(1, ""));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, canAccess]);
 

@@ -239,7 +239,7 @@ export default function HomePage() {
   }, [year, month, activeProjectId]);
 
   useEffect(() => {
-    loadSchedule();
+    void Promise.resolve().then(loadSchedule);
   }, [loadSchedule]);
 
   // ---------------------------------------------------------------------------
