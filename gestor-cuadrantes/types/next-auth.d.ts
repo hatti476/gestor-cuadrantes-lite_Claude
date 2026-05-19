@@ -1,4 +1,3 @@
-import { Session } from "next-auth";
 import type { ProjectMembership } from "@/lib/auth/permissions";
 
 // Amplía los tipos de NextAuth para incluir id, role y projectMemberships

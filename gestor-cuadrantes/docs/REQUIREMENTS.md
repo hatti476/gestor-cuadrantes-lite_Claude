@@ -1,7 +1,7 @@
 # Documento de Requisitos — Gestor de Cuadrantes
 
-**Versión**: 2.4.0 (Sprint 12 — cierre de sprint)  
-**Última actualización**: 14/05/2026  
+**Versión**: 2.7.0 (Sprint 15 — saneamiento técnico y documental)
+**Última actualización**: 19/05/2026
 **Estado**: Vivo — se actualiza al cierre de cada sprint
 
 ---
@@ -9,6 +9,18 @@
 ## 1. Propósito y alcance
 
 El **Gestor de Cuadrantes** es una aplicación web para la planificación y gestión de turnos de equipos de trabajo con cobertura 24 h. Permite a los administradores generar cuadrantes mensuales de forma automática mediante una rotación cíclica configurable, editarlos manualmente, gestionar festivos y exportarlos. Los técnicos pueden consultar su turno en tiempo real.
+
+### Estado actual del producto
+
+| Campo | Valor |
+|-------|-------|
+| Versión funcional | 1.5 |
+| Último sprint cerrado | Sprint 14 — estabilización |
+| Sprint en curso | Sprint 15 — saneamiento técnico y documental |
+| Siguiente sprint planificado | Sprint 16 — refinamiento del algoritmo y robustez de festivos externos |
+| Tests unitarios | 146/146 |
+| Tests E2E declarados | CP-01..CP-98 |
+| Bugs abiertos conocidos | 0 |
 
 ---
 
@@ -308,6 +320,39 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 
 ---
 
+### RF-20 — Festivos públicos por Comunidad Autónoma
+
+| ID | Descripción | Sprint | Estado |
+|----|-------------|--------|--------|
+| RF-20.1 | Cada proyecto puede tener asociada una Comunidad Autónoma española mediante selector en `/projects` | 13 | ✅ |
+| RF-20.2 | El proyecto activo persiste `{ id, name, region }` en `localStorage` para que el cuadrante conozca la región | 13 | ✅ |
+| RF-20.3 | Existe `GET /api/holidays/public?year=YYYY&region=REGION` para consultar festivos públicos de nager.at filtrados por CCAA | 13 | ✅ |
+| RF-20.4 | El `PrepPanel` permite cargar festivos automáticamente cuando el proyecto tiene región configurada | 13 | ✅ |
+| RF-20.5 | Si la API externa falla, el sistema muestra error y permite continuar con gestión manual de festivos | 13 | ✅ |
+
+---
+
+### RF-21 — Historial paginado y filtrable
+
+| ID | Descripción | Sprint | Estado |
+|----|-------------|--------|--------|
+| RF-21.1 | El historial de cambios acepta `page`, `limit` y `month=YYYY-MM` como parámetros de consulta | 13 | ✅ |
+| RF-21.2 | La respuesta incluye `pagination` y `availableMonths` para construir la UI de paginación/filtro | 13 | ✅ |
+| RF-21.3 | La página de historial permite navegar entre páginas y filtrar por mes | 13 | ✅ |
+| RF-21.4 | `PROJECT_ADMIN` puede consultar historiales de empleados accesibles desde su flujo de gestión | 13 | ✅ |
+
+---
+
+### RF-22 — Ayuda Fase 2
+
+| ID | Descripción | Sprint | Estado |
+|----|-------------|--------|--------|
+| RF-22.1 | `/info` documenta gestión de proyectos, preparación del cuadrante, festivos automáticos y preferencias de turno | 13 | ✅ |
+| RF-22.2 | `/info` muestra contenido diferenciado para administradores y empleados | 13 | ✅ |
+| RF-22.3 | La ayuda incluye los 10 tipos de turno vigentes: M, T, N, MF, TF, NF, J, D, V, B | 13 | ✅ |
+
+---
+
 ## 4. Requisitos no funcionales
 
 ### RNF-01 — Seguridad
@@ -427,14 +472,13 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 
 | Suite | Archivo | Tests | Estado |
 |-------|---------|-------|--------|
-| Unit | `schedules/business-logic` | 12 | ✅ |
-| Unit | `scheduler/generate` (Fase 2) | 40 | ✅ |
-| Unit | `employees/business-logic` (incl. `isValidShiftPreference`: M, T, J, null) | 40 | ✅ |
-| Unit | `auth/permissions` | 25 | ✅ |
-| Unit | `soft-delete / shiftPreference` | 4 | ✅ |
-| Unit | `isValidShiftPreference` (M, T, J, null + rechaza inválidos) | 3 | ✅ |
-| Unit | `schedules/month-status` | 10 | ✅ |
-| **Total unit** | | **140** | **✅** |
+| Unit | `tests/unit/lib/business-logic.test.ts` | 27 | ✅ |
+| Unit | `tests/unit/lib/employees-business-logic.test.ts` | 19 | ✅ |
+| Unit | `tests/unit/lib/permissions.test.ts` | 25 | ✅ |
+| Unit | `tests/unit/lib/shift-colors.test.ts` | 7 | ✅ |
+| Unit | `tests/unit/schedules/month-status.test.ts` | 10 | ✅ |
+| Unit | `tests/unit/scheduler/generate.test.ts` | 58 | ✅ |
+| **Total unit** | | **146** | **✅** |
 | E2E Sprint 1 | CP-01..CP-11 | 11 | ✅ |
 | E2E Sprint 2 | CP-12..CP-22 | 11 | ✅ |
 | E2E Sprint 3 | CP-23..CP-29 | 7 | ✅ |
@@ -447,20 +491,25 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | E2E Sprint 10 | CP-71..CP-78 | 8 | ✅ |
 | E2E Sprint 11 | CP-79..CP-85 | 7 | ✅ |
 | E2E Sprint 12 | CP-86..CP-89 | 4 | ✅ |
-| **Total E2E** | | **84** | **✅** |
+| E2E Sprint 13 | CP-90..CP-98 | 9 | ✅ |
+| Sprint 14 | Sin suite E2E nueva; regresiones cubiertas por unit tests y testing manual | — | ✅ |
+| **Total E2E** | | **98** | **✅** |
 
 ---
 
-## 9. Backlog pendiente (Sprint 11+)
+## 9. Backlog pendiente (Sprint 16+)
 
 | Funcionalidad | Requisito | Prioridad |
 |---------------|-----------|-----------|
-| Festivos por CCAA/proyecto (`ProjectHoliday`), integración con API pública de festivos | RF-07 ampliado | Media |
-| Gestión de packs de fin de semana (Sáb+Dom mismo turno, editables) | RF-14.7 | Baja |
-| Resolver BUG-20: servidor E2E con estado obsoleto (CP-69 verificación DOM) | — | Media || Vista personalizada del técnico (solo sus turnos y próximos días) | Nuevos RF | Baja |
-| Solicitud / aprobación de vacaciones (flujo V con aprobación por PROJECT_ADMIN) | Nuevos RF | Alta || Notificaciones email al técnico cuando se asigna/modifica su turno | Nuevos RF | Alta |
-| Dashboard de proyecto: cobertura diaria, ausencias, horas totales | Nuevos RF | Alta |
-| Pipeline CI/CD + deploy automático en producción | Operativo | Media |
+| Sprint 16: refinamiento del algoritmo de generación: equidad M/T a largo plazo y reparto de fines de semana/festivos | RF-14 / RF-16 | Alta |
+| Sprint 16: harness de simulación multi-mes para medir equidad, cobertura y regresiones del generador | Calidad algoritmo | Alta |
+| Sprint 16: diagnósticos del generador en modo test/debug para explicar decisiones de asignación | Calidad algoritmo | Media |
+| Sprint 16: robustez de festivos externos con cache/backfill si producción lo necesita | RF-20 / Operativo | Media |
+| Vista personalizada del técnico: próximos turnos y cambios recientes | Nuevo RF | Media |
+| Solicitud/aprobación de vacaciones | Nuevo RF | Alta |
+| Dashboard de proyecto: cobertura diaria, ausencias y alertas | Nuevo RF | Alta |
+| Pipeline CI/CD con lint, unit, build y subset E2E | Operativo | Media |
+| Exportación Excel/PDF maquetada | Nuevo RF | Media |
 
 ---
 
@@ -481,3 +530,6 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | 1.1 | 11 | Estado del mes (MonthStatus + badge), PrepPanel 4 pasos, campo `manual` en asignaciones, celdas bloqueadas (🔒), revert MF/TF/NF al eliminar festivo, confirmación antes de regenerar |
 | 1.2 | 12 | Aislamiento de asignaciones por proyecto (BUG-29 + `ShiftAssignment.projectId`), `resolveNightBlocks` (transferencia de bloque en vacaciones), preferencia Jornada (J), fila propia resaltada en el grid (RF-19) |
 | 1.3 | 12 | BUG-30: `_pickWorkdayShift` ignoraba preferencia M/T cuando `weeklyShift` fue fijado por cobertura urgente — corregido con `dailyOrder` (empleados sin preferencia resuelven cobertura primero). BUG-31a: `_pickWeekendShift` no retornaba `"D"` para pref `"J"` — corregido. BUG-31b: `_pickWorkdayShift` asignaba M/T en lugar de `"J"` a empleados con pref `"J"` — corregido retornando `"J"` directamente. Validación `shiftPreference` movida a `business-logic.ts` (testeable). Tests unitarios de regresión BUG-30 y BUG-31 añadidos. |
+| 1.4 | 13 | Selector de región por CCAA, carga automática de festivos vía nager.at, historial paginado/filtrado, actualización de `/info` Fase 2 y guía de despliegue. |
+| 1.5 | 14 | Estabilización post-Sprint 13: BUG-32..BUG-37 corregidos, incluyendo localStorage obsoleto, sustituto de noches, día 31, preferencias M/T en MF/TF, máximo de 5 días y pack Sáb+Dom indivisible. |
+| 1.5 | 15 | Saneamiento técnico y documental: lint limpio, E2E CP-29 recuperado, build sin dependencia de Google Fonts, README/requisitos/informe alineados y versionado npm en 1.5.0. |

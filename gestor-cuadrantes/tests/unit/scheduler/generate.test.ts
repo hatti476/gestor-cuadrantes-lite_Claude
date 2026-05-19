@@ -17,8 +17,6 @@ import {
   toDateStr,
   fromDateStr,
   NIGHT_EPOCH_FRIDAY,
-  BLOCK_DAYS,
-  NIGHT_DAYS,
   type ScheduleEmployee,
   type PrevMonthTail,
 } from "@/lib/schedules/generate";

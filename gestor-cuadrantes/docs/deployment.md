@@ -255,7 +255,7 @@ La aplicación estará disponible en http://localhost:3000.
 ## Arquitectura de contenedores (producción)
 
 ```
-gestor-app  (Next.js 14, puerto 3000)
+gestor-app  (Next.js 16, puerto 3000)
     └── gestor-db  (PostgreSQL 16, puerto 5432)
 ```
 

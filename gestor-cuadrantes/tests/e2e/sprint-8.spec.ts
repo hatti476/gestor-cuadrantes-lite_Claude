@@ -17,7 +17,7 @@ import { test, expect } from "@playwright/test";
 import { USERS, ROUTES } from "./config";
 import { loginAsPM, loginAsTech, login, screenshotOnFail } from "./helpers";
 
-const { pm: PM, tech: TECH, admin: ADMIN } = USERS;
+const { admin: ADMIN } = USERS;
 
 // ===========================================================================
 // CP-57 — PROJECT_ADMIN accede a /projects sin ser redirigido
@@ -136,6 +136,7 @@ test("CP-62 — PROJECT_ADMIN añade un miembro EMPLOYEE a su proyecto", async (
     const newUserRes = await page.request.post("/api/employees", {
       data: { name: `Test CP62 ${ts}`, email: `cp62-${ts}@test.local`, password: "Test1234!", role: "USER" },
     });
+    expect(newUserRes.status()).toBe(201);
     // Si el endpoint no existe o el usuario se crea de otra forma, usamos un usuario
     // existente que no sea miembro (p.ej. admin siempre está en el proyecto)
     // Estrategia alternativa: PM abre el panel y usa el select de usuarios disponibles
@@ -224,19 +225,7 @@ test("CP-63 — API rechaza con 403 si PROJECT_ADMIN intenta asignar rol PROJECT
 // CP-64 — PROJECT_ADMIN puede eliminar un miembro de su proyecto
 // ===========================================================================
 test("CP-64 — PROJECT_ADMIN elimina un miembro de su proyecto", async ({ page }) => {
-  const ts = Date.now();
-
   try {
-    // Primero añadir un miembro como SUPER_ADMIN para luego eliminarlo como PM
-    await login(page, ADMIN.email, ADMIN.password);
-    const projectsRes = await page.request.get("/api/projects");
-    const projects = await projectsRes.json();
-    const seededProject = projects.find((p: { name: string }) => p.name === "Equipo Soporte 24h");
-
-    // Obtener usuarios no miembros via API (simular: buscar todos los users)
-    // Usamos page.goto como PM a /projects para obtener el panel de miembros
-    await page.context().clearCookies();
-
     await loginAsPM(page);
     await page.goto("/projects");
     await expect(page).toHaveURL(/\/projects/, { timeout: 8_000 });

@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { isProjectAdmin } from "@/lib/auth/permissions";
 
 // GET /api/employees/[id]/history?page=1&limit=20&month=YYYY-MM
 // Acceso: SUPER_ADMIN y PROJECT_ADMIN

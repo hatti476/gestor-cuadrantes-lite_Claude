@@ -5,6 +5,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+function getActiveProjectName(): string | null {
+  try {
+    const stored = localStorage.getItem("activeProject");
+    return stored ? ((JSON.parse(stored) as { name: string }).name ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function Header() {
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -13,24 +22,17 @@ export function Header() {
     session?.user?.projectMemberships?.some((m) => m.role === "PROJECT_ADMIN") ?? false;
   const canAccessProjects = isSuperAdmin || isProjectAdmin;
 
-  const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
+  const [activeProjectName, setActiveProjectName] = useState<string | null>(
+    () => getActiveProjectName()
+  );
 
   function readActiveProject() {
-    try {
-      const stored = localStorage.getItem("activeProject");
-      setActiveProjectName(
-        stored ? ((JSON.parse(stored) as { name: string }).name ?? null) : null
-      );
-    } catch {
-      setActiveProjectName(null);
-    }
+    setActiveProjectName(getActiveProjectName());
   }
 
   useEffect(() => {
-    readActiveProject();
     window.addEventListener("activeProjectChanged", readActiveProject);
     return () => window.removeEventListener("activeProjectChanged", readActiveProject);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function navClass(href: string) {

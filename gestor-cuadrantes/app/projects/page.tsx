@@ -294,7 +294,6 @@ function NightRotationPanel({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [employees, setEmployees] = useState<EmployeeBasic[]>([]);
   const [order, setOrder] = useState<EmployeeBasic[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -304,7 +303,6 @@ function NightRotationPanel({
     fetch(`/api/employees?projectId=${project.id}`)
       .then((r) => (r.ok ? r.json() : []))
       .then((emps: EmployeeBasic[]) => {
-        setEmployees(emps);
         // Aplicar nightRotationOrder existente si hay
         if (project.nightRotationOrder) {
           try {
@@ -477,7 +475,10 @@ export default function ProjectsPage() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem("activeProject");
-      if (stored) setSelectedProjectId((JSON.parse(stored) as { id: string }).id ?? null);
+      if (stored) {
+        const parsed = JSON.parse(stored) as { id: string };
+        void Promise.resolve().then(() => setSelectedProjectId(parsed.id ?? null));
+      }
     } catch {}
   }, []);
 
@@ -502,7 +503,7 @@ export default function ProjectsPage() {
   }, []);
 
   useEffect(() => {
-    loadProjects();
+    void Promise.resolve().then(loadProjects);
   }, [loadProjects]);
 
   async function handleCreate(data: { name: string; description: string; region: string }) {

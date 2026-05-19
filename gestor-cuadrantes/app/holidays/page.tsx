@@ -40,7 +40,9 @@ export default function HolidaysPage() {
   }, [status, session, router]);
 
   useEffect(() => {
-    if (status === "authenticated") fetchHolidays();
+    if (status === "authenticated") {
+      void Promise.resolve().then(fetchHolidays);
+    }
   }, [status, fetchHolidays]);
 
   async function handleAdd(e: React.FormEvent) {

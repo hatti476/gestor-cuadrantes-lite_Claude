@@ -64,7 +64,9 @@ export default function EmployeesPage() {
   }, []);
 
   useEffect(() => {
-    if (session?.user.role === "SUPER_ADMIN") loadEmployees();
+    if (session?.user.role === "SUPER_ADMIN") {
+      void Promise.resolve().then(loadEmployees);
+    }
   }, [session, loadEmployees]);
 
   async function handleCreate(data: {
