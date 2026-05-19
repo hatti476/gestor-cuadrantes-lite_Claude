@@ -245,7 +245,17 @@ export function resolveNightBlocks(
       existingDates.has(`${block.employeeId}|${d}`)
     );
 
-    if (!originalConflict) {
+    // Also check if this employee was already assigned another block whose days
+    // overlap with this block's N-days (e.g. received a transferred block from a
+    // previous vacation and now their own subsequent block would cause two
+    // consecutive night-shift weeks).
+    const alreadyHasOverlappingBlock = resolved.some((r) => {
+      if (r.employeeId !== block.employeeId) return false;
+      const rDays = nightBlockDays(r);
+      return nDays.some((d) => rDays.has(d));
+    });
+
+    if (!originalConflict && !alreadyHasOverlappingBlock) {
       // No conflict — keep as-is and update tracking
       resolved.push(block);
       const prev = lastBlockMs.get(block.employeeId) ?? -Infinity;
@@ -420,12 +430,15 @@ export function generateMonthSchedule(
   // ── Day-by-day assignment ─────────────────────────────────────────────────
   const dayCoverage = new Map<string, { M: number; T: number }>();
 
+  // Weekend package plan: Saturday date string → { mfEmpId, tfEmpId }.
+  // Built lazily on each Saturday and reused for the following Sunday (BUG-37 fix).
+  const weekendPlan = new Map<string, { mfEmpId: string | null; tfEmpId: string | null }>();
+
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(Date.UTC(year, month - 1, day));
     const dateStr = toDateStr(date);
     const isWeekendDay = isWeekend(date);
     const isHoliday = holidayDates.has(dateStr);
-    const isSpecialDay = isWeekendDay || isHoliday;
     const wKey = weekKey(date);
 
     if (!dayCoverage.has(dateStr)) dayCoverage.set(dateStr, { M: 0, T: 0 });
@@ -440,6 +453,61 @@ export function generateMonthSchedule(
       const bPref = (b.shiftPreference === "M" || b.shiftPreference === "T") ? 1 : 0;
       return aPref - bPref || a.rotationOrder - b.rotationOrder;
     });
+
+    // ── Weekend package selection (BUG-37: Sat+Sun as indivisible units) ─────────
+    // On each Saturday, pick one MF employee and one TF employee for the full
+    // Sat+Sun pair. Sunday reuses the same plan. This ensures the same person
+    // covers both days of the weekend in the same shift type.
+    if (date.getUTCDay() === 6) {
+      const sunDate = addDays(date, 1);
+      const sunStr = toDateStr(sunDate);
+      const sunInMonth =
+        sunDate.getUTCFullYear() === year && sunDate.getUTCMonth() + 1 === month;
+
+      const pkgAvailable = sortedEmps.filter((e) => {
+        if (e.shiftPreference === "J") return false;
+        const satKey = `${e.id}|${dateStr}`;
+        if (existingDates.has(satKey) || nightPlan.has(satKey)) return false;
+        const s = stateMap.get(e.id)!;
+        const isWorkStreak = s.consecutiveShift === "M" || s.consecutiveShift === "T";
+        // Exclude if employee would need rest on Saturday OR on Sunday after Saturday work.
+        // After Saturday (work): count becomes isWorkStreak ? count+1 : 1.
+        // Rest triggers when count >= 5 → exclude if count >= 4 (would hit 5 on Sunday).
+        if (isWorkStreak && s.consecutiveCount >= 4) return false;
+        if (sunInMonth) {
+          const sunKey = `${e.id}|${sunStr}`;
+          if (existingDates.has(sunKey) || nightPlan.has(sunKey)) return false;
+        }
+        return true;
+      });
+
+      // Pick MF employee: prefer M preference, then lowest mCount, then rotationOrder
+      const mfCandidates = [...pkgAvailable].sort((a, b) => {
+        const aPref = a.shiftPreference === "M" ? 0 : 1;
+        const bPref = b.shiftPreference === "M" ? 0 : 1;
+        const aS = stateMap.get(a.id)!;
+        const bS = stateMap.get(b.id)!;
+        return aPref - bPref || aS.mCount - bS.mCount || a.rotationOrder - b.rotationOrder;
+      });
+      const mfEmp = mfCandidates[0] ?? null;
+
+      // Pick TF employee: prefer T preference, exclude MF employee, then lowest tCount
+      const tfCandidates = pkgAvailable
+        .filter((e) => e.id !== mfEmp?.id)
+        .sort((a, b) => {
+          const aPref = a.shiftPreference === "T" ? 0 : 1;
+          const bPref = b.shiftPreference === "T" ? 0 : 1;
+          const aS = stateMap.get(a.id)!;
+          const bS = stateMap.get(b.id)!;
+          return aPref - bPref || aS.tCount - bS.tCount || a.rotationOrder - b.rotationOrder;
+        });
+      const tfEmp = tfCandidates[0] ?? null;
+
+      weekendPlan.set(dateStr, {
+        mfEmpId: mfEmp?.id ?? null,
+        tfEmpId: tfEmp?.id ?? null,
+      });
+    }
 
     for (const emp of dailyOrder) {
       const key = `${emp.id}|${dateStr}`;
@@ -464,12 +532,11 @@ export function generateMonthSchedule(
         continue;
       }
 
-      // Priority 4: force rest if ≥5 consecutive same work shift
+      // Priority 4: force rest if ≥5 consecutive work days (M or T, including
+      // MF/TF variants — BUG-36 fix: M↔T switches do NOT reset the streak).
       const needsRest =
         state.consecutiveCount >= 5 &&
-        state.consecutiveShift !== null &&
-        state.consecutiveShift !== "D" &&
-        state.consecutiveShift !== "N"; // night blocks handle their own rest
+        (state.consecutiveShift === "M" || state.consecutiveShift === "T");
 
       if (needsRest) {
         result.push({ employeeId: emp.id, date, shiftType: "D" });
@@ -477,8 +544,21 @@ export function generateMonthSchedule(
         continue;
       }
 
-      // Weekend / holiday
-      if (isSpecialDay) {
+      // Weekend days: use pre-computed indivisible Sat+Sun package (BUG-37 fix)
+      if (isWeekendDay) {
+        const satStr = date.getUTCDay() === 6 ? dateStr : toDateStr(addDays(date, -1));
+        const pkg = weekendPlan.get(satStr);
+        const shift =
+          pkg?.mfEmpId === emp.id ? "MF"
+          : pkg?.tfEmpId === emp.id ? "TF"
+          : "D";
+        result.push({ employeeId: emp.id, date, shiftType: shift });
+        _updateState(state, shift, wKey, cov);
+        continue;
+      }
+
+      // Weekday holiday: per-employee assignment respecting preference (BUG-35 fix)
+      if (isHoliday) {
         const shift = _pickWeekendShift(emp, state, cov, wKey);
         result.push({ employeeId: emp.id, date, shiftType: shift });
         _updateState(state, shift, wKey, cov);
@@ -511,9 +591,14 @@ function _updateState(
 ): void {
   const base = normalizeShift(shift);
 
-  // Consecutive tracking
-  if (base === state.consecutiveShift) {
+  // Consecutive work-day tracking (BUG-36 fix): any work day (M or T, including
+  // their MF/TF weekend variants after normalisation) continues the streak,
+  // regardless of M↔T switches. Only non-work shifts (D, N, J, V, B) reset it.
+  const isWorkDay = base === "M" || base === "T";
+  const prevIsWorkDay = state.consecutiveShift === "M" || state.consecutiveShift === "T";
+  if (isWorkDay && prevIsWorkDay) {
     state.consecutiveCount++;
+    state.consecutiveShift = base;
   } else {
     state.consecutiveShift = base;
     state.consecutiveCount = 1;
@@ -547,15 +632,18 @@ function _pickWeekendShift(
   // Hard minimum: both slots filled → rest
   if (!mOpen && !tOpen) return "D";
 
-  // Weekly consistency with coverage fallback:
-  // if preferred slot already covered, fill the other open slot instead of resting
+  // Weekly consistency: honor the weekly pattern strictly.
+  // If the employee's preferred slot is already covered, they rest rather than
+  // switching to the opposite shift type (BUG-35 fix).
   const weeklyShift = state.weekShift.get(wKey) ?? null;
-  if (weeklyShift === "M") return mOpen ? "MF" : "TF";
-  if (weeklyShift === "T") return tOpen ? "TF" : "MF";
+  if (weeklyShift === "M") return mOpen ? "MF" : "D";
+  if (weeklyShift === "T") return tOpen ? "TF" : "D";
 
   // No weekly constraint — preference then balance
   if (pref === "M" && mOpen) return "MF";
   if (pref === "T" && tOpen) return "TF";
+  // Preference slot taken — rest rather than switch type (BUG-35 fix)
+  if (pref === "M" || pref === "T") return "D";
 
   if (mOpen && tOpen) {
     return state.mCount <= state.tCount ? "MF" : "TF";

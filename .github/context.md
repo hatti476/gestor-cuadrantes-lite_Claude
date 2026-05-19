@@ -74,10 +74,29 @@ metodología agile.
 7. **Equidad**: distribución equilibrada de M y T entre empleados a lo largo del mes
 8. **Noches y fines de semana**: máximo 1 persona por turno siempre
 
+## Estado Actual <!-- Actualizado: 2026-05-18 -->
+
+| Campo | Valor |
+|-------|-------|
+| Versión | 1.5 (Sprint 14 cerrado) |
+| Rama activa | `main` |
+| Sprints completados | 14 de 14 |
+| Tests unitarios | 146/146 ✅ |
+| Tests E2E | CP-01..CP-98 (todos en verde) |
+| Próximo paso | Sprint 15 — refinamiento del algoritmo de generación |
+
+### Bugs corregidos en Sprint 14 (testing manual post-Sprint 13)
+- ✅ BUG-32: Proyecto antiguo de localStorage persiste aunque no exista en la BD (`app/page.tsx`)
+- ✅ BUG-33: Empleado de reemplazo en semana de noches recibe dos bloques consecutivos (`lib/schedules/generate.ts`)
+- ✅ BUG-34: Día 31 no se muestra — `overflow-x-hidden` → `overflow-x-auto` en `app/page.tsx`
+- ✅ BUG-35: Preferencia M/T ignorada en MF/TF — `_pickWeekendShift` respeta estrictamente la preferencia (`lib/schedules/generate.ts`)
+- ✅ BUG-36: Máx. 5 días consecutivos roto al mezclar M/T con MF/TF — `_updateState` cuenta la racha de trabajo unificada (`lib/schedules/generate.ts`)
+- ✅ BUG-37: Paquete Sáb+Dom no era indivisible — pre-selección del paquete en cada sábado del bucle (`lib/schedules/generate.ts`)
+
 ## Stack Técnico
 | Capa | Tecnología | Justificación |
 |------|-----------|---------------|
-| Frontend + Backend | Next.js 14 (App Router) | Full-stack en un solo framework, máximo soporte de Copilot |
+| Frontend + Backend | Next.js 16.2.6 (App Router) | Full-stack en un solo framework, máximo soporte de Copilot |
 | Estilos | Tailwind CSS | Utility-first, fácil personalización de colores de turno |
 | Base de datos (local) | SQLite + Prisma ORM | Sin instalación adicional, funciona en cualquier PC |
 | Base de datos (producción) | PostgreSQL + Prisma ORM | Mismos modelos, cambio solo de connection string |
@@ -109,6 +128,14 @@ de la UI, lo que permite testearlo de forma independiente.
 | 4 | Empleados y contadores | CRUD empleados, orden rotación, fila de contadores |
 | 5 | Fines de semana | Asignación de packs Sáb+Dom, reglas de cobertura |
 | 6 | Pulido y despliegue | Tests, Docker producción, documentación de despliegue |
+| 7 | Exportación y festivos | Exportación CSV, gestión de festivos, turnos MF/TF/NF |
+| 8 | Multiproyecto base | Proyectos múltiples, roles PROJECT_ADMIN, miembros |
+| 9 | Bloque de noches v2 | NIGHT_EPOCH_FRIDAY, celdas bloqueadas (V/L), historial |
+| 10 | Permisos y contadores | PROJECT_ADMIN edita su proyecto, tabla contadores, nightRotationOrder |
+| 11 | Preferencias y prep | shiftPreference M/T, PrepPanel 4 pasos, MonthStatus, vacaciones |
+| 12 | Aislamiento y noches | ShiftAssignment.projectId, resolveNightBlocks, pref J, RF-19 |
+| 13 | CCAA + historial + docs | Festivos por CCAA (nager.at), historial paginado, /info Fase 2, deployment.md |
+| 14 | Estabilización | BUG-32..BUG-37: localStorage stale, doble bloque noches, día 31, pref M/T en MF/TF, consecutivos, pack Sáb+Dom |
 
 ## Restricciones y Requisitos No Funcionales
 - **Rendimiento**: uso interno, máx. ~20 usuarios concurrentes. Sin requisitos especiales

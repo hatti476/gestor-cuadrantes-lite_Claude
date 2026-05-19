@@ -17,6 +17,14 @@ interface PrepPanelProps {
   isAdmin: boolean;
   /** Ir a gestionar festivos */
   onManageHolidays: () => void;
+  /** Región CCAA del proyecto activo (null si no configurada) */
+  projectRegion?: string | null;
+  /** ID del proyecto activo (para enlace a edición) */
+  projectId?: string | null;
+  /** Llamado al pulsar "Cargar festivos automáticamente" */
+  onAutoLoadHolidays?: () => Promise<void>;
+  /** true mientras se cargan festivos automáticamente */
+  loadingHolidays?: boolean;
 }
 
 const STATUS_BADGE: Record<MonthStatus, { label: string; className: string }> = {
@@ -56,6 +64,10 @@ export function PrepPanel({
   generating,
   isAdmin,
   onManageHolidays,
+  projectRegion,
+  projectId,
+  onAutoLoadHolidays,
+  loadingHolidays = false,
 }: PrepPanelProps) {
   if (!isAdmin) return null;
 
@@ -110,7 +122,34 @@ export function PrepPanel({
 
       {/* Festivos sub-panel */}
       {activeStep === "festivos" && (
-        <div className="mx-3 mb-3">
+        <div className="mx-3 mb-3 space-y-2">
+          {/* Botón de carga automática o mensaje según si hay región */}
+          {projectRegion ? (
+            <button
+              data-testid="btn-auto-load-holidays"
+              onClick={onAutoLoadHolidays}
+              disabled={loadingHolidays}
+              className="w-full text-xs px-3 py-2 rounded border border-green-200 bg-green-50 hover:bg-green-100 text-green-700 disabled:opacity-50 transition-colors"
+            >
+              {loadingHolidays ? "Cargando..." : "Cargar festivos automáticamente"}
+            </button>
+          ) : (
+            <p
+              data-testid="msg-no-region"
+              className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2"
+            >
+              Configura la región del proyecto para usar esta función{" "}
+              {projectId && (
+                <a
+                  href="/projects"
+                  className="underline font-medium hover:text-amber-900"
+                  data-testid="link-configure-region"
+                >
+                  →
+                </a>
+              )}
+            </p>
+          )}
           <button
             onClick={onManageHolidays}
             className="w-full text-xs px-3 py-2 rounded border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors"

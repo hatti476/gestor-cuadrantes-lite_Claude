@@ -2,7 +2,7 @@
 
 **Proyecto:** Gestor de Cuadrantes  
 **Mantenido por:** Agente `doc-writer`  
-**Última actualización:** 2026-05-14  
+**Última actualización:** 2026-05-18  
 
 ---
 
@@ -10,7 +10,9 @@
 
 | Total bugs | Críticos | Altos | Medios | Bajos | Abiertos | Resueltos |
 |-----------|----------|-------|--------|-------|----------|-----------|
-| 31 | 0 | 15 | 10 | 6 | 1 | 30 |
+| 37 | 0 | 20 | 11 | 6 | 0 | 37 |
+
+> Sprint 14 cerrado (2026-05-18): BUG-34..BUG-37 corregidos.
 
 ---
 
@@ -49,6 +51,12 @@
 | [BUG-29](#bug-29) | Sprint 12 | 🟠 High | ✅ Fixed | Nuevo proyecto hereda asignaciones históricas de empleados de proyectos anteriores |
 | [BUG-30](#bug-30) | Sprint 12 | 🟠 High | ✅ Fixed | `_pickWorkdayShift` ignoraba preferencia M/T cuando `weeklyShift` fue fijado por cobertura urgente |
 | [BUG-31](#bug-31) | Sprint 12 | 🟠 High | ✅ Fixed | Empleado con pref `J` recibía MF/TF en fin de semana y M/T en días laborables |
+| [BUG-32](#bug-32) | Sprint 14 | 🟠 High | ✅ Fixed | Proyecto antiguo de localStorage persiste aunque no exista en la BD |
+| [BUG-33](#bug-33) | Sprint 14 | 🟠 High | ✅ Fixed | Empleado de reemplazo en semana de noches recibe dos bloques consecutivos |
+| [BUG-34](#bug-34) | Sprint 14 | 🟡 Medium | ✅ Fixed | Día 31 no se muestra correctamente en meses de 31 días |
+| [BUG-35](#bug-35) | Sprint 14 | 🟠 High | ✅ Fixed | Preferencia M/T no se respeta al asignar MF/TF en fines de semana y festivos |
+| [BUG-36](#bug-36) | Sprint 14 | 🟠 High | ✅ Fixed | Regla de máximo 5 días consecutivos no se aplica al mezclar M/T con MF/TF |
+| [BUG-37](#bug-37) | Sprint 14 | 🟠 High | ✅ Fixed | Turnos de finde/festivo (MF/TF) no se asignan como paquete indivisible Sáb+Dom |
 
 ---
 
@@ -1136,5 +1144,222 @@ El algoritmo de generación no manejaba la preferencia `J` en ninguna de sus dos
 1. `_pickWeekendShift`: añadida primera línea `if (pref === "J") return "D"`.  
 2. `_pickWorkdayShift`: añadida primera línea `if (pref === "J") return "J"`.  
 Los empleados J no compiten por la cobertura M/T del equipo gracias al `dailyOrder` introducido en BUG-30 (se procesan antes los empleados neutrales que cubren RF-16).
+
+---
+
+### BUG-32
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-32 |
+| **Sprint** | Sprint 14 — Testing manual post-Sprint 13 |
+| **Detectado por** | Prueba manual (login con usuario de sprint anterior tras limpiar BD) |
+| **Fecha detección** | 2026-05-17 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+El `useEffect` de `app/page.tsx` guardaba en `localStorage` el ID del proyecto activo. Al limpiar la BD (o al cambiar de entorno), ese ID quedaba almacenado en el navegador aunque el proyecto ya no existiese. El efecto de auto-selección comprobaba `if (activeProjectId !== null) return`, así que nunca consultaba la API para validar si el proyecto seguía existiendo. El usuario veía un proyecto activo en la cabecera (nombre, badge) aunque la BD estuviese vacía.
+
+**Pasos para reproducir**  
+1. Usar la aplicación con un proyecto activo.
+2. Limpiar la BD (`rm dev.db && prisma migrate deploy`).
+3. Recargar la aplicación sin borrar las cookies/localStorage.
+4. La cabecera muestra el badge del proyecto antiguo aunque no exista ningún proyecto.
+
+**Resultado esperado**  
+Si el ID guardado en localStorage no existe en la BD, la aplicación lo descarta y muestra «Sin proyecto» (o selecciona el primero disponible).
+
+**Resultado obtenido**  
+La cabecera muestra el badge del proyecto antiguo y todas las peticiones de datos se hacen con un `projectId` inexistente, devolviendo resultados vacíos.
+
+**Ficheros afectados**  
+- `app/page.tsx` — `useEffect` de auto-selección de proyecto
+
+**Fix aplicado**  
+El efecto ahora siempre consulta `GET /api/projects` al montar el componente:
+- Si no hay proyectos → limpia localStorage y pone `activeProjectId = null`.
+- Si el ID guardado ya no existe en la lista → selecciona el primer proyecto disponible.
+- Si el ID sigue siendo válido → no hace nada (comportamiento anterior).
+
+---
+
+### BUG-33
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-33 |
+| **Sprint** | Sprint 14 — Testing manual post-Sprint 13 |
+| **Detectado por** | Prueba manual (empleado con vacaciones en semana de noches, cuadrante generado) |
+| **Fecha detección** | 2026-05-17 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+Cuando un empleado (A) tiene vacaciones (V) en su semana de noches, `resolveNightBlocks` transfiere correctamente ese bloque al empleado (B) que lleva más tiempo sin noches. Sin embargo, el bloque propio de B (la semana inmediatamente posterior en la rotación) no se transfería porque `originalConflict` solo evaluaba `existingDates` (días marcados como V/B) y no detectaba que B ya había recibido un bloque transferido cuyos días solapaban con el bloque propio. El resultado era que B hacía 14 noches consecutivas (dos semanas de N seguidas) en lugar de 7.
+
+**Pasos para reproducir**  
+1. Crear un cuadrante con 7 técnicos y rotación de noches activa.
+2. Marcar la semana de noches del técnico A como vacaciones (V).
+3. Generar el cuadrante.
+4. El técnico B (que recibe el bloque transferido de A) aparece con N durante 14 días seguidos en lugar de 7.
+
+**Resultado esperado**  
+B cubre los 7 días de noches de A. El bloque propio de B se transfiere al siguiente candidato disponible, de forma que ningún empleado tiene más de 7 noches consecutivas.
+
+**Resultado obtenido**  
+B recibe el bloque de A (7 noches) y además su propio bloque (7 noches más), acumulando 14 noches consecutivas.
+
+**Ficheros afectados**  
+- `lib/schedules/generate.ts` — función `resolveNightBlocks`
+- `tests/unit/scheduler/generate.test.ts` — nuevo test de regresión añadido
+
+**Fix aplicado**  
+Añadida la comprobación `alreadyHasOverlappingBlock` en `resolveNightBlocks`: antes de aceptar un bloque para el empleado original, se verifica si ese empleado ya tiene en `resolved` algún bloque cuyos días solapan con los días N del bloque actual. Si hay solapamiento, el bloque se trata como conflicto y se transfiere al siguiente candidato.
+
+Test de regresión añadido: `"el empleado de reemplazo no recibe dos semanas consecutivas de noches"` — valida que ningún empleado tiene dos bloques resueltos con sus viernes de inicio a ≤7 días de distancia.
+
+---
+
+### BUG-34
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-34 |
+| **Sprint** | Sprint 14 — Testing manual post-Sprint 13 |
+| **Detectado por** | Prueba manual (mes de 31 días) |
+| **Fecha detección** | 2026-05-17 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | — |
+
+**Descripción**  
+En meses de 31 días (enero, marzo, mayo, julio, agosto, octubre, diciembre) la columna del día 31 no se renderiza correctamente en el grid: puede aparecer cortada, desplazada o directamente ausente dependiendo del ancho de pantalla y la lógica de generación de columnas.
+
+**Pasos para reproducir**
+1. Iniciar sesión como administrador o empleado.
+2. Navegar a cualquier mes de 31 días (p.ej. mayo 2026).
+3. Observar la columna correspondiente al día 31.
+4. La columna no se muestra correctamente (ausente, cortada o desplazada).
+
+**Resultado esperado**  
+El grid muestra los 31 días del mes correctamente, con la columna del día 31 con el mismo formato que el resto.
+
+**Resultado obtenido**  
+La columna del día 31 no aparece o se renderiza de forma incorrecta.
+
+**Ficheros afectados**  
+- `components/schedule/schedule-grid.tsx` (generación de columnas de días)
+- `app/page.tsx` (posible truncado en el array de días generado)
+
+**Fix aplicado**  
+Cambiado `overflow-x-hidden` a `overflow-x-auto` en el `<div>` contenedor del grid (`app/page.tsx`). El contenedor usaba `overflow-x-hidden` en lugar de `overflow-x-auto`, impidiendo el scroll horizontal y ocultando las columnas que no cabían en el espacio disponible (como el día 31 cuando el panel PREPA está abierto).
+
+---
+
+### BUG-35
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-35 |
+| **Sprint** | Sprint 14 — Testing manual post-Sprint 13 |
+| **Detectado por** | Prueba manual (revisión de preferencias M/T en generación) |
+| **Fecha detección** | 2026-05-17 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | — |
+
+**Descripción**  
+Cuando un empleado tiene preferencia de turno de mañana (`M`) o tarde (`T`), el algoritmo de generación respeta esa preferencia en días laborables. Sin embargo, al asignar los turnos de fin de semana (`MF`/`TF`) o festivos (`MF`/`TF`), la preferencia no se aplica: un empleado con preferencia `T` puede recibir `MF` (mañana de fin de semana) y viceversa.
+
+**Pasos para reproducir**
+1. Configurar un empleado con preferencia `T` (tarde).
+2. Generar el cuadrante de un mes con fines de semana.
+3. Observar los turnos `MF`/`TF` asignados a ese empleado.
+4. El empleado recibe `MF` en lugar de `TF` en algún fin de semana o festivo.
+
+**Resultado esperado**  
+Un empleado con preferencia `M` siempre recibe `MF` (no `TF`) en fines de semana y festivos. Un empleado con preferencia `T` siempre recibe `TF` (no `MF`).
+
+**Resultado obtenido**  
+La preferencia M/T se ignora al elegir entre `MF` y `TF` en la función `_pickWeekendShift` o equivalente.
+
+**Ficheros afectados**  
+- `lib/schedules/generate.ts` — función que asigna el tipo de turno de fin de semana/festivo
+
+**Fix aplicado**  
+Rediseñada la función `_pickWeekendShift` en `lib/schedules/generate.ts`: cuando el empleado tiene un patrón semanal (`weeklyShift`) o una preferencia explícita (`shiftPreference`), se respeta estrictamente — si el slot preferido ya está cubierto, el empleado descansa (D) en lugar de recibir el turno contrario. Los turnos de fin de semana ahora se asignan mediante el plan pre-computado por BUG-37 (paquete Sáb+Dom), por lo que `_pickWeekendShift` solo se llama para festivos en días laborables. Añadidos 2 tests de regresión: uno para preferencia M y otro para preferencia T.
+
+---
+
+### BUG-36
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-36 |
+| **Sprint** | Sprint 14 — Testing manual post-Sprint 13 |
+| **Detectado por** | Prueba manual (revisión de turnos consecutivos con MF/TF) |
+| **Fecha detección** | 2026-05-17 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | — |
+
+**Descripción**  
+La regla de negocio establece que ningún empleado puede tener más de 5 días consecutivos de trabajo (M/T) sin al menos 2 días de descanso (D). Esta regla se aplica correctamente cuando los turnos son todos del mismo tipo (solo M o solo T), pero no cuando se mezclan turnos de semana (M/T) con turnos de fin de semana o festivo (MF/TF). El contador de días consecutivos se reinicia incorrectamente al cambiar entre M↔MF o T↔TF, permitiendo secuencias de más de 5 días de trabajo continuo.
+
+**Pasos para reproducir**
+1. Generar el cuadrante de un mes que incluya un fin de semana en medio de una semana laboral completa (p.ej. un empleado con turno M de lunes a viernes y MF en sábado y domingo).
+2. Observar que el empleado acumula 7 días seguidos (L M X J V S D) con turno M/MF sin ningún D intercalado.
+3. La regla del máximo de 5 días consecutivos debería haber forzado descanso antes del sábado.
+
+**Resultado esperado**  
+Los turnos MF/TF cuentan como días de trabajo a efectos del contador de días consecutivos. Si un empleado ya lleva 5 días seguidos (M o MF o cualquier combinación), el 6.º día debe ser D obligatorio.
+
+**Resultado obtenido**  
+El algoritmo trata MF/TF como un tipo de turno diferente y no los incluye en el contador de días consecutivos de M/T, permitiendo superar el límite de 5 días.
+
+**Ficheros afectados**  
+- `lib/schedules/generate.ts` — lógica de contador de días consecutivos
+
+**Fix aplicado**  
+Modificada la función `_updateState` en `lib/schedules/generate.ts`: el contador de días consecutivos ahora trata cualquier turno de trabajo (M o T, incluyendo sus variantes MF/TF tras `normalizeShift`) como continuación del streak, independientemente de si el tipo cambia de M a T o viceversa. Solo los turnos no laborables (D, N, J, V, B) reinician el contador. El `needsRest` check se actualizó para dispararse solo cuando `consecutiveShift === "M" || consecutiveShift === "T"`. Añadido 1 test de regresión que verifica que ningún empleado supera 5 días consecutivos de trabajo en todo el mes.
+
+---
+
+### BUG-37
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-37 |
+| **Sprint** | Sprint 14 — Testing manual post-Sprint 13 |
+| **Detectado por** | Prueba manual (revisión de asignación de fines de semana) |
+| **Fecha detección** | 2026-05-17 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | — |
+
+**Descripción**  
+Según los requisitos (RF-Weekend), los turnos de fin de semana deben asignarse como un paquete indivisible sábado + domingo a un mismo empleado. Actualmente el algoritmo puede asignar el sábado a un empleado y el domingo a otro, rompiendo la unidad del paquete. Lo mismo ocurre con festivos que caen en días consecutivos: cada día se asigna de forma independiente sin respetar la regla de paquete.
+
+**Pasos para reproducir**
+1. Generar el cuadrante de un mes con varios fines de semana.
+2. Revisar la columna de sábado y domingo para cada semana.
+3. En al menos un fin de semana, el empleado asignado el sábado difiere del asignado el domingo.
+
+**Resultado esperado**  
+El sábado y el domingo de cada fin de semana siempre tienen el mismo empleado asignado para el turno MF/TF. La unidad Sáb+Dom es indivisible.
+
+**Resultado obtenido**  
+El sábado puede tener al empleado A (MF) y el domingo al empleado B (MF), partiendo el paquete.
+
+**Ficheros afectados**  
+- `lib/schedules/generate.ts` — lógica de asignación de fines de semana (`_pickWeekendShift` o equivalente)
+
+**Fix aplicado**  
+Añadida pre-selección de paquetes Sáb+Dom en `generateMonthSchedule` (`lib/schedules/generate.ts`): en cada sábado del bucle principal, antes de iterar empleados, se elige un empleado para MF y otro para TF que cubrirán ambos días (Sáb y Dom). La selección respeta disponibilidad (`existingDates`, `nightPlan`, preferencia J) y el límite de consecutivos (excluye empleados con 4+ días de trabajo que necesitarían descanso el domingo). El bucle de empleados consulta el plan pre-computado para asignar MF, TF o D. Añadidos 2 tests de regresión que verifican que el mismo empleado cubre sábado y domingo con el mismo tipo de turno.
+
+---
 
 *Registro mantenido por el agente `doc-writer`. Actualizar tras cada sesión de QA.*

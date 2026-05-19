@@ -7,11 +7,16 @@ reglas de rotación (bloques de noche, cobertura mínima diaria, equidad M/T)
 y permite edición manual posterior. Dos roles: admin (edita) y empleado (consulta).
 
 ## Stack
-- **Framework**: Next.js 14 con App Router y TypeScript
+- **Framework**: Next.js 16.2.6 con App Router y TypeScript
 - **Estilos**: Tailwind CSS
 - **ORM**: Prisma (SQLite en dev, PostgreSQL en prod)
 - **Auth**: NextAuth.js
 - **Infraestructura**: Docker + Docker Compose
+- **API externa**: nager.at para festivos públicos por CCAA (`/api/holidays/public`)
+
+## Estado <!-- Actualizado: 2026-05-18 -->
+Sprint 14 cerrado — versión 1.5 en main. Tests: 146 unit + 98 E2E (CP-01..CP-98).  
+BUG-32..BUG-37 todos corregidos (0 bugs abiertos). Sprint 15 en planificación: refinamiento del algoritmo de generación.
 
 ## Reglas Globales
 - Escribe todo el código en inglés (variables, funciones, tipos, comentarios técnicos)

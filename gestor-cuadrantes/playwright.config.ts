@@ -30,6 +30,9 @@ export default defineConfig({
     env: {
       DATABASE_URL: "file:./test.db",
       NEXTAUTH_URL: "http://localhost:3001",
+      // Directorio de build alternativo para no colisionar con el
+      // servidor de desarrollo que usa .next (puerto 3000).
+      NEXT_DIST_DIR: ".next-test",
     },
   },
   projects: [
