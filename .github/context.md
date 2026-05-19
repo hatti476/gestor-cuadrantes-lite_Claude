@@ -63,6 +63,9 @@ metodología agile.
 | MF | Mañana Finde (v2) | 7:00–15:00 sáb/dom | Naranja oscuro `#E65100` |
 | TF | Tarde Finde (v2) | 15:00–23:00 sáb/dom | Azul oscuro `#0D47A1` |
 | NF | Noche Finde (v2) | 23:00–7:00 sáb/dom | Índigo `#311B92` |
+| MN | Mañana Navidad | 7:00–15:00 fechas navideñas | Rojo `#BE123C` |
+| TN | Tarde Navidad | 15:00–23:00 fechas navideñas | Verde `#047857` |
+| NN | Noche Navidad | 23:00–7:00 fechas navideñas | Violeta `#5B21B6` |
 
 ## Reglas de Negocio para Auto-generación <!-- Actualizado: 2026-05-19 -->
 1. **Bloque de noches**: `2D + 7N (Vie 23h → Jue 23h) + 3D` = 12 días por bloque
@@ -70,7 +73,7 @@ metodología agile.
 3. **Cobertura mínima laborable**: mínimo 2 personas en M y 2 en T de L-V
 4. **Consistencia semanal**: un empleado no cambia de M a T (ni viceversa) dentro de la misma semana
 5. **Descanso entre bloques**: 5 días consecutivos de trabajo fuerzan 2 días `D` consecutivos, también en cruce de mes
-6. **Fines de semana y festivos**: pack Sáb+Dom asignado como unidad; `weekendShift` mantiene MF/TF alineado con la pauta semanal M/T
+6. **Fines de semana y festivos**: pack Sáb+Dom asignado como unidad; viernes/lunes festivos pegados se integran en el mismo pack y `weekendShift` mantiene MF/TF alineado con la pauta semanal M/T
 7. **Equidad**: distribución equilibrada de M y T entre empleados a lo largo del mes
 8. **Noches y fines de semana**: máximo 1 persona por turno siempre
 9. **Cumplimiento ET Art. 34.3**: la generación evita transiciones con menos de 12 h de descanso y devuelve warnings informativos
@@ -83,19 +86,21 @@ metodología agile.
 | Versión funcional | 1.6 (Sprint 16 implementado) |
 | Rama activa | `feature/sprint-16-algorithm-fixes` |
 | Sprints completados | 16 de 16 |
-| Tests unitarios | 184/184 ✅ |
-| Tests E2E declarados | CP-01..CP-108 (108 tests) |
-| Última validación local | `npm run test:unit` ✅; `npx playwright test --list` ✅ 108 tests |
+| Tests unitarios | 213/213 ✅ |
+| Tests E2E | CP-01..CP-108 (108/108) ✅ |
+| Última validación local | `npm run lint` ✅; `npm run test:unit` ✅; `npm run build` ✅; `npx playwright test --workers=1` ✅ |
 | Próximo paso | Revisión pre-merge y PR contra `main` |
 
 ### Cambios completados en Sprint 16
 - ✅ PrepPanel permite toggle de `V` y `D` manual: segundo clic elimina la asignación bloqueada vía `DELETE /api/schedules`.
 - ✅ Empleados con preferencia `J` quedan fuera de la rotación automática de noches (`N`, `NF` y descansos de bloque).
 - ✅ El generador mantiene consistencia semanal también en `MF`/`TF` mediante `weekendShift`.
+- ✅ Los festivos viernes/lunes pegados al fin de semana se añaden al pack MF/TF correspondiente.
+- ✅ La cobertura de fin de semana recupera slots MF/TF abiertos cuando el descanso forzado deja huecos y hay personal disponible.
 - ✅ El descanso forzado exige 2 días `D` consecutivos entre bloques de trabajo, incluyendo cruce de mes.
 - ✅ `validateShiftTransition` aplica ET Art. 34.3 y evita transiciones automáticas con menos de 12 h de descanso.
 - ✅ `ShiftEditor` muestra advertencia visible por transiciones ET inválidas sin bloquear ediciones manuales.
-- ✅ Nueva tabla `Complementos económicos` con recuento MF/TF/N/NF y total por empleado.
+- ✅ Nueva tabla de complementos con recuento MF/TF/N/NF, columna `P. Extra`, leyenda de tarifas y extras navideños MN/TN/NN en enero/diciembre.
 - ✅ Tests E2E Sprint 16 añadidos en `tests/e2e/sprint-16.spec.ts` (CP-99..CP-108).
 
 ## Stack Técnico
@@ -143,12 +148,12 @@ negocio se mantienen desacopladas de la UI para poder testearlas con Vitest.
 | 13 | CCAA + historial + docs | Festivos por CCAA (nager.at), historial paginado, /info Fase 2, deployment.md |
 | 14 | Estabilización | BUG-32..BUG-37: localStorage stale, doble bloque noches, día 31, pref M/T en MF/TF, consecutivos, pack Sáb+Dom |
 | 15 | Saneamiento técnico | Lint limpio, build sin Google Fonts, CP-01..CP-98 alineados, docs y versión npm 1.5.0 |
-| 16 | Correcciones algoritmo + extras | Toggle PrepPanel, preferencia J fuera de noches, consistencia MF/TF, 2D descanso, ET 12 h, complementos económicos, CP-99..CP-108 |
+| 16 | Correcciones algoritmo + extras | Toggle PrepPanel, preferencia J fuera de noches, consistencia MF/TF, festivos pegados a finde, 2D descanso, ET 12 h, complementos económicos y navideños, CP-99..CP-108 |
 
 ## Historial de Decisiones <!-- Actualizado: 2026-05-19 -->
 - **Sprint 14**: se cerraron BUG-32..BUG-37 detectados en testing manual post-Sprint 13, incluyendo localStorage stale, doble bloque de noches, día 31, preferencia M/T en MF/TF, consecutivos y pack Sáb+Dom indivisible.
 - **Sprint 15**: se separó el saneamiento técnico/documental de los cambios funcionales para no mezclar recuperación de calidad con reglas de negocio.
-- **Sprint 16**: se corrigieron reglas críticas del generador y se añadió el contador económico; la gestión de nóminas completa sigue fuera de alcance.
+- **Sprint 16**: se corrigieron reglas críticas del generador, se añadió el contador económico informativo y se incorporaron extras navideños; la gestión de nóminas completa sigue fuera de alcance.
 
 ## Restricciones y Requisitos No Funcionales
 - **Rendimiento**: uso interno, máx. ~20 usuarios concurrentes. Sin requisitos especiales
@@ -172,6 +177,7 @@ negocio se mantienen desacopladas de la UI para poder testearlas con Vitest.
 | Cuadrante | Tabla mensual que asigna un turno a cada empleado cada día |
 | Bloque de noches | Secuencia fija: 2D + 7N + 3D asignada a un técnico en rotación |
 | Pack de finde | Sábado y domingo asignados juntos al mismo empleado y turno |
+| Festivo pegado | Festivo viernes/lunes que se une al pack MF/TF del fin de semana contiguo |
 | Rotación | Orden cíclico en que los técnicos se van alternando el bloque de noches |
 | Cobertura mínima | Garantía de al menos 2 personas en M y 2 en T cada día laborable |
 | Admin | Responsable del equipo con permisos de edición |

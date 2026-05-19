@@ -11,8 +11,9 @@
 
 Sprint 16 corrige reglas críticas del algoritmo de generación y añade una nueva
 tabla de complementos económicos. El foco principal ha sido evitar asignaciones
-no deseadas en noches, reforzar descansos mínimos, alinear fines de semana con
-la pauta semanal M/T y validar el descanso legal mínimo de 12 horas entre turnos.
+no deseadas en noches, reforzar descansos mínimos, alinear fines de semana y
+festivos pegados con la pauta semanal M/T, y validar el descanso legal mínimo
+de 12 horas entre turnos.
 
 También se añade cobertura E2E CP-99..CP-108 y se estabiliza el reset de base de
 datos de Playwright para que la suite completa arranque desde un estado limpio.
@@ -29,6 +30,7 @@ datos de Playwright para que la suite completa arranque desde un estado limpio.
 | Exigir 2 días de descanso consecutivos entre bloques | ✅ |
 | Validar descanso mínimo ET Art. 34.3 entre turnos | ✅ |
 | Añadir tabla de complementos económicos | ✅ |
+| Añadir leyenda de tarifas y extras navideños MN/TN/NN | ✅ |
 | Crear E2E CP-99..CP-108 | ✅ |
 | Recuperar suite E2E completa | ✅ |
 
@@ -86,8 +88,17 @@ Se añade `weekendShift` por empleado y semana para mantener la pauta de MF/TF:
 - Pauta `T` o `weeklyShift = T` → preferencia por `TF`.
 - Sin preferencia → reparto equilibrado.
 
-La cobertura mínima en fines de semana y festivos se mantiene: al menos 1 `MF`
-y 1 `TF` por día cuando hay dos o más empleados disponibles.
+La cobertura mínima en fines de semana y festivos se mantiene: exactamente 1
+`MF` y 1 `TF` por día cuando hay empleados disponibles para cubrirlos.
+
+También se integran los festivos pegados al fin de semana:
+
+- Viernes festivo → se añade al pack del sábado/domingo siguiente.
+- Lunes festivo → se añade al pack del sábado/domingo anterior.
+
+El plan de fin de semana puede recuperar un slot `MF`/`TF` abierto cuando el
+empleado inicialmente elegido acaba descansando por reglas de descanso y hay
+otro empleado disponible.
 
 ---
 
@@ -144,7 +155,7 @@ bloquea la edición manual.
 Se añade una nueva tabla junto a los contadores:
 
 - `data-testid="extra-pay-table"`
-- Columnas `MF`, `TF`, `N`, `NF` y `Total €`
+- Columnas `MF`, `TF`, `N`, `NF` y `P. Extra`
 - Tarifas:
   - `MF`: 33,00 €
   - `TF`: 33,00 €
@@ -153,6 +164,19 @@ Se añade una nueva tabla junto a los contadores:
 
 La fila total suma todos los importes del mes visible y los valores cero se
 muestran en gris.
+
+Se elimina el título redundante de la tabla para alinearla con los contadores y
+se añade una leyenda compacta a la derecha con el importe por turno.
+
+En enero y diciembre, la tabla añade los turnos especiales:
+
+- `MN`: 126,50 €
+- `TN`: 126,50 €
+- `NN`: 126,50 €
+
+Estos turnos se aplican automáticamente a las fechas navideñas configuradas:
+24/12 tarde-noche, 25/12 mañana-tarde-noche, 31/12 tarde-noche, 01/01
+mañana-tarde-noche, 05/01 tarde-noche y 06/01 mañana-tarde-noche.
 
 ---
 
@@ -182,6 +206,10 @@ Se crean los casos CP-99..CP-108:
 Además, el `global-setup` de Playwright limpia realmente `prisma/test.db` y
 resemilla datos conocidos, evitando contaminación entre ejecuciones.
 
+Se ajusta CP-32 para tolerar múltiples toasts tras generar, ya que el generador
+puede mostrar simultáneamente el toast de éxito y el aviso informativo de ajustes
+por cumplimiento ET.
+
 ---
 
 ## Validaciones
@@ -189,7 +217,8 @@ resemilla datos conocidos, evitando contaminación entre ejecuciones.
 | Comando | Resultado |
 |---------|-----------|
 | `npm run lint` | ✅ Passing |
-| `npm run test:unit` | ✅ 184/184 |
+| `npm run test:unit` | ✅ 213/213 |
+| `npm run build` | ✅ Passing |
 | `npx playwright test --workers=1` | ✅ 108/108 |
 
 ---
@@ -198,10 +227,10 @@ resemilla datos conocidos, evitando contaminación entre ejecuciones.
 
 | Métrica | Valor |
 |---------|-------|
-| Tests unitarios | 184/184 ✅ |
+| Tests unitarios | 213/213 ✅ |
 | Tests E2E | 108/108 ✅ |
 | Casos E2E nuevos | CP-99..CP-108 |
-| Commits del sprint | 7 |
+| Commits del sprint | 10 |
 | Rama remota | `origin/feature/sprint-16-algorithm-fixes` |
 
 ---
