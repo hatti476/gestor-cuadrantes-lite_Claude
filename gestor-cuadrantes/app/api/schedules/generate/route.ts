@@ -64,13 +64,13 @@ export async function POST(req: NextRequest) {
   );
 
   // Construir el set de celdas bloqueadas:
+  //   - Cualquier asignación manual: no se sobreescribe al regenerar
   //   - V y B: siempre bloqueados (datos de RRHH explícitos)
-  //   - D con manual=true: descanso excepcional marcado en preparación (Sprint 11)
-  //   - J (Jornada normal) NO se bloquea: puede ser residual de otro proyecto
+  //   - J generado (manual=false) NO se bloquea: puede ser residual de otro proyecto
   const ALWAYS_LOCKED = new Set(["V", "B"]);
   const existingSet = new Set<string>(
     existing
-      .filter((a) => ALWAYS_LOCKED.has(a.shiftType) || (a.shiftType === "D" && a.manual))
+      .filter((a) => a.manual || ALWAYS_LOCKED.has(a.shiftType))
       .map((a) => `${a.employeeId}|${a.date.toISOString().slice(0, 10)}`)
   );
 

@@ -650,6 +650,55 @@ describe("generateMonthSchedule — preferencias de turno", () => {
     const jShifts = empJWorkdays.filter((a) => a.shiftType === "J");
     expect(jShifts.length).toBeGreaterThan(0);
   });
+
+  it("técnico con pref J queda excluido de noches aunque esté en nightRotationOrder", () => {
+    const emps = [
+      { id: "emp-1", rotationOrder: 0, shiftPreference: null },
+      { id: "emp-2", rotationOrder: 1, shiftPreference: null },
+      { id: "emp-3", rotationOrder: 2, shiftPreference: null },
+      { id: "emp-4", rotationOrder: 3, shiftPreference: null },
+      { id: "emp-5", rotationOrder: 4, shiftPreference: null },
+      { id: "emp-6", rotationOrder: 5, shiftPreference: null },
+      { id: "emp-J", rotationOrder: 6, shiftPreference: "J" as const },
+    ];
+    const nightOrderIncludingJ = emps.map((e) => e.id);
+
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], nightOrderIncludingJ);
+    const empJAssignments = result.filter((a) => a.employeeId === "emp-J");
+
+    expect(empJAssignments.some((a) => a.shiftType === "N" || a.shiftType === "NF")).toBe(false);
+    expect(
+      empJAssignments
+        .filter((a) => !isWeekend(a.date))
+        .every((a) => a.shiftType === "J")
+    ).toBe(true);
+  });
+
+  it("con menos de 7 empleados elegibles para noches mantiene cobertura nocturna diaria", () => {
+    const emps = [
+      { id: "emp-1", rotationOrder: 0, shiftPreference: null },
+      { id: "emp-2", rotationOrder: 1, shiftPreference: null },
+      { id: "emp-3", rotationOrder: 2, shiftPreference: null },
+      { id: "emp-4", rotationOrder: 3, shiftPreference: null },
+      { id: "emp-5", rotationOrder: 4, shiftPreference: null },
+      { id: "emp-6", rotationOrder: 5, shiftPreference: null },
+      { id: "emp-J", rotationOrder: 6, shiftPreference: "J" as const },
+    ];
+
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], emps.map((e) => e.id));
+    const nightsByDate = new Map<string, number>();
+    for (const a of result) {
+      if (normalizeShift(a.shiftType) === "N") {
+        const dateStr = toDateStr(a.date);
+        nightsByDate.set(dateStr, (nightsByDate.get(dateStr) ?? 0) + 1);
+      }
+    }
+
+    for (let day = 1; day <= 30; day++) {
+      const dateStr = `2026-06-${String(day).padStart(2, "0")}`;
+      expect(nightsByDate.get(dateStr) ?? 0).toBe(1);
+    }
+  });
 });
 
 // ─── Helpers tests ────────────────────────────────────────────────────────────

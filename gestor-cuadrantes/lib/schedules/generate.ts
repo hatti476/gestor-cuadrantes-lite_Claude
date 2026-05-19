@@ -355,11 +355,19 @@ export function generateMonthSchedule(
   // Sort employees by rotationOrder
   const sortedEmps = [...employees].sort((a, b) => a.rotationOrder - b.rotationOrder);
 
-  // Night rotation order (default: rotationOrder)
-  const nightOrder: string[] =
-    nightRotationIds && nightRotationIds.length > 0
-      ? nightRotationIds
-      : sortedEmps.map((e) => e.id);
+  // Night rotation order (default: rotationOrder). Employees with Jornada (J)
+  // are never part of automatic night blocks; with fewer than 7 eligible people
+  // the 7-day block cadence rotates among the available employees.
+  const eligibleForNights = sortedEmps.filter((e) => e.shiftPreference !== "J");
+  const eligibleNightIds = new Set(eligibleForNights.map((e) => e.id));
+  const configuredNightOrder = (nightRotationIds ?? []).filter((id) => eligibleNightIds.has(id));
+  const configuredNightOrderSet = new Set(configuredNightOrder);
+  const missingNightIds = eligibleForNights
+    .map((e) => e.id)
+    .filter((id) => !configuredNightOrderSet.has(id));
+  const nightOrder: string[] = configuredNightOrder.length > 0
+    ? [...configuredNightOrder, ...missingNightIds]
+    : eligibleForNights.map((e) => e.id);
 
   // ── Night blocks ─────────────────────────────────────────────────────────
   // Compute the mathematical rotation, then resolve conflicts: if an employee
