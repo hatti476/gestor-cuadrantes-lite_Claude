@@ -12,6 +12,7 @@ import {
   applySpecialDayRule,
   isWeekend,
   weekKey,
+  isPostRestDay,
   normalizeShift,
   addDays,
   toDateStr,
@@ -30,6 +31,11 @@ function make7Employees(pref?: string | null): ScheduleEmployee[] {
     rotationOrder: i,
     shiftPreference: pref ?? null,
   }));
+}
+
+function isGeneratedWork(shiftType: string): boolean {
+  const base = normalizeShift(shiftType);
+  return base === "M" || base === "T" || base === "J";
 }
 
 // ─── nightBlockDays ────────────────────────────────────────────────────────────
@@ -515,7 +521,7 @@ describe("generateMonthSchedule — continuidad entre meses", () => {
     { id: "emp-4", rotationOrder: 3, shiftPreference: null },
   ];
 
-  it("si un técnico termina el mes N-1 con 5M seguidas, el mes N empieza con D", () => {
+  it("si un técnico termina el mes N-1 con 5M seguidas, el mes N empieza con 2D", () => {
     // Prev-month tail: 5 días M consecutivos justo al final
     const prevTail: PrevMonthTail[] = [
       { employeeId: "emp-1", date: "2026-05-27", shiftType: "M" },
@@ -526,9 +532,11 @@ describe("generateMonthSchedule — continuidad entre meses", () => {
     ];
 
     const result = generateMonthSchedule(emps4, 2026, 6, new Set(), new Set(), prevTail, nightIds);
-    // El día 1 de junio (lunes) debe ser D (forzado por el límite de consecutivos)
+    // Los días 1 y 2 de junio deben ser D (descanso mínimo de 2 días)
     const day1 = result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-01");
+    const day2 = result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-02");
     expect(day1?.shiftType).toBe("D");
+    expect(day2?.shiftType).toBe("D");
   });
 
   it("si un técnico termina con 3M, el mes siguiente puede continuar con M", () => {
@@ -542,6 +550,22 @@ describe("generateMonthSchedule — continuidad entre meses", () => {
     // 2026-06-01 es lunes (laborable) — puede ser M (sólo 3+1=4 consecutivos)
     const day1 = result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-01");
     expect(day1?.shiftType).toBe("M");
+  });
+
+  it("si el mes anterior termina con un único D tras 5 días de trabajo, el nuevo mes fuerza el segundo D", () => {
+    const prevTail: PrevMonthTail[] = [
+      { employeeId: "emp-1", date: "2026-05-26", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-27", shiftType: "T" },
+      { employeeId: "emp-1", date: "2026-05-28", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-29", shiftType: "T" },
+      { employeeId: "emp-1", date: "2026-05-30", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-31", shiftType: "D" },
+    ];
+
+    const result = generateMonthSchedule(emps4, 2026, 6, new Set(), new Set(), prevTail, nightIds);
+    const day1 = result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-01");
+
+    expect(day1?.shiftType).toBe("D");
   });
 });
 
@@ -731,6 +755,26 @@ describe("isWeekend", () => {
   });
   it("lunes no es fin de semana", () => {
     expect(isWeekend(fromDateStr("2026-06-01"))).toBe(false);
+  });
+});
+
+describe("isPostRestDay", () => {
+  it("devuelve true cuando los dos días anteriores son D", () => {
+    expect(
+      isPostRestDay("emp-1", fromDateStr("2026-06-03"), [
+        { employeeId: "emp-1", date: "2026-06-01", shiftType: "D" },
+        { employeeId: "emp-1", date: "2026-06-02", shiftType: "D" },
+      ])
+    ).toBe(true);
+  });
+
+  it("devuelve false cuando solo hay un día D anterior", () => {
+    expect(
+      isPostRestDay("emp-1", fromDateStr("2026-06-03"), [
+        { employeeId: "emp-1", date: "2026-06-01", shiftType: "M" },
+        { employeeId: "emp-1", date: "2026-06-02", shiftType: "D" },
+      ])
+    ).toBe(false);
   });
 });
 
@@ -1000,6 +1044,28 @@ describe("generateMonthSchedule — BUG-36: máximo 5 días consecutivos con mez
           expect(streak).toBeLessThanOrEqual(5);
         } else {
           streak = 0;
+        }
+      }
+    }
+  });
+
+  it("nunca hay un único D entre dos bloques de trabajo", () => {
+    const emps = make7Employees();
+    const result = generateMonthSchedule(emps, 2026, 5, new Set(), new Set(), [], emps.map((e) => e.id));
+
+    for (const emp of emps) {
+      const empAssignments = result
+        .filter((a) => a.employeeId === emp.id)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      for (let i = 1; i < empAssignments.length - 1; i++) {
+        const previous = empAssignments[i - 1];
+        const current = empAssignments[i];
+        const next = empAssignments[i + 1];
+        if (current.shiftType === "D" && isGeneratedWork(previous.shiftType) && isGeneratedWork(next.shiftType)) {
+          throw new Error(
+            `${emp.id} has a single rest day between work blocks on ${toDateStr(current.date)}`
+          );
         }
       }
     }

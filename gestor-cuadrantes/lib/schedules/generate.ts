@@ -316,6 +316,65 @@ export function normalizeShift(shift: string): string {
   return shift;
 }
 
+function isDayWorkShift(shift: string | null): boolean {
+  if (!shift) return false;
+  const base = normalizeShift(shift);
+  return base === "M" || base === "T" || base === "J";
+}
+
+function countTrailingDayWork(entries: { shiftType: string }[], endIndex = entries.length - 1): number {
+  let count = 0;
+  for (let i = endIndex; i >= 0; i--) {
+    if (!isDayWorkShift(entries[i].shiftType)) break;
+    count++;
+  }
+  return count;
+}
+
+function countTrailingShift(entries: { shiftType: string }[], shift: string): number {
+  let count = 0;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (normalizeShift(entries[i].shiftType) !== shift) break;
+    count++;
+  }
+  return count;
+}
+
+function initialForcedRestDaysRemaining(entries: { shiftType: string }[]): number {
+  let trailingRestDays = 0;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].shiftType !== "D") break;
+    trailingRestDays++;
+  }
+
+  if (trailingRestDays !== 1) return 0;
+
+  const workBeforeSingleRest = countTrailingDayWork(entries, entries.length - trailingRestDays - 1);
+  return workBeforeSingleRest >= 5 ? 1 : 0;
+}
+
+export function isPostRestDay(
+  employeeId: string,
+  date: Date,
+  assignments: { employeeId: string; date: Date | string; shiftType: string }[]
+): boolean {
+  const previousDate = toDateStr(addDays(date, -1));
+  const secondPreviousDate = toDateStr(addDays(date, -2));
+
+  const shiftByDate = new Map(
+    assignments
+      .filter((assignment) => assignment.employeeId === employeeId)
+      .map((assignment) => {
+        const dateStr = typeof assignment.date === "string"
+          ? assignment.date.slice(0, 10)
+          : toDateStr(assignment.date);
+        return [dateStr, assignment.shiftType] as const;
+      })
+  );
+
+  return shiftByDate.get(previousDate) === "D" && shiftByDate.get(secondPreviousDate) === "D";
+}
+
 // ─── ISO week helper ─────────────────────────────────────────────────────────
 
 /** Return the Monday of the ISO week containing `date` as "YYYY-MM-DD" key */
@@ -395,7 +454,7 @@ export function generateMonthSchedule(
   }
 
   // ── Prev-month trailing state ─────────────────────────────────────────────
-  const prevTailByEmp = new Map<string, { shift: string; count: number }>();
+  const prevTailByEmp = new Map<string, { shift: string; count: number; forcedRestDaysRemaining: number }>();
   if (prevMonthTail.length > 0) {
     const byEmp = new Map<string, { date: string; shiftType: string }[]>();
     for (const p of prevMonthTail) {
@@ -405,12 +464,14 @@ export function generateMonthSchedule(
     for (const [empId, entries] of byEmp) {
       const sorted = entries.sort((a, b) => a.date.localeCompare(b.date));
       const lastShift = normalizeShift(sorted[sorted.length - 1].shiftType);
-      let count = 0;
-      for (let i = sorted.length - 1; i >= 0; i--) {
-        if (normalizeShift(sorted[i].shiftType) === lastShift) count++;
-        else break;
-      }
-      prevTailByEmp.set(empId, { shift: lastShift, count });
+      const count = isDayWorkShift(lastShift)
+        ? countTrailingDayWork(sorted)
+        : countTrailingShift(sorted, lastShift);
+      prevTailByEmp.set(empId, {
+        shift: lastShift,
+        count,
+        forcedRestDaysRemaining: initialForcedRestDaysRemaining(sorted),
+      });
     }
   }
 
@@ -418,6 +479,7 @@ export function generateMonthSchedule(
   interface EmpState {
     consecutiveShift: string | null;
     consecutiveCount: number;
+    forcedRestDaysRemaining: number;
     weekShift: Map<string, string>; // weekKey → "M" | "T"
     weekendShift: Map<string, "MF" | "TF">; // weekKey → "MF" | "TF"
     mCount: number;
@@ -430,6 +492,7 @@ export function generateMonthSchedule(
     stateMap.set(emp.id, {
       consecutiveShift: prev?.shift ?? null,
       consecutiveCount: prev?.count ?? 0,
+      forcedRestDaysRemaining: prev?.forcedRestDaysRemaining ?? 0,
       weekShift: new Map(),
       weekendShift: new Map(),
       mCount: 0,
@@ -479,7 +542,8 @@ export function generateMonthSchedule(
         const satKey = `${e.id}|${dateStr}`;
         if (existingDates.has(satKey) || nightPlan.has(satKey)) return false;
         const s = stateMap.get(e.id)!;
-        const isWorkStreak = s.consecutiveShift === "M" || s.consecutiveShift === "T";
+        const isWorkStreak = isDayWorkShift(s.consecutiveShift);
+        if (s.forcedRestDaysRemaining > 0) return false;
         // Exclude if employee would need rest on Saturday OR on Sunday after Saturday work.
         // After Saturday (work): count becomes isWorkStreak ? count+1 : 1.
         // Rest triggers when count >= 5 → exclude if count >= 4 (would hit 5 on Sunday).
@@ -528,13 +592,19 @@ export function generateMonthSchedule(
         continue;
       }
 
-      // Priority 4: force rest if ≥5 consecutive work days (M or T, including
-      // MF/TF variants — BUG-36 fix: M↔T switches do NOT reset the streak).
+      // Priority 4: force 2 consecutive rest days after ≥5 consecutive day-work
+      // shifts (M/T/J, including MF/TF variants). Night blocks have their own
+      // pre/post rest plan and are handled before this branch.
       const needsRest =
         state.consecutiveCount >= 5 &&
-        (state.consecutiveShift === "M" || state.consecutiveShift === "T");
+        isDayWorkShift(state.consecutiveShift);
 
-      if (needsRest) {
+      if (state.forcedRestDaysRemaining > 0 || needsRest) {
+        if (state.forcedRestDaysRemaining > 0) {
+          state.forcedRestDaysRemaining--;
+        } else {
+          state.forcedRestDaysRemaining = 1;
+        }
         result.push({ employeeId: emp.id, date, shiftType: "D" });
         _updateState(state, "D", wKey, cov);
         continue;
@@ -577,6 +647,7 @@ function _updateState(
   state: {
     consecutiveShift: string | null;
     consecutiveCount: number;
+    forcedRestDaysRemaining: number;
     weekShift: Map<string, string>;
     weekendShift: Map<string, "MF" | "TF">;
     mCount: number;
@@ -591,8 +662,8 @@ function _updateState(
   // Consecutive work-day tracking (BUG-36 fix): any work day (M or T, including
   // their MF/TF weekend variants after normalisation) continues the streak,
   // regardless of M↔T switches. Only non-work shifts (D, N, J, V, B) reset it.
-  const isWorkDay = base === "M" || base === "T";
-  const prevIsWorkDay = state.consecutiveShift === "M" || state.consecutiveShift === "T";
+  const isWorkDay = isDayWorkShift(base);
+  const prevIsWorkDay = isDayWorkShift(state.consecutiveShift);
   if (isWorkDay && prevIsWorkDay) {
     state.consecutiveCount++;
     state.consecutiveShift = base;
