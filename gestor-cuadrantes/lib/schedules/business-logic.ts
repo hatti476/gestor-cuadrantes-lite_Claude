@@ -148,10 +148,6 @@ export function validateShiftTransition(
     return { valid: false, hoursGap: 8 };
   }
 
-  if (isAfternoonShift(prevShift) && isNightShift(nextShift)) {
-    return { valid: false, hoursGap: 0 };
-  }
-
   if (isNightShift(prevShift) && isMorningShift(nextShift)) {
     return { valid: false, hoursGap: 0 };
   }

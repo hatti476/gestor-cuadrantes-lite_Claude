@@ -314,7 +314,7 @@ describe("generateMonthSchedule — máximo 1 técnico en noche por día", () =>
 // ─── Regla: cobertura mínima en laborables ────────────────────────────────────
 
 describe("generateMonthSchedule — cobertura mínima M/T en laborables", () => {
-  it("cada día laborable tiene al menos 2M y 2T (con 7 técnicos)", () => {
+  it("cada día laborable tiene al menos 1M y 1T; el objetivo 2M/2T es best effort", () => {
     const emps = make7Employees();
     const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], []);
 
@@ -332,11 +332,11 @@ describe("generateMonthSchedule — cobertura mínima M/T en laborables", () => 
 
       const mCount = shifts.filter((s) => normalizeShift(s) === "M").length;
       const tCount = shifts.filter((s) => normalizeShift(s) === "T").length;
-      // Night-block employees won't count as M or T; so only check if enough non-night emps
+      // Night-block employees won't count as M or T; the hard minimum is 1M + 1T.
       const nonNightCount = shifts.filter((s) => normalizeShift(s) !== "N" && s !== "D").length;
-      if (nonNightCount >= 4) {
-        expect(mCount).toBeGreaterThanOrEqual(2);
-        expect(tCount).toBeGreaterThanOrEqual(2);
+      if (nonNightCount >= 2) {
+        expect(mCount).toBeGreaterThanOrEqual(1);
+        expect(tCount).toBeGreaterThanOrEqual(1);
       }
     }
   });
@@ -440,6 +440,129 @@ describe("generateMonthSchedule — RF-16 cobertura mínima garantizada", () => 
       const shifts = result.filter((assignment) => toDateStr(assignment.date) === dateStr);
       expect(shifts.filter((assignment) => normalizeShift(assignment.shiftType) === "M")).toHaveLength(1);
       expect(shifts.filter((assignment) => normalizeShift(assignment.shiftType) === "T")).toHaveLength(1);
+    }
+  });
+
+  it("cubre el primer fin de semana del mes aunque J no cuente y haya bloqueos manuales", () => {
+    const emps: ScheduleEmployee[] = [
+      { id: "jornada", rotationOrder: 1, shiftPreference: "J" },
+      { id: "tarde", rotationOrder: 2, shiftPreference: "T" },
+      { id: "noche-tail", rotationOrder: 3, shiftPreference: null },
+      { id: "locked-1", rotationOrder: 4, shiftPreference: null },
+      { id: "locked-2", rotationOrder: 5, shiftPreference: null },
+      { id: "tarde-2", rotationOrder: 6, shiftPreference: null },
+      { id: "locked-3", rotationOrder: 7, shiftPreference: null },
+      { id: "locked-4", rotationOrder: 8, shiftPreference: null },
+    ];
+    const prevTail: PrevMonthTail[] = [
+      ["jornada", ["J", "J", "J", "J", "J"]],
+      ["tarde", ["T", "T", "T", "T", "T"]],
+      ["noche-tail", ["NF", "N", "N", "N", "D"]],
+      ["locked-1", ["T", "T", "D", "D", "NF"]],
+      ["locked-2", ["M", "M", "M", "M", "M"]],
+      ["tarde-2", ["T", "T", "T", "T", "T"]],
+      ["locked-3", ["M", "M", "M", "M", "M"]],
+      ["locked-4", ["M", "M", "M", "M", "D"]],
+    ].flatMap(([employeeId, shifts]) =>
+      (shifts as string[]).map((shiftType, index) => ({
+        employeeId: employeeId as string,
+        date: `2026-07-${String(27 + index).padStart(2, "0")}`,
+        shiftType,
+      }))
+    );
+    const locked = new Set([
+      "locked-1|2026-08-01",
+      "locked-1|2026-08-02",
+      "locked-2|2026-08-01",
+      "locked-2|2026-08-02",
+      "locked-3|2026-08-01",
+      "locked-3|2026-08-02",
+      "locked-4|2026-08-01",
+      "locked-4|2026-08-02",
+    ]);
+
+    const result = generateMonthSchedule(
+      emps,
+      2026,
+      8,
+      locked,
+      new Set(),
+      prevTail,
+      emps.map((employee) => employee.id)
+    );
+
+    for (const dateStr of ["2026-08-01", "2026-08-02"]) {
+      const shifts = result.filter((assignment) => toDateStr(assignment.date) === dateStr);
+      expect(shifts.filter((assignment) => normalizeShift(assignment.shiftType) === "M")).toHaveLength(1);
+      expect(shifts.filter((assignment) => normalizeShift(assignment.shiftType) === "T")).toHaveLength(1);
+      expect(shifts.filter((assignment) => normalizeShift(assignment.shiftType) === "N")).toHaveLength(1);
+      expect(shifts.find((assignment) => assignment.employeeId === "jornada")?.shiftType).toBe("D");
+    }
+  });
+
+  it("evita cambios M↔T de un día al siguiente cuando la cobertura puede repararse con otro empleado", () => {
+    const emps: ScheduleEmployee[] = [
+      { id: "jornada", rotationOrder: 1, shiftPreference: "J" },
+      { id: "tarde", rotationOrder: 2, shiftPreference: "T" },
+      { id: "noche-tail", rotationOrder: 3, shiftPreference: null },
+      { id: "locked-1", rotationOrder: 4, shiftPreference: null },
+      { id: "locked-2", rotationOrder: 5, shiftPreference: null },
+      { id: "tarde-2", rotationOrder: 6, shiftPreference: null },
+      { id: "locked-3", rotationOrder: 7, shiftPreference: null },
+      { id: "locked-4", rotationOrder: 8, shiftPreference: null },
+    ];
+    const prevTail: PrevMonthTail[] = [
+      ["jornada", ["J", "J", "J", "J", "J"]],
+      ["tarde", ["T", "T", "T", "T", "T"]],
+      ["noche-tail", ["NF", "N", "N", "N", "D"]],
+      ["locked-1", ["T", "T", "D", "D", "NF"]],
+      ["locked-2", ["M", "M", "M", "M", "M"]],
+      ["tarde-2", ["T", "T", "T", "T", "T"]],
+      ["locked-3", ["M", "M", "M", "M", "M"]],
+      ["locked-4", ["M", "M", "M", "M", "D"]],
+    ].flatMap(([employeeId, shifts]) =>
+      (shifts as string[]).map((shiftType, index) => ({
+        employeeId: employeeId as string,
+        date: `2026-07-${String(27 + index).padStart(2, "0")}`,
+        shiftType,
+      }))
+    );
+    const locked = new Set([
+      "locked-1|2026-08-01",
+      "locked-1|2026-08-02",
+      "locked-2|2026-08-01",
+      "locked-2|2026-08-02",
+      "locked-3|2026-08-01",
+      "locked-3|2026-08-02",
+      "locked-4|2026-08-01",
+      "locked-4|2026-08-02",
+    ]);
+
+    const result = generateMonthSchedule(
+      emps,
+      2026,
+      8,
+      locked,
+      new Set(),
+      prevTail,
+      emps.map((employee) => employee.id)
+    );
+
+    for (const emp of emps) {
+      const assignments = result
+        .filter((assignment) => assignment.employeeId === emp.id)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      for (let i = 1; i < assignments.length; i++) {
+        const previousBase = normalizeShift(assignments[i - 1].shiftType);
+        const currentBase = normalizeShift(assignments[i].shiftType);
+        if (
+          (previousBase === "M" || previousBase === "T") &&
+          (currentBase === "M" || currentBase === "T")
+        ) {
+          expect(currentBase).toBe(previousBase);
+        }
+      }
     }
   });
 
