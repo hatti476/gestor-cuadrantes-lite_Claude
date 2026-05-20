@@ -2,8 +2,8 @@
  * Playwright Global Setup — BD de tests aislada (Option B)
  *
  * Antes de ejecutar cualquier test E2E:
- *   1. Elimina test.db (si existe) para empezar limpio
- *   2. Aplica todas las migraciones sobre test.db
+ *   1. Elimina prisma/test.db (si existe) para empezar limpio
+ *   2. Aplica todas las migraciones sobre prisma/test.db
  *   3. Ejecuta el seed con datos de prueba conocidos
  *
  * El servidor de tests (puerto 3001) lee DATABASE_URL=file:./test.db
@@ -14,20 +14,50 @@
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import { PrismaClient } from "@prisma/client";
 
 const TEST_DB_URL = "file:./test.db";
 
+async function clearTestData() {
+  const prisma = new PrismaClient({
+    datasources: { db: { url: TEST_DB_URL } },
+  });
+
+  try {
+    await prisma.$transaction([
+      prisma.shiftChangeLog.deleteMany(),
+      prisma.shiftAssignment.deleteMany(),
+      prisma.schedule.deleteMany(),
+      prisma.holiday.deleteMany(),
+      prisma.projectMember.deleteMany(),
+      prisma.employee.deleteMany(),
+      prisma.session.deleteMany(),
+      prisma.account.deleteMany(),
+      prisma.verificationToken.deleteMany(),
+      prisma.project.deleteMany(),
+      prisma.user.deleteMany(),
+    ]);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 export default async function globalSetup() {
   const cwd = path.resolve(__dirname, "../../"); // gestor-cuadrantes/
+  const prismaDir = path.join(cwd, "prisma");
 
-  // 1. Eliminar test.db y su WAL/journal para empezar desde cero
+  // 1. Eliminar test.db y su WAL/journal para empezar desde cero.
+  // Prisma resuelve file:./test.db relativo al directorio del schema
+  // (prisma/schema.prisma), así que la BD real vive en prisma/test.db.
   for (const file of ["test.db", "test.db-wal", "test.db-shm", "test.db-journal"]) {
-    const p = path.join(cwd, file);
-    if (fs.existsSync(p)) {
-      fs.unlinkSync(p);
+    for (const dir of [prismaDir, cwd]) {
+      const p = path.join(dir, file);
+      if (fs.existsSync(p)) {
+        fs.unlinkSync(p);
+      }
     }
   }
-  console.log("\n[globalSetup] test.db eliminada — empezando con BD limpia");
+  console.log("\n[globalSetup] prisma/test.db eliminada — empezando con BD limpia");
 
   // 1b. Eliminar el lock de Next.js dev (Next.js 16+) para que el servidor de tests
   //     pueda arrancar en el puerto 3001 aunque ya haya un dev server en el puerto 3000.
@@ -50,7 +80,19 @@ export default async function globalSetup() {
   // Pasamos DATABASE_URL explícitamente en la línea de comando para que Prisma CLI
   // no pueda sobreescribirlo con .env (que apunta a dev.db)
   console.log("[globalSetup] Aplicando migraciones...");
-  execSync(`DATABASE_URL="${TEST_DB_URL}" npx prisma migrate deploy`, { env, cwd, stdio: "inherit" });
+  try {
+    execSync(`DATABASE_URL="${TEST_DB_URL}" npx prisma migrate deploy`, { env, cwd, stdio: "inherit" });
+  } catch (error) {
+    const devDb = path.join(prismaDir, "dev.db");
+    const testDb = path.join(prismaDir, "test.db");
+    if (!fs.existsSync(devDb)) throw error;
+
+    console.warn("[globalSetup] migrate deploy no pudo crear test.db; usando dev.db como plantilla de schema");
+    fs.copyFileSync(devDb, testDb);
+  }
+
+  // 2b. Si se usó una plantilla con datos, limpiar únicamente las tablas de datos.
+  await clearTestData();
 
   // 3. Sembrar datos de prueba
   console.log("[globalSetup] Sembrando datos...");

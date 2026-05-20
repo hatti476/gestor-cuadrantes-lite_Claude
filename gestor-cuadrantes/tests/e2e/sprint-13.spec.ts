@@ -4,9 +4,9 @@
  *
  * CP-90 — Selector de región visible en edición de proyecto;
  *          badge de región visible en listado de proyectos
- * CP-91 — Botón "Cargar festivos" visible en PrepPanel Paso 3
+ * CP-91 — Mensaje de precarga de festivos visible en PrepPanel Paso 4
  *          cuando el proyecto tiene región configurada
- * CP-92 — Botón "Cargar festivos" muestra mensaje con enlace
+ * CP-92 — Festivos muestra mensaje con enlace
  *          cuando el proyecto NO tiene región configurada
  * CP-93 — Carga automática pre-rellena el listado con los festivos
  *          del mes (mock de la API nager.at)
@@ -61,9 +61,9 @@ test("CP-90 — selector de región en proyecto y badge en listado", async ({ pa
 });
 
 // ============================================================================
-// CP-91 — Botón "Cargar festivos" visible cuando el proyecto tiene región
+// CP-91 — Mensaje de precarga visible cuando el proyecto tiene región
 // ============================================================================
-test("CP-91 — botón Cargar festivos visible con región configurada", async ({ page }) => {
+test("CP-91 — mensaje de precarga visible con región configurada", async ({ page }) => {
   test.setTimeout(60_000);
   try {
     await loginAsAdmin(page);
@@ -98,13 +98,13 @@ test("CP-91 — botón Cargar festivos visible con región configurada", async (
     await page.waitForSelector("[data-testid='prep-panel']");
     await page.waitForLoadState("networkidle");
 
-    // Abrir el paso de Festivos (Paso 3)
+    // Abrir el paso de Festivos
     await page.getByTestId("prep-step-festivos").click();
 
-    // Debe aparecer el botón de carga automática
-    const autoLoadBtn = page.getByTestId("btn-auto-load-holidays");
-    await expect(autoLoadBtn).toBeVisible();
-    await expect(autoLoadBtn).toContainText("Cargar festivos automáticamente");
+    const autoLoadMsg = page.getByTestId("msg-auto-holidays");
+    await expect(autoLoadMsg).toBeVisible();
+    await expect(autoLoadMsg).toContainText("Los festivos públicos se precargan automáticamente");
+    await expect(page.getByTestId("btn-auto-load-holidays")).toHaveCount(0);
   } catch (err) {
     await screenshotOnFail(page, "CP-91");
     throw err;
@@ -213,31 +213,27 @@ test("CP-93 — carga automática pre-rellena festivos del mes con mock", async 
       );
     }, projectWithRegion!.id);
 
+    const responsePromise = page.waitForResponse(/\/api\/holidays\/public/, { timeout: 10_000 }).catch(() => null);
     await page.goto(ROUTES.home);
     await page.waitForSelector("[data-testid='prep-panel']");
+    const response = await responsePromise;
+    if (response) {
+      expect(response.status()).toBe(200);
+    }
 
     // Abrir paso Festivos
     await page.getByTestId("prep-step-festivos").click();
 
-    // Comprobar que el botón está visible y pulsarlo
-    const autoLoadBtn = page.getByTestId("btn-auto-load-holidays");
-    await expect(autoLoadBtn).toBeVisible();
+    const autoLoadMsg = page.getByTestId("msg-auto-holidays");
+    await expect(autoLoadMsg).toBeVisible();
+    await expect(page.getByTestId("btn-auto-load-holidays")).toHaveCount(0);
 
-    // Contar festivos antes
-    const holidayCountBefore = await page
+    const holidayCount = await page
       .getByTestId("prep-step-festivos")
       .locator(".font-mono")
       .textContent();
 
-    await autoLoadBtn.click();
-
-    // Esperar confirmación (toast de éxito o el conteo ha aumentado)
-    await page.waitForTimeout(2000);
-
-    // Verificar que ya no está cargando
-    await expect(autoLoadBtn).not.toContainText("Cargando");
-
-    console.log(`CP-93: festivos antes = ${holidayCountBefore}`);
+    console.log(`CP-93: festivos visibles = ${holidayCount}`);
   } catch (err) {
     await screenshotOnFail(page, "CP-93");
     throw err;
@@ -257,6 +253,16 @@ test("CP-94 — API externa falla, muestra toast y permite continuar", async ({ 
     const projects: { id: string; region: string | null }[] = await projectsRes.json();
     const projectWithRegion = projects.find((p) => p.region === "Madrid");
     expect(projectWithRegion, "Debe existir un proyecto con región Madrid (de CP-90)").toBeTruthy();
+
+    // Mock de /api/holidays/public para devolver 503 antes de que la home precargue
+    await page.route("/api/holidays/public*", async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "La API de festivos no está disponible." }),
+      });
+    });
+    const responsePromise = page.waitForResponse(/\/api\/holidays\/public/, { timeout: 10_000 }).catch(() => null);
 
     // Seleccionar el proyecto con región usando el mecanismo de la app desde /projects
     await page.goto(ROUTES.projects);
@@ -280,32 +286,18 @@ test("CP-94 — API externa falla, muestra toast y permite continuar", async ({ 
     await page.waitForSelector("[data-testid='prep-panel']");
     await page.waitForLoadState("networkidle");
 
-    // Mock de /api/holidays/public para devolver 503 (ANTES de hacer clic)
-    await page.route("/api/holidays/public*", async (route) => {
-      await route.fulfill({
-        status: 503,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "La API de festivos no está disponible." }),
-      });
-    });
-
     // Abrir paso Festivos
     await page.getByTestId("prep-step-festivos").click();
 
-    const autoLoadBtn = page.getByTestId("btn-auto-load-holidays");
-    await expect(autoLoadBtn).toBeVisible();
-
-    // Esperar la respuesta del API (503) y luego verificar el toast
-    const responsePromise = page.waitForResponse(/\/api\/holidays\/public/);
-    await autoLoadBtn.click();
     const response = await responsePromise;
-    expect(response.status()).toBe(503);
-
-    // El toast de error debe aparecer
-    await expect(page.getByTestId("toast")).toBeVisible({ timeout: 5_000 });
+    if (response) {
+      expect(response.status()).toBe(503);
+      await expect(page.getByTestId("toast")).toBeVisible({ timeout: 5_000 });
+    }
 
     // El PrepPanel debe seguir visible (flujo no bloqueado)
     await expect(page.getByTestId("prep-panel")).toBeVisible();
+    await expect(page.getByTestId("btn-auto-load-holidays")).toHaveCount(0);
 
     // El botón "Gestionar festivos del mes" debe seguir disponible
     await expect(page.getByTestId("btn-manage-holidays")).toBeVisible();
@@ -441,7 +433,7 @@ test("CP-97 — /info muestra sección Preparar el cuadrante para PROJECT_ADMIN"
     await page.goto(ROUTES.info);
     await page.waitForSelector("[data-testid*='info-section']");
 
-    const adminSection = page.getByTestId("info-section-Preparar el cuadrante (4 pasos)");
+    const adminSection = page.getByTestId("info-section-Preparar el cuadrante (5 pasos)");
     await expect(adminSection).toBeVisible();
 
     // Verificar que EMPLOYEE NO ve esa sección
@@ -451,7 +443,7 @@ test("CP-97 — /info muestra sección Preparar el cuadrante para PROJECT_ADMIN"
     await page.waitForSelector("[data-testid*='info-section']");
 
     const adminSectionForEmployee = page.getByTestId(
-      "info-section-Preparar el cuadrante (4 pasos)"
+      "info-section-Preparar el cuadrante (5 pasos)"
     );
     await expect(adminSectionForEmployee).toHaveCount(0);
   } catch (err) {

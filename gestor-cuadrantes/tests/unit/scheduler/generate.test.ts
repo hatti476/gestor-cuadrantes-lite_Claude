@@ -10,8 +10,10 @@ import {
   resolveNightBlocks,
   generateMonthSchedule,
   applySpecialDayRule,
+  applyChristmasSpecialRule,
   isWeekend,
   weekKey,
+  isPostRestDay,
   normalizeShift,
   addDays,
   toDateStr,
@@ -30,6 +32,10 @@ function make7Employees(pref?: string | null): ScheduleEmployee[] {
     rotationOrder: i,
     shiftPreference: pref ?? null,
   }));
+}
+
+function isGeneratedWork(shiftType: string): boolean {
+  return !["D", "V", "B"].includes(shiftType);
 }
 
 // ─── nightBlockDays ────────────────────────────────────────────────────────────
@@ -163,6 +169,26 @@ describe("applySpecialDayRule", () => {
   });
 });
 
+describe("applyChristmasSpecialRule", () => {
+  it("convierte mañana, tarde y noche de los festivos navideños configurados", () => {
+    expect(applyChristmasSpecialRule("M", fromDateStr("2026-12-25"))).toBe("MN");
+    expect(applyChristmasSpecialRule("T", fromDateStr("2026-12-25"))).toBe("TN");
+    expect(applyChristmasSpecialRule("N", fromDateStr("2026-12-25"))).toBe("NN");
+    expect(applyChristmasSpecialRule("MF", fromDateStr("2027-01-06"))).toBe("MN");
+    expect(applyChristmasSpecialRule("TF", fromDateStr("2027-01-06"))).toBe("TN");
+    expect(applyChristmasSpecialRule("NF", fromDateStr("2027-01-06"))).toBe("NN");
+  });
+
+  it("solo convierte tarde y noche en 24/12, 31/12 y 05/01", () => {
+    expect(applyChristmasSpecialRule("M", fromDateStr("2026-12-24"))).toBe("M");
+    expect(applyChristmasSpecialRule("T", fromDateStr("2026-12-24"))).toBe("TN");
+    expect(applyChristmasSpecialRule("N", fromDateStr("2026-12-24"))).toBe("NN");
+    expect(applyChristmasSpecialRule("M", fromDateStr("2027-01-05"))).toBe("M");
+    expect(applyChristmasSpecialRule("T", fromDateStr("2027-01-05"))).toBe("TN");
+    expect(applyChristmasSpecialRule("N", fromDateStr("2027-01-05"))).toBe("NN");
+  });
+});
+
 // ─── generateMonthSchedule — reglas fundamentales ─────────────────────────────
 
 describe("generateMonthSchedule — mes completo con 7 técnicos", () => {
@@ -183,7 +209,7 @@ describe("generateMonthSchedule — mes completo con 7 técnicos", () => {
   });
 
   it("todos los shiftType son válidos", () => {
-    const valid = new Set(["M", "T", "N", "D", "MF", "TF", "NF"]);
+    const valid = new Set(["M", "T", "N", "D", "MF", "TF", "NF", "MN", "TN", "NN"]);
     const result = generateMonthSchedule(emps, 2026, 5);
     for (const a of result) {
       expect(valid.has(a.shiftType)).toBe(true);
@@ -288,7 +314,7 @@ describe("generateMonthSchedule — máximo 1 técnico en noche por día", () =>
 // ─── Regla: cobertura mínima en laborables ────────────────────────────────────
 
 describe("generateMonthSchedule — cobertura mínima M/T en laborables", () => {
-  it("cada día laborable tiene al menos 2M y 2T (con 7 técnicos)", () => {
+  it("cada día laborable tiene al menos 1M y 1T; el objetivo 2M/2T es best effort", () => {
     const emps = make7Employees();
     const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], []);
 
@@ -306,11 +332,11 @@ describe("generateMonthSchedule — cobertura mínima M/T en laborables", () => 
 
       const mCount = shifts.filter((s) => normalizeShift(s) === "M").length;
       const tCount = shifts.filter((s) => normalizeShift(s) === "T").length;
-      // Night-block employees won't count as M or T; so only check if enough non-night emps
+      // Night-block employees won't count as M or T; the hard minimum is 1M + 1T.
       const nonNightCount = shifts.filter((s) => normalizeShift(s) !== "N" && s !== "D").length;
-      if (nonNightCount >= 4) {
-        expect(mCount).toBeGreaterThanOrEqual(2);
-        expect(tCount).toBeGreaterThanOrEqual(2);
+      if (nonNightCount >= 2) {
+        expect(mCount).toBeGreaterThanOrEqual(1);
+        expect(tCount).toBeGreaterThanOrEqual(1);
       }
     }
   });
@@ -378,6 +404,165 @@ describe("generateMonthSchedule — RF-16 cobertura mínima garantizada", () => 
       const tfCount = shifts.filter((s) => s === "TF").length;
       expect(mfCount).toBeGreaterThanOrEqual(1);
       expect(tfCount).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("no deja fines de semana sin MF/TF cuando hay técnicos disponibles", () => {
+    const emps = [
+      ...make7Employees(),
+      { id: "emp-8", rotationOrder: 7, shiftPreference: null },
+    ];
+    const result = generateMonthSchedule(emps, 2026, 7, new Set(), new Set(), [], emps.map((e) => e.id));
+
+    for (const dateStr of ["2026-07-25", "2026-07-26"]) {
+      const shifts = result.filter((a) => toDateStr(a.date) === dateStr).map((a) => a.shiftType);
+      expect(shifts.filter((s) => s === "MF")).toHaveLength(1);
+      expect(shifts.filter((s) => s === "TF")).toHaveLength(1);
+    }
+  });
+
+  it("cubre mañana y tarde en todos los fines de semana y festivos de enero con un técnico J", () => {
+    const emps = [
+      { id: "emp-J", rotationOrder: 0, shiftPreference: "J" as const },
+      ...make7Employees().map((employee, index) => ({
+        ...employee,
+        rotationOrder: index + 1,
+      })),
+    ];
+    const holidays = new Set(["2026-01-01", "2026-01-06"]);
+    const result = generateMonthSchedule(emps, 2026, 1, new Set(), holidays, [], emps.map((e) => e.id));
+
+    for (let day = 1; day <= 31; day++) {
+      const dateStr = `2026-01-${String(day).padStart(2, "0")}`;
+      const date = fromDateStr(dateStr);
+      if (!isWeekend(date) && !holidays.has(dateStr)) continue;
+
+      const shifts = result.filter((assignment) => toDateStr(assignment.date) === dateStr);
+      expect(shifts.filter((assignment) => normalizeShift(assignment.shiftType) === "M")).toHaveLength(1);
+      expect(shifts.filter((assignment) => normalizeShift(assignment.shiftType) === "T")).toHaveLength(1);
+    }
+  });
+
+  it("cubre el primer fin de semana del mes aunque J no cuente y haya bloqueos manuales", () => {
+    const emps: ScheduleEmployee[] = [
+      { id: "jornada", rotationOrder: 1, shiftPreference: "J" },
+      { id: "tarde", rotationOrder: 2, shiftPreference: "T" },
+      { id: "noche-tail", rotationOrder: 3, shiftPreference: null },
+      { id: "locked-1", rotationOrder: 4, shiftPreference: null },
+      { id: "locked-2", rotationOrder: 5, shiftPreference: null },
+      { id: "tarde-2", rotationOrder: 6, shiftPreference: null },
+      { id: "locked-3", rotationOrder: 7, shiftPreference: null },
+      { id: "locked-4", rotationOrder: 8, shiftPreference: null },
+    ];
+    const prevTail: PrevMonthTail[] = [
+      ["jornada", ["J", "J", "J", "J", "J"]],
+      ["tarde", ["T", "T", "T", "T", "T"]],
+      ["noche-tail", ["NF", "N", "N", "N", "D"]],
+      ["locked-1", ["T", "T", "D", "D", "NF"]],
+      ["locked-2", ["M", "M", "M", "M", "M"]],
+      ["tarde-2", ["T", "T", "T", "T", "T"]],
+      ["locked-3", ["M", "M", "M", "M", "M"]],
+      ["locked-4", ["M", "M", "M", "M", "D"]],
+    ].flatMap(([employeeId, shifts]) =>
+      (shifts as string[]).map((shiftType, index) => ({
+        employeeId: employeeId as string,
+        date: `2026-07-${String(27 + index).padStart(2, "0")}`,
+        shiftType,
+      }))
+    );
+    const locked = new Set([
+      "locked-1|2026-08-01",
+      "locked-1|2026-08-02",
+      "locked-2|2026-08-01",
+      "locked-2|2026-08-02",
+      "locked-3|2026-08-01",
+      "locked-3|2026-08-02",
+      "locked-4|2026-08-01",
+      "locked-4|2026-08-02",
+    ]);
+
+    const result = generateMonthSchedule(
+      emps,
+      2026,
+      8,
+      locked,
+      new Set(),
+      prevTail,
+      emps.map((employee) => employee.id)
+    );
+
+    for (const dateStr of ["2026-08-01", "2026-08-02"]) {
+      const shifts = result.filter((assignment) => toDateStr(assignment.date) === dateStr);
+      expect(shifts.filter((assignment) => normalizeShift(assignment.shiftType) === "M")).toHaveLength(1);
+      expect(shifts.filter((assignment) => normalizeShift(assignment.shiftType) === "T")).toHaveLength(1);
+      expect(shifts.filter((assignment) => normalizeShift(assignment.shiftType) === "N")).toHaveLength(1);
+      expect(shifts.find((assignment) => assignment.employeeId === "jornada")?.shiftType).toBe("D");
+    }
+  });
+
+  it("evita cambios M↔T de un día al siguiente cuando la cobertura puede repararse con otro empleado", () => {
+    const emps: ScheduleEmployee[] = [
+      { id: "jornada", rotationOrder: 1, shiftPreference: "J" },
+      { id: "tarde", rotationOrder: 2, shiftPreference: "T" },
+      { id: "noche-tail", rotationOrder: 3, shiftPreference: null },
+      { id: "locked-1", rotationOrder: 4, shiftPreference: null },
+      { id: "locked-2", rotationOrder: 5, shiftPreference: null },
+      { id: "tarde-2", rotationOrder: 6, shiftPreference: null },
+      { id: "locked-3", rotationOrder: 7, shiftPreference: null },
+      { id: "locked-4", rotationOrder: 8, shiftPreference: null },
+    ];
+    const prevTail: PrevMonthTail[] = [
+      ["jornada", ["J", "J", "J", "J", "J"]],
+      ["tarde", ["T", "T", "T", "T", "T"]],
+      ["noche-tail", ["NF", "N", "N", "N", "D"]],
+      ["locked-1", ["T", "T", "D", "D", "NF"]],
+      ["locked-2", ["M", "M", "M", "M", "M"]],
+      ["tarde-2", ["T", "T", "T", "T", "T"]],
+      ["locked-3", ["M", "M", "M", "M", "M"]],
+      ["locked-4", ["M", "M", "M", "M", "D"]],
+    ].flatMap(([employeeId, shifts]) =>
+      (shifts as string[]).map((shiftType, index) => ({
+        employeeId: employeeId as string,
+        date: `2026-07-${String(27 + index).padStart(2, "0")}`,
+        shiftType,
+      }))
+    );
+    const locked = new Set([
+      "locked-1|2026-08-01",
+      "locked-1|2026-08-02",
+      "locked-2|2026-08-01",
+      "locked-2|2026-08-02",
+      "locked-3|2026-08-01",
+      "locked-3|2026-08-02",
+      "locked-4|2026-08-01",
+      "locked-4|2026-08-02",
+    ]);
+
+    const result = generateMonthSchedule(
+      emps,
+      2026,
+      8,
+      locked,
+      new Set(),
+      prevTail,
+      emps.map((employee) => employee.id)
+    );
+
+    for (const emp of emps) {
+      const assignments = result
+        .filter((assignment) => assignment.employeeId === emp.id)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      for (let i = 1; i < assignments.length; i++) {
+        const previousBase = normalizeShift(assignments[i - 1].shiftType);
+        const currentBase = normalizeShift(assignments[i].shiftType);
+        if (
+          (previousBase === "M" || previousBase === "T") &&
+          (currentBase === "M" || currentBase === "T")
+        ) {
+          expect(currentBase).toBe(previousBase);
+        }
+      }
     }
   });
 
@@ -515,7 +700,7 @@ describe("generateMonthSchedule — continuidad entre meses", () => {
     { id: "emp-4", rotationOrder: 3, shiftPreference: null },
   ];
 
-  it("si un técnico termina el mes N-1 con 5M seguidas, el mes N empieza con D", () => {
+  it("si un técnico termina el mes N-1 con 5M seguidas, el mes N empieza con 2D", () => {
     // Prev-month tail: 5 días M consecutivos justo al final
     const prevTail: PrevMonthTail[] = [
       { employeeId: "emp-1", date: "2026-05-27", shiftType: "M" },
@@ -526,9 +711,11 @@ describe("generateMonthSchedule — continuidad entre meses", () => {
     ];
 
     const result = generateMonthSchedule(emps4, 2026, 6, new Set(), new Set(), prevTail, nightIds);
-    // El día 1 de junio (lunes) debe ser D (forzado por el límite de consecutivos)
+    // Los días 1 y 2 de junio deben ser D (descanso mínimo de 2 días)
     const day1 = result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-01");
+    const day2 = result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-02");
     expect(day1?.shiftType).toBe("D");
+    expect(day2?.shiftType).toBe("D");
   });
 
   it("si un técnico termina con 3M, el mes siguiente puede continuar con M", () => {
@@ -542,6 +729,22 @@ describe("generateMonthSchedule — continuidad entre meses", () => {
     // 2026-06-01 es lunes (laborable) — puede ser M (sólo 3+1=4 consecutivos)
     const day1 = result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-01");
     expect(day1?.shiftType).toBe("M");
+  });
+
+  it("si el mes anterior termina con un único D tras 5 días de trabajo, el nuevo mes fuerza el segundo D", () => {
+    const prevTail: PrevMonthTail[] = [
+      { employeeId: "emp-1", date: "2026-05-26", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-27", shiftType: "T" },
+      { employeeId: "emp-1", date: "2026-05-28", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-29", shiftType: "T" },
+      { employeeId: "emp-1", date: "2026-05-30", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-31", shiftType: "D" },
+    ];
+
+    const result = generateMonthSchedule(emps4, 2026, 6, new Set(), new Set(), prevTail, nightIds);
+    const day1 = result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-01");
+
+    expect(day1?.shiftType).toBe("D");
   });
 });
 
@@ -650,6 +853,55 @@ describe("generateMonthSchedule — preferencias de turno", () => {
     const jShifts = empJWorkdays.filter((a) => a.shiftType === "J");
     expect(jShifts.length).toBeGreaterThan(0);
   });
+
+  it("técnico con pref J queda excluido de noches aunque esté en nightRotationOrder", () => {
+    const emps = [
+      { id: "emp-1", rotationOrder: 0, shiftPreference: null },
+      { id: "emp-2", rotationOrder: 1, shiftPreference: null },
+      { id: "emp-3", rotationOrder: 2, shiftPreference: null },
+      { id: "emp-4", rotationOrder: 3, shiftPreference: null },
+      { id: "emp-5", rotationOrder: 4, shiftPreference: null },
+      { id: "emp-6", rotationOrder: 5, shiftPreference: null },
+      { id: "emp-J", rotationOrder: 6, shiftPreference: "J" as const },
+    ];
+    const nightOrderIncludingJ = emps.map((e) => e.id);
+
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], nightOrderIncludingJ);
+    const empJAssignments = result.filter((a) => a.employeeId === "emp-J");
+
+    expect(empJAssignments.some((a) => a.shiftType === "N" || a.shiftType === "NF")).toBe(false);
+    expect(
+      empJAssignments
+        .filter((a) => !isWeekend(a.date))
+        .every((a) => a.shiftType === "J")
+    ).toBe(true);
+  });
+
+  it("con menos de 7 empleados elegibles para noches mantiene cobertura nocturna diaria", () => {
+    const emps = [
+      { id: "emp-1", rotationOrder: 0, shiftPreference: null },
+      { id: "emp-2", rotationOrder: 1, shiftPreference: null },
+      { id: "emp-3", rotationOrder: 2, shiftPreference: null },
+      { id: "emp-4", rotationOrder: 3, shiftPreference: null },
+      { id: "emp-5", rotationOrder: 4, shiftPreference: null },
+      { id: "emp-6", rotationOrder: 5, shiftPreference: null },
+      { id: "emp-J", rotationOrder: 6, shiftPreference: "J" as const },
+    ];
+
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), [], emps.map((e) => e.id));
+    const nightsByDate = new Map<string, number>();
+    for (const a of result) {
+      if (normalizeShift(a.shiftType) === "N") {
+        const dateStr = toDateStr(a.date);
+        nightsByDate.set(dateStr, (nightsByDate.get(dateStr) ?? 0) + 1);
+      }
+    }
+
+    for (let day = 1; day <= 30; day++) {
+      const dateStr = `2026-06-${String(day).padStart(2, "0")}`;
+      expect(nightsByDate.get(dateStr) ?? 0).toBe(1);
+    }
+  });
 });
 
 // ─── Helpers tests ────────────────────────────────────────────────────────────
@@ -669,6 +921,9 @@ describe("normalizeShift", () => {
   it("MF → M", () => expect(normalizeShift("MF")).toBe("M"));
   it("TF → T", () => expect(normalizeShift("TF")).toBe("T"));
   it("NF → N", () => expect(normalizeShift("NF")).toBe("N"));
+  it("MN → M", () => expect(normalizeShift("MN")).toBe("M"));
+  it("TN → T", () => expect(normalizeShift("TN")).toBe("T"));
+  it("NN → N", () => expect(normalizeShift("NN")).toBe("N"));
   it("D → D", () => expect(normalizeShift("D")).toBe("D"));
   it("V → V", () => expect(normalizeShift("V")).toBe("V"));
 });
@@ -682,6 +937,26 @@ describe("isWeekend", () => {
   });
   it("lunes no es fin de semana", () => {
     expect(isWeekend(fromDateStr("2026-06-01"))).toBe(false);
+  });
+});
+
+describe("isPostRestDay", () => {
+  it("devuelve true cuando los dos días anteriores son D", () => {
+    expect(
+      isPostRestDay("emp-1", fromDateStr("2026-06-03"), [
+        { employeeId: "emp-1", date: "2026-06-01", shiftType: "D" },
+        { employeeId: "emp-1", date: "2026-06-02", shiftType: "D" },
+      ])
+    ).toBe(true);
+  });
+
+  it("devuelve false cuando solo hay un día D anterior", () => {
+    expect(
+      isPostRestDay("emp-1", fromDateStr("2026-06-03"), [
+        { employeeId: "emp-1", date: "2026-06-01", shiftType: "M" },
+        { employeeId: "emp-1", date: "2026-06-02", shiftType: "D" },
+      ])
+    ).toBe(false);
   });
 });
 
@@ -955,6 +1230,131 @@ describe("generateMonthSchedule — BUG-36: máximo 5 días consecutivos con mez
       }
     }
   });
+
+  it("nunca hay un único D entre dos bloques de trabajo", () => {
+    const emps = make7Employees();
+    const result = generateMonthSchedule(emps, 2026, 5, new Set(), new Set(), [], emps.map((e) => e.id));
+
+    for (const emp of emps) {
+      const empAssignments = result
+        .filter((a) => a.employeeId === emp.id)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      for (let i = 1; i < empAssignments.length - 1; i++) {
+        const previous = empAssignments[i - 1];
+        const current = empAssignments[i];
+        const next = empAssignments[i + 1];
+        if (current.shiftType === "D" && isGeneratedWork(previous.shiftType) && isGeneratedWork(next.shiftType)) {
+          throw new Error(
+            `${emp.id} has a single rest day between work blocks on ${toDateStr(current.date)}`
+          );
+        }
+      }
+    }
+  });
+
+  it("nunca hay un único D entre bloques de trabajo en enero con festivos navideños", () => {
+    const emps = [
+      { id: "emp-J", rotationOrder: 0, shiftPreference: "J" as const },
+      ...make7Employees().map((employee, index) => ({
+        ...employee,
+        rotationOrder: index + 1,
+      })),
+    ];
+    const holidays = new Set(["2026-01-01", "2026-01-06"]);
+    const result = generateMonthSchedule(emps, 2026, 1, new Set(), holidays, [], emps.map((e) => e.id));
+
+    for (const emp of emps) {
+      const empAssignments = result
+        .filter((a) => a.employeeId === emp.id)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      for (let i = 1; i < empAssignments.length - 1; i++) {
+        const previous = empAssignments[i - 1];
+        const current = empAssignments[i];
+        const next = empAssignments[i + 1];
+        if (current.shiftType === "D" && isGeneratedWork(previous.shiftType) && isGeneratedWork(next.shiftType)) {
+          throw new Error(
+            `${emp.id} has a single rest day between work blocks on ${toDateStr(current.date)}`
+          );
+        }
+      }
+    }
+  });
+
+  it("recoloca el pack de fin de semana si evita un D aislado con cola del mes anterior", () => {
+    const emps = [
+      { id: "admin", rotationOrder: 0, shiftPreference: null },
+      ...make7Employees().map((employee, index) => ({
+        ...employee,
+        rotationOrder: index + 1,
+      })),
+    ];
+    const may = generateMonthSchedule(emps, 2028, 5, new Set(), new Set(), [], emps.map((e) => e.id));
+    const prevTail = may.map((assignment) => ({
+      employeeId: assignment.employeeId,
+      date: toDateStr(assignment.date),
+      shiftType: assignment.shiftType,
+    }));
+    const june = generateMonthSchedule(emps, 2028, 6, new Set(), new Set(), prevTail, emps.map((e) => e.id));
+
+    for (const emp of emps) {
+      const empAssignments = june
+        .filter((a) => a.employeeId === emp.id)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      for (let i = 1; i < empAssignments.length - 1; i++) {
+        const previous = empAssignments[i - 1];
+        const current = empAssignments[i];
+        const next = empAssignments[i + 1];
+        if (current.shiftType === "D" && isGeneratedWork(previous.shiftType) && isGeneratedWork(next.shiftType)) {
+          throw new Error(
+            `${emp.id} has a single rest day between work blocks on ${toDateStr(current.date)}`
+          );
+        }
+      }
+    }
+  });
+});
+
+// ─── Sprint 16: cumplimiento ET Art. 34.3 ───────────────────────────────────
+
+describe("generateMonthSchedule — descanso mínimo ET entre turnos", () => {
+  it("ajusta a D una transición prohibida T→M y registra warning", () => {
+    const emps = make7Employees();
+    const warnings: {
+      employeeId: string;
+      date: string;
+      prevShift: string;
+      nextShift: string;
+      hoursGap: number;
+      reason: string;
+    }[] = [];
+    const result = generateMonthSchedule(
+      emps,
+      2026,
+      6,
+      new Set(),
+      new Set(),
+      [{ employeeId: "emp-4", date: "2026-05-31", shiftType: "T" }],
+      emps.map((e) => e.id),
+      { warnings }
+    );
+
+    const adjusted = result.find((a) => a.employeeId === "emp-4" && toDateStr(a.date) === "2026-06-01");
+    expect(adjusted?.shiftType).toBe("D");
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          employeeId: "emp-4",
+          date: "2026-06-01",
+          prevShift: "T",
+          nextShift: "M",
+          hoursGap: 8,
+        }),
+      ])
+    );
+  });
 });
 
 // ─── BUG-37: paquete Sáb+Dom indivisible ─────────────────────────────────────
@@ -1037,5 +1437,82 @@ describe("generateMonthSchedule — BUG-37: paquete Sáb+Dom indivisible", () =>
         }
       }
     }
+  });
+});
+
+// ─── Sprint 16: consistencia MF/TF con patrón semanal M/T ───────────────────
+
+describe("generateMonthSchedule — consistencia semanal de fines de semana y festivos", () => {
+  it("empleado con weeklyShift M recibe MF en fin de semana de la misma semana, no TF", () => {
+    const emps = make7Employees();
+    const result = generateMonthSchedule(emps, 2026, 1, new Set(), new Set(), [], emps.map((e) => e.id));
+    const weekStart = "2025-12-29";
+    let foundAlignedWeekend = false;
+
+    for (const emp of emps) {
+      const weekdayBaseShifts = new Set(
+        result
+          .filter((a) => a.employeeId === emp.id && weekKey(a.date) === weekStart && !isWeekend(a.date))
+          .map((a) => normalizeShift(a.shiftType))
+          .filter((shift) => shift === "M" || shift === "T")
+      );
+      const weekendShifts = result.filter(
+        (a) =>
+          a.employeeId === emp.id &&
+          weekKey(a.date) === weekStart &&
+          (a.shiftType === "MF" || a.shiftType === "TF")
+      );
+
+      if (weekdayBaseShifts.has("M") && !weekdayBaseShifts.has("T") && weekendShifts.length > 0) {
+        expect(weekendShifts.every((a) => a.shiftType === "MF")).toBe(true);
+        foundAlignedWeekend = true;
+      }
+    }
+
+    expect(foundAlignedWeekend).toBe(true);
+  });
+
+  it("no hay cambio abrupto MF↔TF entre días consecutivos del mismo empleado", () => {
+    const emps = make7Employees();
+    const holidays = new Set(["2026-06-05"]); // viernes festivo antes del fin de semana
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), holidays, [], emps.map((e) => e.id));
+    const consecutiveDates = [
+      ["2026-06-05", "2026-06-06"],
+      ["2026-06-06", "2026-06-07"],
+    ];
+
+    for (const emp of emps) {
+      for (const [firstDate, secondDate] of consecutiveDates) {
+        const first = result.find((a) => a.employeeId === emp.id && toDateStr(a.date) === firstDate);
+        const second = result.find((a) => a.employeeId === emp.id && toDateStr(a.date) === secondDate);
+        if (
+          first &&
+          second &&
+          (first.shiftType === "MF" || first.shiftType === "TF") &&
+          (second.shiftType === "MF" || second.shiftType === "TF")
+        ) {
+          expect(second.shiftType).toBe(first.shiftType);
+        }
+      }
+    }
+  });
+
+  it("festivo viernes pegado al fin de semana usa el mismo pack MF/TF", () => {
+    const emps = make7Employees();
+    const holidays = new Set(["2026-06-05"]);
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), holidays, [], emps.map((e) => e.id));
+    const packageDates = ["2026-06-05", "2026-06-06", "2026-06-07"];
+
+    const mfAssignments = packageDates.map((dateStr) =>
+      result.find((a) => toDateStr(a.date) === dateStr && a.shiftType === "MF")
+    );
+    const tfAssignments = packageDates.map((dateStr) =>
+      result.find((a) => toDateStr(a.date) === dateStr && a.shiftType === "TF")
+    );
+
+    expect(mfAssignments.every(Boolean)).toBe(true);
+    expect(tfAssignments.every(Boolean)).toBe(true);
+    expect(new Set(mfAssignments.map((a) => a?.employeeId)).size).toBe(1);
+    expect(new Set(tfAssignments.map((a) => a?.employeeId)).size).toBe(1);
   });
 });

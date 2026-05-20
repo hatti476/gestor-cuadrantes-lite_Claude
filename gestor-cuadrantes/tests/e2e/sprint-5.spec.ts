@@ -9,10 +9,10 @@ test("CP-40 — El admin ve la guía de administrador", async ({ page }) => {
   await expect(page).toHaveURL(ROUTES.info, { timeout: 5_000 });
 
   // Debe mostrar secciones específicas del admin
-  await expect(page.locator("text=Gestión del cuadrante")).toBeVisible();
-  await expect(page.locator("text=Gestión de festivos")).toBeVisible();
-  await expect(page.locator("text=Gestión de empleados")).toBeVisible();
-  await expect(page.locator("text=Administrador")).toBeVisible();
+  await expect(page.locator("text=Gestión de proyectos")).toBeVisible();
+  await expect(page.locator("text=Preparar el cuadrante")).toBeVisible();
+  await expect(page.locator("text=Festivos precargados")).toBeVisible();
+  await expect(page.locator("text=Super Admin")).toBeVisible();
 });
 
 // ─── CP-41 — El técnico ve la guía de empleado ───────────────────────────────
@@ -22,13 +22,13 @@ test("CP-41 — El técnico ve la guía de empleado", async ({ page }) => {
   await expect(page).toHaveURL(ROUTES.info, { timeout: 5_000 });
 
   // Secciones del empleado
-  await expect(page.locator("text=Consulta del cuadrante")).toBeVisible();
-  await expect(page.locator("text=Tu cuenta")).toBeVisible();
+  await expect(page.locator("text=Cómo leer el cuadrante")).toBeVisible();
+  await expect(page.locator("text=Tu turno actual")).toBeVisible();
   await expect(page.locator("text=Técnico")).toBeVisible();
 
   // NO debe mostrar secciones de admin
-  await expect(page.locator("text=Gestión de festivos")).not.toBeVisible();
-  await expect(page.locator("text=Gestión de empleados")).not.toBeVisible();
+  await expect(page.locator("text=Gestión de proyectos")).not.toBeVisible();
+  await expect(page.locator("text=Festivos precargados")).not.toBeVisible();
 });
 
 // ─── CP-42 — La página /info redirige a login si no autenticado ───────────────

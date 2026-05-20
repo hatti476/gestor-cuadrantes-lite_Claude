@@ -59,7 +59,7 @@ test("CP-45 — SUPER_ADMIN crea empleado con rol USER", async ({ page }) => {
   try {
     await login(page, ADMIN.email, ADMIN.password);
     await page.goto("/employees");
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     await page.locator("button").filter({ hasText: /Nuevo empleado|Añadir|Crear/i }).click();
     await expect(page.locator("input#emp-name")).toBeVisible({ timeout: 5_000 });
@@ -91,7 +91,7 @@ test("CP-46 — SUPER_ADMIN crea empleado con rol SUPER_ADMIN", async ({ page })
   try {
     await login(page, ADMIN.email, ADMIN.password);
     await page.goto("/employees");
-    await expect(page.locator("table")).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     await page.locator("button").filter({ hasText: /Nuevo empleado|Añadir|Crear/i }).click();
     await expect(page.locator("input#emp-name")).toBeVisible({ timeout: 5_000 });

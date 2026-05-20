@@ -9,6 +9,12 @@ describe("SHIFT_COLORS", () => {
     });
   });
 
+  it("contiene los turnos especiales de Navidad", () => {
+    ["MN", "TN", "NN"].forEach((key) => {
+      expect(SHIFT_COLORS).toHaveProperty(key);
+    });
+  });
+
   it("cada turno tiene color, textColor y label", () => {
     Object.entries(SHIFT_COLORS).forEach(([, config]) => {
       expect(config).toHaveProperty("color");
@@ -27,6 +33,10 @@ describe("SHIFT_COLORS", () => {
 
   it("N es verde (#4CAF50)", () => {
     expect(SHIFT_COLORS.N.color).toBe("#4CAF50");
+  });
+
+  it("NN usa fondo verde para mantener la familia de noches", () => {
+    expect(SHIFT_COLORS.NN.color).toBe("#0B6B2B");
   });
 });
 

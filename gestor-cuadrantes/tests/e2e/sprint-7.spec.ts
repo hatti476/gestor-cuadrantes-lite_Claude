@@ -59,7 +59,7 @@ test("CP-48 — SUPER_ADMIN crea un proyecto nuevo", async ({ page }) => {
 
     await page.fill("input#proj-name", projectName);
     await page.fill("textarea#proj-description", "Proyecto de prueba Sprint 7");
-    await page.fill("input#proj-region", "Madrid");
+    await page.locator("#proj-region").selectOption("Madrid");
 
     await page.locator('button[type="submit"]').click();
 

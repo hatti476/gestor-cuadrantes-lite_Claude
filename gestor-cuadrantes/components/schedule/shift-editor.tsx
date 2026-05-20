@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 
-const SHIFT_OPTIONS: ShiftType[] = ["M", "T", "N", "J", "D", "V", "B", "MF", "TF", "NF"];
+const SHIFT_OPTIONS: ShiftType[] = ["M", "T", "N", "J", "D", "V", "B", "MF", "TF", "NF", "MN", "TN", "NN"];
 
 interface ShiftEditorProps {
   date: string; // "YYYY-MM-DD"
@@ -10,6 +11,7 @@ interface ShiftEditorProps {
   onSave: (shiftType: string) => void;
   onDelete?: () => void;
   onClose: () => void;
+  getTransitionWarning?: (shiftType: string) => string | null;
 }
 
 function formatDate(dateStr: string): string {
@@ -17,7 +19,27 @@ function formatDate(dateStr: string): string {
   return `${day}/${month}/${year}`;
 }
 
-export function ShiftEditor({ date, currentShift, onSave, onDelete, onClose }: ShiftEditorProps) {
+export function ShiftEditor({
+  date,
+  currentShift,
+  onSave,
+  onDelete,
+  onClose,
+  getTransitionWarning,
+}: ShiftEditorProps) {
+  const [pendingShift, setPendingShift] = useState<string | null>(null);
+  const [transitionWarning, setTransitionWarning] = useState<string | null>(null);
+
+  function handleShiftSelection(shift: string) {
+    const warning = getTransitionWarning?.(shift) ?? null;
+    if (warning) {
+      setPendingShift(shift);
+      setTransitionWarning(warning);
+      return;
+    }
+    onSave(shift);
+  }
+
   return (
     // Overlay
     <div
@@ -51,7 +73,7 @@ export function ShiftEditor({ date, currentShift, onSave, onDelete, onClose }: S
             return (
               <button
                 key={shift}
-                onClick={() => onSave(shift)}
+                onClick={() => handleShiftSelection(shift)}
                 data-testid={`shift-btn-${shift}`}
                 title={label}
                 className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all ${
@@ -65,6 +87,35 @@ export function ShiftEditor({ date, currentShift, onSave, onDelete, onClose }: S
             );
           })}
         </div>
+
+        {transitionWarning && pendingShift && (
+          <div
+            data-testid="et-warning"
+            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+          >
+            <p>{transitionWarning}</p>
+            <div className="mt-2 flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingShift(null);
+                  setTransitionWarning(null);
+                }}
+                className="px-2 py-1 rounded border border-amber-200 bg-white text-amber-700 hover:bg-amber-100"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                data-testid="btn-confirm-et-warning"
+                onClick={() => onSave(pendingShift)}
+                className="px-2 py-1 rounded bg-amber-600 text-white hover:bg-amber-700"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Acciones */}
         <div className="flex gap-2 pt-1">

@@ -24,6 +24,7 @@ test("CP-79 — mes sin cuadrante muestra badge Sin generar", async ({ page }) =
     await loginAsAdmin(page);
     await page.goto(ROUTES.home);
     await page.waitForLoadState("networkidle");
+    page.on("dialog", (dialog) => dialog.accept());
 
     // Navegar a un mes futuro sin cuadrante (12 meses adelante)
     for (let i = 0; i < 12; i++) {
@@ -53,6 +54,7 @@ test("CP-80 — marcar vacaciones bloquea celda con icono lock", async ({ page }
     await loginAsAdmin(page);
     await page.goto(ROUTES.home);
     await page.waitForLoadState("networkidle");
+    page.on("dialog", (dialog) => dialog.accept());
 
     // Abrir panel de preparación y hacer clic en "Vacaciones"
     const prepPanel = page.locator('[data-testid="prep-panel"]');

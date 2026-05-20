@@ -2,7 +2,7 @@
 
 import { MonthStatus } from "@/lib/schedules/types";
 
-export type PrepStep = "vacaciones" | "libres" | "festivos" | "generar" | null;
+export type PrepStep = "vacaciones" | "libres" | "bajas" | "festivos" | "generar" | null;
 
 interface PrepPanelProps {
   monthStatus: MonthStatus;
@@ -10,6 +10,7 @@ interface PrepPanelProps {
   onStepChange: (step: PrepStep) => void;
   vacacionesCount: number;
   libresCount: number;
+  bajasCount: number;
   holidaysCount: number;
   onSavePreparation: () => void;
   onGenerate: () => void;
@@ -21,8 +22,6 @@ interface PrepPanelProps {
   projectRegion?: string | null;
   /** ID del proyecto activo (para enlace a edición) */
   projectId?: string | null;
-  /** Llamado al pulsar "Cargar festivos automáticamente" */
-  onAutoLoadHolidays?: () => Promise<void>;
   /** true mientras se cargan festivos automáticamente */
   loadingHolidays?: boolean;
 }
@@ -36,6 +35,7 @@ const STATUS_BADGE: Record<MonthStatus, { label: string; className: string }> = 
 const STEPS: { id: PrepStep; label: string; icon: string; description: string }[] = [
   { id: "vacaciones", label: "Vacaciones", icon: "🏖️", description: "Haz clic en celdas para marcar días de vacaciones (V). Quedan bloqueadas." },
   { id: "libres", label: "Días libres", icon: "📅", description: "Haz clic en celdas para marcar descansos excepcionales (D). Quedan bloqueados." },
+  { id: "bajas", label: "Bajas", icon: "🩺", description: "Haz clic en celdas para marcar bajas (B). Quedan bloqueadas." },
   { id: "festivos", label: "Festivos", icon: "🎉", description: "Revisa y gestiona los festivos del mes." },
   { id: "generar", label: "Generar", icon: "⚙️", description: "Guarda la preparación y genera el cuadrante automáticamente." },
 ];
@@ -58,6 +58,7 @@ export function PrepPanel({
   onStepChange,
   vacacionesCount,
   libresCount,
+  bajasCount,
   holidaysCount,
   onSavePreparation,
   onGenerate,
@@ -66,7 +67,6 @@ export function PrepPanel({
   onManageHolidays,
   projectRegion,
   projectId,
-  onAutoLoadHolidays,
   loadingHolidays = false,
 }: PrepPanelProps) {
   if (!isAdmin) return null;
@@ -74,6 +74,7 @@ export function PrepPanel({
   const stepCounts: Record<string, number> = {
     vacaciones: vacacionesCount,
     libres: libresCount,
+    bajas: bajasCount,
     festivos: holidaysCount,
   };
 
@@ -123,16 +124,15 @@ export function PrepPanel({
       {/* Festivos sub-panel */}
       {activeStep === "festivos" && (
         <div className="mx-3 mb-3 space-y-2">
-          {/* Botón de carga automática o mensaje según si hay región */}
           {projectRegion ? (
-            <button
-              data-testid="btn-auto-load-holidays"
-              onClick={onAutoLoadHolidays}
-              disabled={loadingHolidays}
-              className="w-full text-xs px-3 py-2 rounded border border-green-200 bg-green-50 hover:bg-green-100 text-green-700 disabled:opacity-50 transition-colors"
+            <p
+              data-testid="msg-auto-holidays"
+              className="text-xs text-green-700 bg-green-50 border border-green-200 rounded p-2"
             >
-              {loadingHolidays ? "Cargando..." : "Cargar festivos automáticamente"}
-            </button>
+              {loadingHolidays
+                ? "Cargando festivos públicos..."
+                : `Los festivos públicos se precargan automáticamente para ${projectRegion}.`}
+            </p>
           ) : (
             <p
               data-testid="msg-no-region"
@@ -161,11 +161,12 @@ export function PrepPanel({
       )}
 
       {/* Generar step */}
-      {activeStep === "generar" && (
+      {(activeStep === "generar" || activeStep === null) && (
         <div className="mx-3 mb-3 space-y-2">
           <div className="text-xs text-gray-500 space-y-1">
             <div>🏖️ <strong>{vacacionesCount}</strong> días de vacaciones bloqueados</div>
             <div>📅 <strong>{libresCount}</strong> días libres bloqueados</div>
+            <div>🩺 <strong>{bajasCount}</strong> días de baja bloqueados</div>
             <div>🎉 <strong>{holidaysCount}</strong> festivos del mes</div>
           </div>
           <button

@@ -77,17 +77,17 @@ test("CP-05 — Vista del cuadrante muestra grid de 8 empleados y 31 días", asy
     await login(page, ADMIN.email, ADMIN.password);
     await expect(page).toHaveURL("/");
 
-    const table = page.locator("table");
+    const table = page.locator("table").first();
     await expect(table).toBeVisible();
 
     // Al menos 7 filas de datos (tbody tr) — el seed crea 7 técnicos con turnos de Mayo 2026
-    const rows = page.locator("tbody tr");
+    const rows = table.locator("tbody tr");
     const rowCount = await rows.count();
     expect(rowCount).toBeGreaterThanOrEqual(7);
 
-    // 31 celdas de día en la primera fila + columna nombre + columna contadores = 33 th en el header
-    const headerCells = page.locator("thead tr th");
-    await expect(headerCells).toHaveCount(33); // 1 nombre + 31 días + 1 contadores
+    // 31 celdas de día en la primera fila + columna nombre = 32 th en el header del grid
+    const headerCells = table.locator("thead tr th");
+    await expect(headerCells).toHaveCount(32); // 1 nombre + 31 días
   } catch (e) {
     await screenshotOnFail(page, "CP-05");
     throw e;
@@ -126,17 +126,16 @@ test("CP-07 — Contadores de turno visibles en formato Turno:N", async ({ page 
     await login(page, ADMIN.email, ADMIN.password);
     await expect(page).toHaveURL("/");
 
-    // La primera fila de datos (Admin) debe tener contadores J: (jornada normal)
-    const firstRowCounters = page.locator("tbody tr").first().locator("td").last();
-    await expect(firstRowCounters).toBeVisible();
+    const countersTable = page.locator('[data-testid="counters-table"]');
+    await expect(countersTable).toBeVisible({ timeout: 8_000 });
 
-    // Verificar que al menos un badge tiene formato X:N
-    const badges = firstRowCounters.locator("span");
-    const count = await badges.count();
-    expect(count).toBeGreaterThan(0);
+    const firstCounterRow = countersTable.locator("tbody tr").first();
+    await expect(firstCounterRow).toBeVisible();
+    const counterCells = firstCounterRow.locator("td[data-testid^='counter-']");
+    expect(await counterCells.count()).toBeGreaterThan(0);
 
-    const firstBadgeText = await badges.first().textContent();
-    expect(firstBadgeText).toMatch(/^[MTNJDVB]{1,2}:\d+$/);
+    const firstCountText = await counterCells.first().textContent();
+    expect(firstCountText).toMatch(/^\d+$/);
   } catch (e) {
     await screenshotOnFail(page, "CP-07");
     throw e;
@@ -152,11 +151,11 @@ test("CP-08 — Columnas de fin de semana tienen fondo azul claro", async ({ pag
     await expect(page).toHaveURL("/");
 
     // Esperar a que la tabla esté renderizada antes de contar
-    await expect(page.locator("table")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Mayo 2026: 10 días de fin de semana (4 sábados + 5 domingos — 31 días)
     // Los th de días de fin de semana tienen clase bg-blue-50
-    const weekendHeaders = page.locator("thead tr th.bg-blue-50");
+    const weekendHeaders = page.locator("table").first().locator("thead tr th.bg-blue-50");
     await expect(weekendHeaders.first()).toBeVisible({ timeout: 5_000 });
     const count = await weekendHeaders.count();
     // Mayo 2026 tiene 9 fines de semana (sábados y domingos)
