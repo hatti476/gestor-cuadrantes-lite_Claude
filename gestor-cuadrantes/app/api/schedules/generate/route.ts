@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { generateMonthSchedule, type GenerationWarning, type PrevMonthTail } from "@/lib/schedules/generate";
+import { generateMonthSchedule, type GenerationWarning, type CoverageWarning, type PrevMonthTail } from "@/lib/schedules/generate";
 import { getMonthRange } from "@/lib/schedules/business-logic";
 
 // POST /api/schedules/generate
@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
 
   // Generar nuevas asignaciones con el algoritmo Phase 2
   const warnings: GenerationWarning[] = [];
+  const coverageWarnings: CoverageWarning[] = [];
   const toCreate = generateMonthSchedule(
     employees,
     year,
@@ -117,7 +118,7 @@ export async function POST(req: NextRequest) {
     holidaySet,
     prevMonthTail,
     nightRotationIds,
-    { existingAssignments, warnings }
+    { existingAssignments, warnings, coverageWarnings }
   );
 
   // Insertar en BD — una sola transacción para máximo rendimiento con SQLite
@@ -136,5 +137,5 @@ export async function POST(req: NextRequest) {
     })
   );
 
-  return NextResponse.json({ created: toCreate.length, warnings });
+  return NextResponse.json({ created: toCreate.length, warnings, coverageWarnings });
 }
