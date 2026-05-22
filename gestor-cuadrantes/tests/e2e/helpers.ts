@@ -38,6 +38,11 @@ export async function loginAsPM(page: Page): Promise<void> {
   return login(page, USERS.pm.email, USERS.pm.password);
 }
 
+/** Login rápido como SUPER_VIEWER. */
+export async function loginAsViewer(page: Page): Promise<void> {
+  return login(page, USERS.viewer.email, USERS.viewer.password);
+}
+
 /**
  * Captura un screenshot al fallar un test.
  * Se guarda en tests/screenshots/<cpId>-fail.png
