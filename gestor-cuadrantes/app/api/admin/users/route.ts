@@ -72,11 +72,15 @@ export async function POST(req: NextRequest) {
       projectAssignments?: { projectId: string; role: string }[];
     };
 
-  if (!name || typeof name !== "string" || name.trim().length < 2) {
-    return NextResponse.json({ error: "Nombre requerido (mínimo 2 caracteres)" }, { status: 400 });
-  }
   if (!email || typeof email !== "string" || !email.includes("@")) {
     return NextResponse.json({ error: "Email inválido" }, { status: 400 });
+  }
+  if (!globalRole || !["SUPER_ADMIN", "SUPER_VIEWER", "USER"].includes(globalRole)) {
+    return NextResponse.json({ error: "Rol global inválido" }, { status: 400 });
+  }
+  // Nombre solo es obligatorio para USER (tiene registro Employee)
+  if (globalRole === "USER" && (!name || typeof name !== "string" || name.trim().length < 2)) {
+    return NextResponse.json({ error: "Nombre requerido (mínimo 2 caracteres)" }, { status: 400 });
   }
   if (!password || typeof password !== "string" || password.length < 8) {
     return NextResponse.json({ error: "Contraseña inválida: mínimo 8 caracteres" }, { status: 400 });

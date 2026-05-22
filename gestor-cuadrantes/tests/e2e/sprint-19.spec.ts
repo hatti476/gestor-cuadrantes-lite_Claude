@@ -98,16 +98,16 @@ test("CP-133 — SUPER_ADMIN puede crear un SUPER_VIEWER desde /admin", async ({
 
   // Abrir modal de nuevo usuario
   await page.getByRole("button", { name: /Nuevo usuario/i }).click();
+  // Esperar que el modal esté visible
+  await expect(page.locator('h3:has-text("Nuevo usuario")')).toBeVisible({ timeout: 5_000 });
 
-  // Rellenar formulario
-  const emailField = page.locator('input[type="email"]');
-  await emailField.fill("newviewer_cp133@cuadrantes.test");
-
-  const roleSelect = page.locator("select").first();
+  // Cambiar rol primero (elimina el campo Nombre requerido para USER)
+  const roleSelect = page.locator('[data-testid="select-global-role"]');
   await roleSelect.selectOption("SUPER_VIEWER");
 
-  const passwordField = page.locator('input[type="password"]').first();
-  await passwordField.fill("Test1234!");
+  // Rellenar formulario
+  await page.locator('input[type="email"]').fill("newviewer_cp133@cuadrantes.test");
+  await page.locator('input[type="password"]').first().fill("Test1234!");
 
   // Guardar
   await page.getByRole("button", { name: /Guardar/i }).click();
@@ -143,6 +143,7 @@ test("CP-134 — SUPER_ADMIN puede editar el email del usuario creado en CP-133"
 
   // Click en Editar
   await row.getByRole("button", { name: /Editar/i }).click();
+  await expect(page.locator('h3:has-text("Editar")')).toBeVisible({ timeout: 5_000 });
 
   // Cambiar el email
   const emailField = page.locator('input[type="email"]');
@@ -162,10 +163,13 @@ test("CP-134 — SUPER_ADMIN puede editar el email del usuario creado en CP-133"
 // ──────────────────────────────────────────────────────────────────────────────
 // CP-135 — SUPER_ADMIN puede desactivar un usuario desde /admin
 // ──────────────────────────────────────────────────────────────────────────────
-test("CP-135 — SUPER_ADMIN puede desactivar un usuario SUPER_VIEWER desde /admin", async ({
+test("CP-135 — SUPER_ADMIN puede desactivar un usuario USER desde /admin", async ({
   page,
 }) => {
-  // Crear un usuario USER para poder desactivarlo (SUPER_VIEWER no tiene Employee)
+  // Login primero para que el API request tenga sesión
+  await loginAsAdmin(page);
+
+  // Crear un usuario USER para poder desactivarlo
   const createRes = await page.request.post("/api/admin/users", {
     data: {
       name: "CP135 Temp",
@@ -174,12 +178,9 @@ test("CP-135 — SUPER_ADMIN puede desactivar un usuario SUPER_VIEWER desde /adm
       globalRole: "USER",
     },
   });
-  // Si falla (ya existe de una ejecución previa), seguimos
   const userId: string | null = createRes.ok()
     ? ((await createRes.json()) as { id: string }).id
     : null;
-
-  await loginAsAdmin(page);
   await page.goto("/admin");
   await expect(page.locator('[data-testid="admin-tab-users"]')).toBeVisible({
     timeout: 8_000,

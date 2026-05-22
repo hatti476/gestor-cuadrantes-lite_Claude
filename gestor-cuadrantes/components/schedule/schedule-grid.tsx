@@ -65,7 +65,7 @@ export function ScheduleGrid({
 
   return (
     <>
-      <div className="overflow-x-auto w-fit rounded-lg border border-gray-200 shadow-sm">
+      <div data-testid="schedule-grid" className="overflow-x-auto w-fit rounded-lg border border-gray-200 shadow-sm">
       <table className="border-collapse text-xs min-w-max">
         <thead>
           {/* Fila de números de día */}
