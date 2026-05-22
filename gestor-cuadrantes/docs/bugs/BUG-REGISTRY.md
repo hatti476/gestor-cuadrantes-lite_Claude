@@ -2,7 +2,7 @@
 
 **Proyecto:** Gestor de Cuadrantes  
 **Mantenido por:** Agente `doc-writer`  
-**Última actualización:** 2026-05-18  
+**Última actualización:** 2026-05-22  
 
 ---
 
@@ -12,7 +12,8 @@
 |-----------|----------|-------|--------|-------|----------|-----------|
 | 37 | 0 | 20 | 11 | 6 | 0 | 37 |
 
-> Sprint 14 cerrado (2026-05-18): BUG-34..BUG-37 corregidos.
+> Sprint 14 cerrado (2026-05-18): BUG-34..BUG-37 corregidos.  
+> Sprints 15-17 (2026-05-19 → 2026-05-22): sin nuevos bugs registrados. Los cambios de estos sprints son correcciones planificadas del algoritmo de generación y mejoras técnicas/documentales, no bugs descubiertos en testing o producción.
 
 ---
 

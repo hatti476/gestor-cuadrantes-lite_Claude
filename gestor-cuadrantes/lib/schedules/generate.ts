@@ -48,9 +48,17 @@ export interface GenerationWarning {
   reason: string;
 }
 
+/** Warning emitted when a day has reduced coverage due to mandatory rest rules. */
+export interface CoverageWarning {
+  date: string; // "YYYY-MM-DD"
+  employeeId: string;
+  message: string;
+}
+
 export interface GenerateMonthScheduleOptions {
   existingAssignments?: Map<string, string>;
   warnings?: GenerationWarning[];
+  coverageWarnings?: CoverageWarning[];
 }
 
 /**
@@ -97,6 +105,31 @@ export function toDateStr(date: Date): string {
 /** UTC midnight Date from "YYYY-MM-DD" */
 export function fromDateStr(s: string): Date {
   return new Date(s + "T00:00:00.000Z");
+}
+
+/**
+ * Returns true if the date is a weekend or a public holiday, OR if the date is
+ * a weekday holiday that belongs to an extended weekend (connected to Sat/Sun
+ * through a contiguous chain of holidays).
+ */
+export function isWeekendOrHoliday(date: Date, holidays: Set<string>): boolean {
+  if (isWeekend(date)) return true;
+  const ds = toDateStr(date);
+  if (!holidays.has(ds)) return false;
+  // Walk forward: check if this holiday connects to Saturday through consecutive holidays
+  let fwd = addDays(date, 1);
+  while (!isWeekend(fwd)) {
+    if (!holidays.has(toDateStr(fwd))) break;
+    fwd = addDays(fwd, 1);
+  }
+  if (fwd.getUTCDay() === 6) return true;
+  // Walk backward: check if this holiday connects to Sunday through consecutive holidays
+  let bwd = addDays(date, -1);
+  while (!isWeekend(bwd)) {
+    if (!holidays.has(toDateStr(bwd))) break;
+    bwd = addDays(bwd, -1);
+  }
+  return isWeekend(bwd);
 }
 
 /** Add `n` days (returns new Date) */
@@ -429,6 +462,78 @@ export function isPostRestDay(
   return shiftByDate.get(previousDate) === "D" && shiftByDate.get(secondPreviousDate) === "D";
 }
 
+// ─── Exported helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Counts consecutive work days (M/T/J including their MF/TF variants) going
+ * backward from `date` (not including `date` itself).
+ * Looks up assignments and, optionally, prevMonthTail to cross month boundaries.
+ */
+export function countConsecutiveWorkDays(
+  employeeId: string,
+  date: Date,
+  assignments: { employeeId: string; date: Date | string; shiftType: string }[],
+  prevMonthTail?: PrevMonthTail[]
+): number {
+  const shiftMap = new Map<string, string>();
+  if (prevMonthTail) {
+    for (const p of prevMonthTail) {
+      if (p.employeeId === employeeId) shiftMap.set(p.date, p.shiftType);
+    }
+  }
+  for (const a of assignments) {
+    if (a.employeeId !== employeeId) continue;
+    const ds = typeof a.date === "string" ? a.date.slice(0, 10) : toDateStr(a.date);
+    shiftMap.set(ds, a.shiftType);
+  }
+  let count = 0;
+  let check = addDays(date, -1);
+  for (let i = 0; i < 100; i++) {
+    const ds = toDateStr(check);
+    const shift = shiftMap.get(ds);
+    if (shift === undefined) break;
+    const base = normalizeShift(shift);
+    if (base !== "M" && base !== "T" && base !== "J") break;
+    count++;
+    check = addDays(check, -1);
+  }
+  return count;
+}
+
+/**
+ * Returns the extended weekend block that includes `date` (which must be a
+ * Saturday or Sunday). The core is always Sat+Sun; it then expands backward
+ * through consecutive holiday weekdays (Fri, Thu, …) and forward through
+ * consecutive holiday weekdays (Mon, Tue, …).
+ */
+export function getExtendedWeekend(
+  date: Date,
+  holidays: Set<string>
+): { start: Date; end: Date; days: Date[] } {
+  const dow = date.getUTCDay();
+  const satDate = dow === 6 ? date : dow === 0 ? addDays(date, -1) : null;
+  if (!satDate) return { start: date, end: date, days: [] };
+
+  const sunDate = addDays(satDate, 1);
+  const days: Date[] = [satDate, sunDate];
+
+  // Expand backward: consecutive holiday weekdays before Saturday
+  let back = addDays(satDate, -1);
+  while (holidays.has(toDateStr(back))) {
+    days.unshift(back);
+    back = addDays(back, -1);
+  }
+
+  // Expand forward: consecutive holiday weekdays after Sunday
+  let fwd = addDays(sunDate, 1);
+  while (holidays.has(toDateStr(fwd))) {
+    days.push(fwd);
+    fwd = addDays(fwd, 1);
+  }
+
+  return { start: days[0], end: days[days.length - 1], days };
+}
+
 // ─── ISO week helper ─────────────────────────────────────────────────────────
 
 /** Return the Monday of the ISO week containing `date` as "YYYY-MM-DD" key */
@@ -502,6 +607,12 @@ export function generateMonthSchedule(
   // (can happen when the same employee gets both a transferred block and their natural
   // block, whose pre/post-rest D-days overlap with the transferred N-days).
   const nightPlan = new Map<string, string>();
+  // Night-block pre/post-rest days that must not be converted to work by coverage repair.
+  // These mandatory rest days are analogous to Priority-2 HARD forced-rest days.
+  const nightBlockRestDates = new Set<string>();
+  // Cross-month post-rest dates populated by TAREA 2 below; pre-seeded into
+  // forcedRestDates so the repair phase cannot convert them even in relaxed mode.
+  const crossMonthRestDates = new Set<string>();
   for (const block of nightBlocks) {
     const days = nightBlockDays(block);
     for (const [dateStr, baseShift] of days) {
@@ -511,6 +622,105 @@ export function generateMonthSchedule(
       // N wins over D: skip writing D if N is already recorded for this slot
       if (nightPlan.get(key) !== "N") {
         nightPlan.set(key, baseShift);
+      }
+      // Mark pre-rest and post-rest days as protected from coverage repair
+      if (baseShift === "D") {
+        nightBlockRestDates.add(key);
+      }
+    }
+  }
+
+  // ── Night block continuity from prevMonthTail (TAREA 2 fix) ────────────────
+  // Detect employees who were mid-block at the end of the previous month and
+  // give them absolute priority to complete their nights at the start of this month.
+  if (prevMonthTail.length > 0) {
+    const prevByEmpNight = new Map<string, PrevMonthTail[]>();
+    for (const p of prevMonthTail) {
+      if (!prevByEmpNight.has(p.employeeId)) prevByEmpNight.set(p.employeeId, []);
+      prevByEmpNight.get(p.employeeId)!.push(p);
+    }
+
+    for (const [empId, entries] of prevByEmpNight) {
+      const sorted = entries.sort((a, b) => a.date.localeCompare(b.date));
+
+      // Count trailing N/NF nights from the end of prevMonthTail
+      let trailingNights = 0;
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        if (normalizeShift(sorted[i].shiftType) !== "N") break;
+        trailingNights++;
+      }
+
+      // Count trailing D shifts (potential post-rest period)
+      let trailingPostRestD = 0;
+      if (trailingNights === 0) {
+        let checkIdx = sorted.length - 1;
+        while (checkIdx >= 0 && sorted[checkIdx].shiftType === "D") {
+          trailingPostRestD++;
+          checkIdx--;
+        }
+        // Validate: there must be N shifts before the D for it to count as post-rest
+        if (trailingPostRestD > 0 && (checkIdx < 0 || normalizeShift(sorted[checkIdx].shiftType) !== "N")) {
+          trailingPostRestD = 0;
+        }
+      }
+
+      const monthStart = new Date(Date.UTC(year, month - 1, 1));
+
+      if (trailingNights > 0 && trailingNights < 7) {
+        // Employee mid-block: add remaining nights + 3D post-rest to nightPlan with priority
+        const nightsRemaining = 7 - trailingNights;
+        let contDate = monthStart;
+
+        // Override nightPlan for remaining night dates, clearing conflicting N entries
+        for (let i = 0; i < nightsRemaining; i++) {
+          if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
+          const ds = toDateStr(contDate);
+          const empKey = `${empId}|${ds}`;
+          // Remove conflicting N from any other employee assigned to this date
+          for (const [existingKey, existingShift] of nightPlan.entries()) {
+            if (existingKey !== empKey && existingKey.endsWith(`|${ds}`) && existingShift === "N") {
+              nightPlan.delete(existingKey);
+            }
+          }
+          nightPlan.set(empKey, "N");
+          contDate = addDays(contDate, 1);
+        }
+        // Add 3D post-rest
+        for (let i = 0; i < 3; i++) {
+          if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
+          const ds = toDateStr(contDate);
+          const empKey = `${empId}|${ds}`;
+          if (nightPlan.get(empKey) !== "N") {
+            nightPlan.set(empKey, "D");
+            crossMonthRestDates.add(empKey);
+          }
+          contDate = addDays(contDate, 1);
+        }
+      } else if (trailingNights >= 7) {
+        // Employee completed all 7 nights: add 3D post-rest in new month
+        let contDate = monthStart;
+        for (let i = 0; i < 3; i++) {
+          if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
+          const ds = toDateStr(contDate);
+          const empKey = `${empId}|${ds}`;
+          if (nightPlan.get(empKey) !== "N") {
+            nightPlan.set(empKey, "D");
+            crossMonthRestDates.add(empKey);
+          }
+          contDate = addDays(contDate, 1);
+        }
+      } else if (trailingPostRestD >= 2 && trailingPostRestD < 3) {
+        // Employee in post-rest: add remaining D days (≥2 trailing D required to be
+        // unambiguously post-rest; a single trailing D might be a mid-block interruption)
+        const postRestNeeded = 3 - trailingPostRestD;
+        let contDate = monthStart;
+        for (let i = 0; i < postRestNeeded; i++) {
+          if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
+          const ds = toDateStr(contDate);
+          const empKey = `${empId}|${ds}`;
+          if (nightPlan.get(empKey) !== "N") nightPlan.set(empKey, "D");
+          contDate = addDays(contDate, 1);
+        }
       }
     }
   }
@@ -645,15 +855,28 @@ export function generateMonthSchedule(
     date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month;
 
   const getWeekendPackageDates = (satDate: Date): Date[] => {
-    const dates: Date[] = [];
-    const friDate = addDays(satDate, -1);
     const sunDate = addDays(satDate, 1);
-    const monDate = addDays(satDate, 2);
+    const dates: Date[] = [];
 
-    if (isInGeneratedMonth(friDate) && holidayDates.has(toDateStr(friDate))) dates.push(friDate);
+    // Expand backward: consecutive holiday weekdays before Saturday (Thu, Fri, …)
+    const backDates: Date[] = [];
+    let back = addDays(satDate, -1);
+    while (isInGeneratedMonth(back) && holidayDates.has(toDateStr(back))) {
+      backDates.unshift(back);
+      back = addDays(back, -1);
+    }
+    dates.push(...backDates);
+
+    // Core: Saturday and Sunday
     if (isInGeneratedMonth(satDate)) dates.push(satDate);
     if (isInGeneratedMonth(sunDate)) dates.push(sunDate);
-    if (isInGeneratedMonth(monDate) && holidayDates.has(toDateStr(monDate))) dates.push(monDate);
+
+    // Expand forward: consecutive holiday weekdays after Sunday (Mon, Tue, …)
+    let fwd = addDays(sunDate, 1);
+    while (isInGeneratedMonth(fwd) && holidayDates.has(toDateStr(fwd))) {
+      dates.push(fwd);
+      fwd = addDays(fwd, 1);
+    }
     return dates;
   };
 
@@ -661,8 +884,29 @@ export function generateMonthSchedule(
     const dow = date.getUTCDay();
     if (dow === 6) return date;
     if (dow === 0) return addDays(date, -1);
-    if (dow === 5 && isHolidayDay) return addDays(date, 1);
-    if (dow === 1 && isHolidayDay) return addDays(date, -2);
+    if (!isHolidayDay) return null;
+
+    // Walk forward through consecutive holidays to find Saturday
+    {
+      let check = addDays(date, 1);
+      while (!isWeekend(check)) {
+        if (!holidayDates.has(toDateStr(check))) break;
+        check = addDays(check, 1);
+      }
+      if (check.getUTCDay() === 6) return check;
+    }
+
+    // Walk backward through consecutive holidays to find Sunday → return its Saturday
+    {
+      let check = addDays(date, -1);
+      while (!isWeekend(check)) {
+        if (!holidayDates.has(toDateStr(check))) break;
+        check = addDays(check, -1);
+      }
+      if (check.getUTCDay() === 0) return addDays(check, -1);
+      if (check.getUTCDay() === 6) return check;
+    }
+
     return null;
   };
 
@@ -917,6 +1161,11 @@ export function generateMonthSchedule(
     return packageWeeklyShift !== null && packageWeeklyShift !== targetBase;
   };
 
+  // ── HARD forced-rest tracking (Tarea 1) ──────────────────────────────────
+  // Assignments added here must NEVER be converted to work shifts by the repair phase.
+  // Pre-seeded with cross-month post-rest dates from TAREA 2 so they are also protected.
+  const forcedRestDates = new Set<string>(crossMonthRestDates);
+
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(Date.UTC(year, month - 1, day));
     const dateStr = toDateStr(date);
@@ -939,7 +1188,11 @@ export function generateMonthSchedule(
     const canLaterEmployeeCover = (targetBaseShift: "M" | "T", currentIndex: number): boolean =>
       dailyOrder.slice(currentIndex + 1).some((candidate) => {
         const candidateState = stateMap.get(candidate.id)!;
-        if (candidateState.weekShift.get(wKey) !== targetBaseShift) return false;
+        // Accept candidates whose weekShift already matches OR whose preference matches
+        // the target (they will naturally pick that shift once urgency is resolved).
+        const weeklyShiftMatch = candidateState.weekShift.get(wKey) === targetBaseShift;
+        const preferenceMatch = candidate.shiftPreference === targetBaseShift;
+        if (!weeklyShiftMatch && !preferenceMatch) return false;
 
         const candidateKey = `${candidate.id}|${dateStr}`;
         if (existingDates.has(candidateKey) || nightPlan.has(candidateKey)) return false;
@@ -975,11 +1228,62 @@ export function generateMonthSchedule(
       const key = `${emp.id}|${dateStr}`;
       const state = stateMap.get(emp.id)!;
 
-      // Priority 1/2: existing / locked (manual, V, B) — skip, do not emit
+      // Priority 1: existing / locked (manual, V, B) — skip, do not emit
       if (existingDates.has(key)) {
         // Reset consecutive tracking conservatively
         state.consecutiveShift = null;
         state.consecutiveCount = 0;
+        continue;
+      }
+
+      // Priority 2: HARD forced rest — must never be skipped for coverage.
+      // Applies when employee has ≥5 consecutive day-work shifts OR already
+      // started a 2-day forced rest sequence. Active night shifts (N) from the
+      // night plan are exempt — they have their own pre/post-rest structure.
+      const needsHardRest =
+        (state.consecutiveCount >= 5 && isDayWorkShift(state.consecutiveShift)) ||
+        state.forcedRestDaysRemaining > 0;
+      const isActiveNightSlot = nightPlan.get(key) === "N";
+
+      if (needsHardRest && !isActiveNightSlot) {
+        // Release any pre-planned weekend package slot for this employee
+        releaseWeekendPackageShift(emp.id, date, isHoliday);
+        if (state.forcedRestDaysRemaining > 0) {
+          state.forcedRestDaysRemaining--;
+        } else {
+          state.forcedRestDaysRemaining = 1;
+        }
+        // HARD rest days on non-weekend days (Mon–Fri, including holidays) are permanently
+        // protected and cannot be converted to work shifts by the repair phase.
+        // Weekend forced rest (Sat/Sun) remains D-assigned but IS repairable by the
+        // weekend-package planner (which can reassign the slot to another available employee).
+        if (!isWeekend(date)) {
+          forcedRestDates.add(key);
+        }
+        // Emit coverage warning if day-coverage minimum cannot be guaranteed
+        if (!isWeekend(date) && !holidayDates.has(dateStr)) {
+          const mCovered = cov.M >= 1;
+          const tCovered = cov.T >= 1;
+          if (!mCovered || !tCovered) {
+            const missingShift = !mCovered ? "M" : "T";
+            options.coverageWarnings?.push({
+              date: dateStr,
+              employeeId: emp.id,
+              message: `Cobertura reducida el ${dateStr.slice(8, 10)}/${dateStr.slice(5, 7)}: empleado ${emp.id} en descanso obligatorio. Revisar manualmente si es necesario.`,
+            });
+            // Also emit for weekend/holiday if applicable
+            void missingShift;
+          }
+        } else if (isWeekend(date) || holidayDates.has(dateStr)) {
+          if (cov.M < 1 || cov.T < 1) {
+            options.coverageWarnings?.push({
+              date: dateStr,
+              employeeId: emp.id,
+              message: `Cobertura reducida el ${dateStr.slice(8, 10)}/${dateStr.slice(5, 7)}: empleado ${emp.id} en descanso obligatorio. Revisar manualmente si es necesario.`,
+            });
+          }
+        }
+        pushAssignment(emp.id, date, "D", state, wKey, cov);
         continue;
       }
 
@@ -1008,9 +1312,9 @@ export function generateMonthSchedule(
         continue;
       }
 
-      // Priority 4: force 2 consecutive rest days after ≥5 consecutive day-work
-      // shifts (M/T/J, including MF/TF variants). Night blocks have their own
-      // pre/post rest plan and are handled before this branch.
+      // Priority 4 (was Priority 4 originally, now renumbered): force 2 consecutive
+      // rest days after ≥5 consecutive day-work shifts — kept here for safety but the
+      // HARD check above (Priority 2) should handle it before reaching this point.
       const needsRest =
         state.consecutiveCount >= 5 &&
         isDayWorkShift(state.consecutiveShift);
@@ -1067,7 +1371,15 @@ export function generateMonthSchedule(
       const canPreserveWeeklyShift =
         (weeklyShift === "M" && cov.M >= 1 && cov.T < 1 && canLaterEmployeeCover("T", orderIndex)) ||
         (weeklyShift === "T" && cov.T >= 1 && cov.M < 1 && canLaterEmployeeCover("M", orderIndex));
-      const shift = _pickWorkdayShift(emp, state, cov, wKey, canPreserveWeeklyShift);
+      // When both shifts are urgent simultaneously, check if a preference employee
+      // coming later in dailyOrder can naturally cover one of the shifts, so this
+      // (neutral) employee can take the other without violating any preferences.
+      let deferShift: "M" | "T" | null = null;
+      if (cov.M < 1 && cov.T < 1 && weeklyShift === null) {
+        if (canLaterEmployeeCover("T", orderIndex)) deferShift = "T";
+        else if (canLaterEmployeeCover("M", orderIndex)) deferShift = "M";
+      }
+      const shift = _pickWorkdayShift(emp, state, cov, wKey, canPreserveWeeklyShift, deferShift);
       pushAssignment(emp.id, date, applyChristmasSpecialRule(shift, date), state, wKey, cov);
     }
   }
@@ -1127,6 +1439,8 @@ export function generateMonthSchedule(
     if (!assignment || assignment.shiftType !== "D") return false;
     if (existingDates.has(key)) return false;
     if (nightPlan.has(key) && !options.allowNightPlanRest) return false;
+    // HARD constraint: forced rest days must never be converted to work shifts
+    if (forcedRestDates.has(key)) return false;
 
     const employee = sortedEmps.find((e) => e.id === employeeId);
     if (!employee || employee.shiftPreference === "J") return false;
@@ -1140,6 +1454,46 @@ export function generateMonthSchedule(
         countAdjacentDayWork(employeeId, date, 1);
       if (workStreak > 5) return false;
       if (hasAdjacentOppositeDayShift(employeeId, date, targetBase)) return false;
+    }
+
+    // On weekdays, in strict (non-relaxed) mode only: reject candidates whose conversion
+    // would create an isolated D at a neighbouring day. For example, converting date D→T
+    // when date-1=D and date-2=work would make date-1 isolated (work–D–work pattern).
+    // Relaxed mode allows creating isolated Ds because repairSingleRestDays will fix them.
+    if (!options.relaxed && (targetBase === "M" || targetBase === "T") && !isWeekend(date) && !holidayDates.has(toDateStr(date))) {
+      const prevShift = getGeneratedOrExistingShift(employeeId, addDays(date, -1));
+      if (prevShift === "D") {
+        const prev2Shift = getGeneratedOrExistingShift(employeeId, addDays(date, -2));
+        if (prev2Shift !== null && isDayWorkShift(prev2Shift)) return false;
+      }
+      const nextShift2 = getGeneratedOrExistingShift(employeeId, addDays(date, 1));
+      if (nextShift2 === "D") {
+        const next2Shift = getGeneratedOrExistingShift(employeeId, addDays(date, 2));
+        if (next2Shift !== null && isDayWorkShift(next2Shift)) return false;
+      }
+    }
+
+    // Reject if converting this D to work would create an isolated D at date+1 that
+    // CANNOT be fixed by repairSingleRestDays method 1 (package move). This specifically
+    // catches the pattern: date=Thu→T, date+1=Fri=D, date+2=Sat=MF (1-day package).
+    // Applies in both strict and relaxed modes to prevent repair cycles.
+    if (targetBase === "M" || targetBase === "T") {
+      const nextDateV = addDays(date, 1);
+      const nextShiftV = getGeneratedOrExistingShift(employeeId, nextDateV);
+      if (nextShiftV === "D") {
+        const nextNextDate = addDays(date, 2);
+        const nextNextShift = getGeneratedOrExistingShift(employeeId, nextNextDate);
+        if (nextNextShift !== null && isDayWorkShift(nextNextShift)) {
+          // date+1 would become isolated D; fixable only if date+2 is part of a ≥2-day package
+          const nextNextStr = toDateStr(nextNextDate);
+          const isNextNextSpecial = isWeekend(nextNextDate) || holidayDates.has(nextNextStr);
+          if (isNextNextSpecial) {
+            const satDateV = getWeekendSaturdayForDate(nextNextDate, holidayDates.has(nextNextStr));
+            const pkgLength = satDateV ? getWeekendPackageDates(satDateV).length : 0;
+            if (pkgLength < 2) return false; // isolated D at date+1 would be unfixable
+          }
+        }
+      }
     }
 
     if (previousShift && isValidShiftType(previousShift) && isValidShiftType(targetShift)) {
@@ -1225,14 +1579,30 @@ export function generateMonthSchedule(
         scoredCandidates = buildScoredCandidates(true);
       }
       if (scoredCandidates.length === 0) {
+        const targetBase2 = normalizeShift(targetShift);
+        const isWeekdayDate = !isWeekend(date) && !holidayDates.has(dateKey);
         scoredCandidates = sortedEmps
           .filter((employee) => {
             const key = `${employee.id}|${dateKey}`;
             const assignment = resultByKey.get(key);
-            return Boolean(assignment) &&
-              assignment?.shiftType === "D" &&
-              !existingDates.has(key) &&
-              employee.shiftPreference !== "J";
+            if (!Boolean(assignment) || assignment?.shiftType !== "D") return false;
+            if (existingDates.has(key)) return false;
+            if (forcedRestDates.has(key)) return false; // HARD: never convert forced rest to work
+            if (employee.shiftPreference === "J") return false;
+            // On weekdays: do not create isolated D at a neighbouring day
+            if ((targetBase2 === "M" || targetBase2 === "T") && isWeekdayDate) {
+              const prevShift = getGeneratedOrExistingShift(employee.id, addDays(date, -1));
+              if (prevShift === "D") {
+                const prev2Shift = getGeneratedOrExistingShift(employee.id, addDays(date, -2));
+                if (prev2Shift !== null && isDayWorkShift(prev2Shift)) return false;
+              }
+              const nextShift = getGeneratedOrExistingShift(employee.id, addDays(date, 1));
+              if (nextShift === "D") {
+                const next2Shift = getGeneratedOrExistingShift(employee.id, addDays(date, 2));
+                if (next2Shift !== null && isDayWorkShift(next2Shift)) return false;
+              }
+            }
+            return true;
           })
           .map((employee) => ({ employee, score: employee.rotationOrder }))
           .sort((a, b) => a.score - b.score);
@@ -1344,7 +1714,7 @@ export function generateMonthSchedule(
     }
   };
 
-  const canConvertGeneratedWorkToRest = (employeeId: string, date: Date): boolean => {
+  const canConvertGeneratedWorkToRest = (employeeId: string, date: Date, ignoreMinCoverage = false): boolean => {
     const dateKey = toDateStr(date);
     const key = `${employeeId}|${dateKey}`;
     const assignment = resultByKey.get(key);
@@ -1353,6 +1723,7 @@ export function generateMonthSchedule(
 
     const base = normalizeShift(assignment.shiftType);
     if (base !== "M" && base !== "T") return true;
+    if (ignoreMinCoverage) return true; // skip coverage floor; caller must restore it afterwards
 
     const sameBaseCoverage = sortedEmps.filter((employee) => {
       if (employee.id === employeeId) return false;
@@ -1456,6 +1827,22 @@ export function generateMonthSchedule(
             changed = true;
             break;
           }
+
+          // Last-resort relaxed fallback: when all normal repair methods fail, extend
+          // the rest window to an adjacent work day even if coverage temporarily drops.
+          // The subsequent repairAllDailyCoverage pass will restore coverage from
+          // another available D employee. Applies to any isolated D including those
+          // caused by prepRest or HARD forced-rest (forcedRestDates).
+          if (canConvertGeneratedWorkToRest(employee.id, previous.date, true)) {
+              convertGeneratedWorkToRest(employee.id, previous.date);
+              changed = true;
+              break;
+            }
+            if (canConvertGeneratedWorkToRest(employee.id, next.date, true)) {
+              convertGeneratedWorkToRest(employee.id, next.date);
+              changed = true;
+              break;
+            }
         }
 
         if (changed) break;
@@ -1723,7 +2110,8 @@ function _pickWorkdayShift(
   },
   cov: { M: number; T: number },
   wKey: string,
-  preserveWeeklyShiftForLaterCoverage = false
+  preserveWeeklyShiftForLaterCoverage = false,
+  deferShift: "M" | "T" | null = null
 ): string {
   const pref = emp.shiftPreference ?? null;
 
@@ -1749,6 +2137,16 @@ function _pickWorkdayShift(
   // edge case where all neutral employees are in night blocks (RF-16 must hold).
   const urgentM = cov.M < 1;
   const urgentT = cov.T < 1;
+
+  // When both shifts are simultaneously urgent and weeklyShift is null (first day of week),
+  // defer to a later preference employee when available (deferShift indicates which shift
+  // a later preference employee can cover, so this employee takes the opposite).
+  if (urgentM && urgentT && weeklyShift === null) {
+    if (deferShift === "T") return "M"; // a T-pref employee comes later → take M now
+    if (deferShift === "M") return "T"; // an M-pref employee comes later → take T now
+    return state.mCount <= state.tCount ? "M" : "T"; // equity fallback
+  }
+
   if (urgentM && !urgentT && weeklyShift === null) return "M";
   if (urgentT && !urgentM && weeklyShift === null) return "T";
 

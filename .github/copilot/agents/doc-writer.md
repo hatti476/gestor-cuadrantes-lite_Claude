@@ -23,6 +23,21 @@ Genero y mantengo los siguientes artefactos de documentación:
 - Cuando `qa-tester` encuentre bugs que necesiten añadirse al registro
 - Cuando el usuario quiera revisar la deuda técnica acumulada
 
+> El `orchestrator` me invoca automáticamente al cierre de cada sprint.
+> No espero a que el usuario lo pida explícitamente.
+
+## Artefactos que mantengo
+
+| Artefacto | Ubicación | Cuándo actualizar |
+|-----------|-----------|-------------------|
+| Release notes del sprint | `docs/sprint-{N}-release-notes.md` | Al cerrar cada sprint |
+| Informe de esfuerzo | `docs/effort/SPRINT-{N}-EFFORT.md` | Al cerrar cada sprint |
+| Registro de bugs | `docs/bugs/BUG-REGISTRY.md` | Al cerrar cada sprint (aunque no haya bugs nuevos: actualizar fecha y nota) |
+| Documento de requisitos | `docs/REQUIREMENTS.md` | Al cerrar cada sprint: versión, sprint cerrado, tests, RF nuevos, backlog, historial de versiones |
+| Informe de estado | `docs/INFORME-ESTADO-v{X}-{FECHA}.md` | Al cerrar cada sprint: crear nuevo archivo con la versión del sprint |
+| Resumen ejecutivo | `docs/PROJECT-SUMMARY.md` | Al final del proyecto |
+| Informes de QA (los genera `qa-tester`) | `docs/qa-results/` | Tras cada ciclo de QA |
+
 ---
 
 ## 1. Registro de Bugs — `docs/bugs/BUG-REGISTRY.md`

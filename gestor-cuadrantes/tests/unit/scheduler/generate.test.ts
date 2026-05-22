@@ -21,6 +21,7 @@ import {
   NIGHT_EPOCH_FRIDAY,
   type ScheduleEmployee,
   type PrevMonthTail,
+  type CoverageWarning,
 } from "@/lib/schedules/generate";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1514,5 +1515,226 @@ describe("generateMonthSchedule — consistencia semanal de fines de semana y fe
     expect(tfAssignments.every(Boolean)).toBe(true);
     expect(new Set(mfAssignments.map((a) => a?.employeeId)).size).toBe(1);
     expect(new Set(tfAssignments.map((a) => a?.employeeId)).size).toBe(1);
+  });
+});
+
+// ─── Sprint 17 Tarea 1: descanso forzado y coverageWarnings ─────────────────
+
+describe("generateMonthSchedule — Sprint 17 Tarea 1: descanso forzado HARD y coverageWarnings", () => {
+  // 4 employees with nightRotationIds=["emp-2","emp-3","emp-4","emp-1"] places emp-1
+  // at night-order position 3 (block Jun12–18), so Jun1–3 have NO nightPlan entry for
+  // emp-1, allowing the forced-rest logic to apply on those workdays without exemption.
+  const emps4T1 = (): ScheduleEmployee[] => [
+    { id: "emp-1", rotationOrder: 0, shiftPreference: null },
+    { id: "emp-2", rotationOrder: 1, shiftPreference: null },
+    { id: "emp-3", rotationOrder: 2, shiftPreference: null },
+    { id: "emp-4", rotationOrder: 3, shiftPreference: null },
+  ];
+  const nightIds4T1 = ["emp-2", "emp-3", "emp-4", "emp-1"] as const;
+
+  it("emite coverageWarning cuando el descanso obligatorio deja un laborable sin cobertura", () => {
+    // emp-1 termina mayo con 5M consecutivas → descanso forzado en Jun1 y Jun2.
+    // emp-3 tiene bloque nocturno N en Jun1-4 → cov M/T = 0 cuando emp-1 es
+    // procesado primero → se emiten coverageWarnings.
+    const emps = emps4T1();
+    const prevTail: PrevMonthTail[] = [
+      { employeeId: "emp-1", date: "2026-05-27", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-28", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-29", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-30", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-31", shiftType: "M" },
+    ];
+    const coverageWarnings: CoverageWarning[] = [];
+    generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), prevTail, [...nightIds4T1], { coverageWarnings });
+
+    // Deben haberse emitido warnings para los días laborables sin cobertura
+    const warningDates = coverageWarnings.map((w) => w.date);
+    expect(warningDates).toContain("2026-06-01");
+    expect(warningDates).toContain("2026-06-02");
+    // Los warnings del descanso forzado de emp-1 en Jun1 y Jun2 llevan su employeeId
+    const jun1Warnings = coverageWarnings.filter((w) => w.date === "2026-06-01");
+    const jun2Warnings = coverageWarnings.filter((w) => w.date === "2026-06-02");
+    expect(jun1Warnings.every((w) => w.employeeId === "emp-1")).toBe(true);
+    expect(jun2Warnings.every((w) => w.employeeId === "emp-1")).toBe(true);
+  });
+
+  it("el empleado puede trabajar con normalidad a partir del día 3 (tras los 2D forzados)", () => {
+    // El empleado con 5M termina el mes anterior. Jun1 y Jun2 son D forzados.
+    // A partir de Jun3 el empleado puede volver a trabajar sin restricción.
+    const emps = emps4T1();
+    const prevTail: PrevMonthTail[] = [
+      { employeeId: "emp-1", date: "2026-05-27", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-28", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-29", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-30", shiftType: "M" },
+      { employeeId: "emp-1", date: "2026-05-31", shiftType: "M" },
+    ];
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), new Set(), prevTail, [...nightIds4T1]);
+
+    // Jun1 y Jun2: descanso forzado
+    expect(result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-01")?.shiftType).toBe("D");
+    expect(result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-02")?.shiftType).toBe("D");
+
+    // Jun3 (miércoles): emp-1 ya puede trabajar — no debe ser D por descanso forzado
+    const day3 = result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-03");
+    expect(day3?.shiftType).not.toBe("D");
+    const base3 = normalizeShift(day3?.shiftType ?? "");
+    expect(base3 === "M" || base3 === "T").toBe(true);
+  });
+});
+
+// ─── Sprint 17 Tarea 2: continuidad cross-month de bloque nocturno ────────────
+
+describe("generateMonthSchedule — Sprint 17 Tarea 2: continuidad cross-month de bloque nocturno", () => {
+  // With 4 employees, cycle = 4×7 = 28 days.
+  // emp-1 (rotationOrder=0) regular block in June 2026 starts Jun19, so Jun1–3
+  // are free for cross-month continuation logic to apply without conflict.
+  const make4Employees = (): ScheduleEmployee[] =>
+    Array.from({ length: 4 }, (_, i) => ({
+      id: `emp-${i + 1}`,
+      rotationOrder: i,
+      shiftPreference: null,
+    }));
+
+  it("empleado con 4 noches al final del mes anterior completa las 3 noches restantes en el nuevo mes", () => {
+    // emp-1 termina mayo con 4N (noches 4-7 de su bloque) → debe tener N en Jun1, Jun2, Jun3.
+    const emps = make4Employees();
+    const prevTail: PrevMonthTail[] = [
+      { employeeId: "emp-1", date: "2026-05-28", shiftType: "N" },
+      { employeeId: "emp-1", date: "2026-05-29", shiftType: "N" },
+      { employeeId: "emp-1", date: "2026-05-30", shiftType: "N" },
+      { employeeId: "emp-1", date: "2026-05-31", shiftType: "N" },
+    ];
+    const result = generateMonthSchedule(
+      emps, 2026, 6, new Set(), new Set(), prevTail, emps.map((e) => e.id)
+    );
+
+    // Las 3 noches de continuación deben aparecer en Jun1, Jun2 y Jun3
+    expect(result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-01")?.shiftType).toBe("N");
+    expect(result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-02")?.shiftType).toBe("N");
+    expect(result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-03")?.shiftType).toBe("N");
+  });
+
+  it("empleado que completa 7 noches al final del mes anterior recibe 3D post-descanso en el nuevo mes", () => {
+    // emp-1 terminó mayo con las 7 noches completas → Jun1, Jun2, Jun3 son D (post-descanso).
+    const emps = make4Employees();
+    const prevTail: PrevMonthTail[] = [
+      { employeeId: "emp-1", date: "2026-05-25", shiftType: "N" },
+      { employeeId: "emp-1", date: "2026-05-26", shiftType: "N" },
+      { employeeId: "emp-1", date: "2026-05-27", shiftType: "N" },
+      { employeeId: "emp-1", date: "2026-05-28", shiftType: "N" },
+      { employeeId: "emp-1", date: "2026-05-29", shiftType: "N" },
+      { employeeId: "emp-1", date: "2026-05-30", shiftType: "N" },
+      { employeeId: "emp-1", date: "2026-05-31", shiftType: "N" },
+    ];
+    const result = generateMonthSchedule(
+      emps, 2026, 6, new Set(), new Set(), prevTail, emps.map((e) => e.id)
+    );
+
+    // Los 3 días de post-descanso deben ser D en Jun1, Jun2, Jun3
+    expect(result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-01")?.shiftType).toBe("D");
+    expect(result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-02")?.shiftType).toBe("D");
+    expect(result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-03")?.shiftType).toBe("D");
+  });
+
+  it("la continuidad cross-month mantiene exactamente 1 turno N por día en todo el nuevo mes", () => {
+    // Con 4 empleados y emp-1 completando noches a inicio de mes, el algoritmo
+    // no debe generar 2 N en el mismo día (invariante de cobertura nocturna).
+    const emps = make4Employees();
+    const prevTail: PrevMonthTail[] = [
+      { employeeId: "emp-1", date: "2026-05-28", shiftType: "N" },
+      { employeeId: "emp-1", date: "2026-05-29", shiftType: "N" },
+      { employeeId: "emp-1", date: "2026-05-30", shiftType: "N" },
+      { employeeId: "emp-1", date: "2026-05-31", shiftType: "N" },
+    ];
+    const result = generateMonthSchedule(
+      emps, 2026, 6, new Set(), new Set(), prevTail, emps.map((e) => e.id)
+    );
+
+    const nightsByDate = new Map<string, number>();
+    for (const a of result) {
+      if (normalizeShift(a.shiftType) === "N") {
+        const ds = toDateStr(a.date);
+        nightsByDate.set(ds, (nightsByDate.get(ds) ?? 0) + 1);
+      }
+    }
+    // Nunca debe haber 2 empleados en N el mismo día
+    for (const [, count] of nightsByDate) {
+      expect(count).toBeLessThanOrEqual(1);
+    }
+    // Los días Jun1-3 (continuación) deben tener exactamente 1 N
+    expect(nightsByDate.get("2026-06-01") ?? 0).toBe(1);
+    expect(nightsByDate.get("2026-06-02") ?? 0).toBe(1);
+    expect(nightsByDate.get("2026-06-03") ?? 0).toBe(1);
+  });
+});
+
+// ─── Sprint 17 Tarea 3: paquete extendido — festivo lunes pegado al fin de semana ──
+
+describe("generateMonthSchedule — Sprint 17 Tarea 3: paquete extendido Sáb+Dom+Lun festivo", () => {
+  it("festivo lunes pegado al domingo extiende el paquete a 3 días con el mismo empleado", () => {
+    // Lunes 8 de junio de 2026 marcado como festivo → el paquete Sáb6+Dom7+Lun8
+    // debe asignarse al mismo par de empleados (uno para MF y uno para TF los 3 días).
+    const emps = make7Employees();
+    const holidays = new Set(["2026-06-08"]); // lunes festivo
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), holidays, [], emps.map((e) => e.id));
+
+    const packageDates = ["2026-06-06", "2026-06-07", "2026-06-08"];
+
+    // Exactamente 1 empleado cubre MF los 3 días y debe ser el mismo
+    const mfByDate = packageDates.map((dateStr) =>
+      result.find((a) => toDateStr(a.date) === dateStr && normalizeShift(a.shiftType) === "M")
+    );
+    const tfByDate = packageDates.map((dateStr) =>
+      result.find((a) => toDateStr(a.date) === dateStr && normalizeShift(a.shiftType) === "T")
+    );
+
+    expect(mfByDate.every(Boolean)).toBe(true);
+    expect(tfByDate.every(Boolean)).toBe(true);
+    // El mismo empleado cubre M los 3 días del paquete
+    expect(new Set(mfByDate.map((a) => a?.employeeId)).size).toBe(1);
+    // El mismo empleado cubre T los 3 días del paquete
+    expect(new Set(tfByDate.map((a) => a?.employeeId)).size).toBe(1);
+  });
+
+  it("festivo lunes: el lunes festivo recibe MF/TF, no M/T (es fin de semana extendido)", () => {
+    // El lunes festivo dentro del paquete extendido debe recibir MF o TF, no M o T.
+    const emps = make7Employees();
+    const holidays = new Set(["2026-06-08"]);
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), holidays, [], emps.map((e) => e.id));
+
+    // El lunes festivo debe tener MF o TF (no M ni T)
+    const mondayWork = result.filter(
+      (a) => toDateStr(a.date) === "2026-06-08" && (a.shiftType === "M" || a.shiftType === "T")
+    );
+    expect(mondayWork).toHaveLength(0);
+
+    // Debe haber exactamente 1 MF y 1 TF en ese lunes
+    const mondayMF = result.filter((a) => toDateStr(a.date) === "2026-06-08" && a.shiftType === "MF");
+    const mondayTF = result.filter((a) => toDateStr(a.date) === "2026-06-08" && a.shiftType === "TF");
+    expect(mondayMF).toHaveLength(1);
+    expect(mondayTF).toHaveLength(1);
+  });
+
+  it("festivo viernes — el viernes se incorpora al mismo pack Sáb+Dom (confirmación Tarea 3)", () => {
+    // Viernes festivo antes de un fin de semana → paquete extendido Vie+Sáb+Dom.
+    // El mismo empleado cubre M todos los días del paquete y otro cubre T.
+    const emps = make7Employees();
+    const holidays = new Set(["2026-06-05"]); // viernes festivo
+    const result = generateMonthSchedule(emps, 2026, 6, new Set(), holidays, [], emps.map((e) => e.id));
+
+    const packageDates = ["2026-06-05", "2026-06-06", "2026-06-07"];
+
+    const mfByDate = packageDates.map((dateStr) =>
+      result.find((a) => toDateStr(a.date) === dateStr && normalizeShift(a.shiftType) === "M")
+    );
+    const tfByDate = packageDates.map((dateStr) =>
+      result.find((a) => toDateStr(a.date) === dateStr && normalizeShift(a.shiftType) === "T")
+    );
+
+    expect(mfByDate.every(Boolean)).toBe(true);
+    expect(tfByDate.every(Boolean)).toBe(true);
+    expect(new Set(mfByDate.map((a) => a?.employeeId)).size).toBe(1);
+    expect(new Set(tfByDate.map((a) => a?.employeeId)).size).toBe(1);
   });
 });

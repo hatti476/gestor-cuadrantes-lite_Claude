@@ -1,7 +1,7 @@
 # Documento de Requisitos — Gestor de Cuadrantes
 
-**Versión**: 2.7.0 (Sprint 15 — saneamiento técnico y documental)
-**Última actualización**: 19/05/2026
+**Versión**: 3.0.0 (Sprint 17 — correcciones del algoritmo II)
+**Última actualización**: 22/05/2026
 **Estado**: Vivo — se actualiza al cierre de cada sprint
 
 ---
@@ -14,12 +14,12 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 
 | Campo | Valor |
 |-------|-------|
-| Versión funcional | 1.5 |
-| Último sprint cerrado | Sprint 14 — estabilización |
-| Sprint en curso | Sprint 15 — saneamiento técnico y documental |
-| Siguiente sprint planificado | Sprint 16 — refinamiento del algoritmo y robustez de festivos externos |
-| Tests unitarios | 146/146 |
-| Tests E2E declarados | CP-01..CP-98 |
+| Versión funcional | 1.7 |
+| Último sprint cerrado | Sprint 17 — correcciones del algoritmo II |
+| Sprint en curso | — (pendiente de planificación) |
+| Siguiente sprint planificado | Sprint 18 — pendiente de definición |
+| Tests unitarios | 227/227 |
+| Tests E2E declarados | CP-01..CP-115 |
 | Bugs abiertos conocidos | 0 |
 
 ---
@@ -119,6 +119,7 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-05.5 | La generación aplica automáticamente las reglas de festivos y fines de semana (RF-06) | 3/4 | ✅ |
 | RF-05.6 | Solo el SUPER_ADMIN puede disparar la generación automática | 3 | ✅ |
 | RF-05.7 | La generación es idempotente: ejecutarla varias veces produce el mismo resultado | 3/9 | ✅ |
+| RF-05.9 | La respuesta de `POST /api/schedules/generate` incluye `coverageWarnings[]` con los días en que un descanso forzado reduce la cobertura M/T por debajo del mínimo | 17 | ✅ |
 
 ---
 
@@ -254,6 +255,9 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-14.9 | Ningún empleado supera 5 días consecutivos con el mismo turno de trabajo | 9 | ✅ |
 | RF-14.10 | La generación consulta los últimos 7 días del mes anterior (`prevMonthTail`) para aplicar la regla de máximo consecutivo en el inicio del mes | 9 | ✅ |
 | RF-14.11 | Los turnos V/B/J existentes bloquean la celda; los turnos M/T/N/D de generaciones anteriores se regeneran | 9 | ✅ |
+| RF-14.14 | El algoritmo detecta empleados que terminaron el mes anterior a mitad de bloque nocturno y los completa al inicio del nuevo mes (continuidad cross-month), seguidos de los días de post-descanso obligatorios | 17 | ✅ |
+| RF-14.15 | Cuando el lunes siguiente a un domingo es festivo, el paquete de fin de semana se extiende a 3 días (Sáb+Dom+Lun); el mismo par de empleados cubre los 3 días con MF/TF | 17 | ✅ |
+| RF-14.16 | Tras ≥5 jornadas diurnas consecutivas (M/T, incluyendo cruce de mes), el algoritmo aplica 2 días de descanso forzado HARD (no reemplazables por la fase de reparación de cobertura) | 17 | ✅ |
 
 ---
 
@@ -472,13 +476,13 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 
 | Suite | Archivo | Tests | Estado |
 |-------|---------|-------|--------|
-| Unit | `tests/unit/lib/business-logic.test.ts` | 27 | ✅ |
+| Unit | `tests/unit/lib/business-logic.test.ts` | 77 | ✅ |
 | Unit | `tests/unit/lib/employees-business-logic.test.ts` | 19 | ✅ |
 | Unit | `tests/unit/lib/permissions.test.ts` | 25 | ✅ |
-| Unit | `tests/unit/lib/shift-colors.test.ts` | 7 | ✅ |
+| Unit | `tests/unit/lib/shift-colors.test.ts` | 9 | ✅ |
 | Unit | `tests/unit/schedules/month-status.test.ts` | 10 | ✅ |
-| Unit | `tests/unit/scheduler/generate.test.ts` | 58 | ✅ |
-| **Total unit** | | **146** | **✅** |
+| Unit | `tests/unit/scheduler/generate.test.ts` | 87 | ✅ |
+| **Total unit** | | **227** | **✅** |
 | E2E Sprint 1 | CP-01..CP-11 | 11 | ✅ |
 | E2E Sprint 2 | CP-12..CP-22 | 11 | ✅ |
 | E2E Sprint 3 | CP-23..CP-29 | 7 | ✅ |
@@ -493,18 +497,21 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | E2E Sprint 12 | CP-86..CP-89 | 4 | ✅ |
 | E2E Sprint 13 | CP-90..CP-98 | 9 | ✅ |
 | Sprint 14 | Sin suite E2E nueva; regresiones cubiertas por unit tests y testing manual | — | ✅ |
-| **Total E2E** | | **98** | **✅** |
+| Sprint 15 | Sin suite E2E nueva; baseline técnico y documental | — | ✅ |
+| E2E Sprint 16 | CP-99..CP-109 | 11 | ✅ |
+| E2E Sprint 17 | CP-110..CP-115 | 6 | ✅ |
+| **Total E2E** | | **115** | **✅** |
 
 ---
 
-## 9. Backlog pendiente (Sprint 16+)
+## 9. Backlog pendiente (Sprint 18+)
 
 | Funcionalidad | Requisito | Prioridad |
 |---------------|-----------|-----------|
-| Sprint 16: refinamiento del algoritmo de generación: equidad M/T a largo plazo y reparto de fines de semana/festivos | RF-14 / RF-16 | Alta |
-| Sprint 16: harness de simulación multi-mes para medir equidad, cobertura y regresiones del generador | Calidad algoritmo | Alta |
-| Sprint 16: diagnósticos del generador en modo test/debug para explicar decisiones de asignación | Calidad algoritmo | Media |
-| Sprint 16: robustez de festivos externos con cache/backfill si producción lo necesita | RF-20 / Operativo | Media |
+| Sprint 18: equidad M/T a largo plazo y reparto equitativo de fines de semana/festivos | RF-14 / RF-16 | Alta |
+| Sprint 18: harness de simulación multi-mes para medir equidad, cobertura y regresiones del generador | Calidad algoritmo | Alta |
+| Sprint 18: diagnósticos del generador en modo test/debug para explicar decisiones de asignación | Calidad algoritmo | Media |
+| Robustez de festivos externos con cache/backfill si producción lo necesita | RF-20 / Operativo | Media |
 | Vista personalizada del técnico: próximos turnos y cambios recientes | Nuevo RF | Media |
 | Solicitud/aprobación de vacaciones | Nuevo RF | Alta |
 | Dashboard de proyecto: cobertura diaria, ausencias y alertas | Nuevo RF | Alta |
@@ -533,3 +540,5 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | 1.4 | 13 | Selector de región por CCAA, carga automática de festivos vía nager.at, historial paginado/filtrado, actualización de `/info` Fase 2 y guía de despliegue. |
 | 1.5 | 14 | Estabilización post-Sprint 13: BUG-32..BUG-37 corregidos, incluyendo localStorage obsoleto, sustituto de noches, día 31, preferencias M/T en MF/TF, máximo de 5 días y pack Sáb+Dom indivisible. |
 | 1.5 | 15 | Saneamiento técnico y documental: lint limpio, E2E CP-29 recuperado, build sin dependencia de Google Fonts, README/requisitos/informe alineados y versionado npm en 1.5.0. |
+| 1.6 | 16 | Correcciones del algoritmo I: toggle V/D en PrepPanel, exclusión pref J de noches, consistencia MF/TF con pauta semanal, 2D obligatorios entre bloques, validación ET Art. 34.3, tabla de complementos económicos, E2E CP-99..CP-109. |
+| 1.7 | 17 | Correcciones del algoritmo II: descanso forzado HARD (Tarea 1), continuidad cross-month de bloque nocturno con protección `crossMonthRestDates` (Tarea 2), paquete extendido Sáb+Dom+Lun festivo (Tarea 3), `coverageWarnings` en API, E2E CP-110..CP-115. |
