@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   isSuperAdmin,
+  isSuperViewer,
   isProjectAdmin,
   canViewProject,
+  canEditProject,
   hasAdminAccess,
   GLOBAL_ROLES,
   PROJECT_ROLES,
@@ -28,6 +30,7 @@ function makeSession(
 }
 
 const SUPER_ADMIN_SESSION = makeSession("SUPER_ADMIN");
+const SUPER_VIEWER_SESSION = makeSession("SUPER_VIEWER");
 const USER_SESSION = makeSession("USER");
 
 const PROJECT_A = "project-a";
@@ -49,10 +52,11 @@ const SESSION_MULTI = makeSession("USER", [
 // ─── Constantes exportadas ────────────────────────────────────────────────────
 
 describe("GLOBAL_ROLES", () => {
-  it("contiene SUPER_ADMIN y USER", () => {
+  it("contiene SUPER_ADMIN, SUPER_VIEWER y USER", () => {
     expect(GLOBAL_ROLES).toContain("SUPER_ADMIN");
+    expect(GLOBAL_ROLES).toContain("SUPER_VIEWER");
     expect(GLOBAL_ROLES).toContain("USER");
-    expect(GLOBAL_ROLES).toHaveLength(2);
+    expect(GLOBAL_ROLES).toHaveLength(3);
   });
 });
 
@@ -75,6 +79,10 @@ describe("isSuperAdmin", () => {
     expect(isSuperAdmin(USER_SESSION)).toBe(false);
   });
 
+  it("devuelve false para SUPER_VIEWER", () => {
+    expect(isSuperAdmin(SUPER_VIEWER_SESSION)).toBe(false);
+  });
+
   it("devuelve false para sesión null", () => {
     expect(isSuperAdmin(null)).toBe(false);
   });
@@ -83,6 +91,26 @@ describe("isSuperAdmin", () => {
     expect(isSuperAdmin(makeSession("ADMIN"))).toBe(false);
     expect(isSuperAdmin(makeSession("EMPLOYEE"))).toBe(false);
     expect(isSuperAdmin(makeSession(""))).toBe(false);
+  });
+});
+
+// ─── isSuperViewer ────────────────────────────────────────────────────────────
+
+describe("isSuperViewer", () => {
+  it("devuelve true para sesión con rol SUPER_VIEWER", () => {
+    expect(isSuperViewer(SUPER_VIEWER_SESSION)).toBe(true);
+  });
+
+  it("devuelve false para SUPER_ADMIN", () => {
+    expect(isSuperViewer(SUPER_ADMIN_SESSION)).toBe(false);
+  });
+
+  it("devuelve false para USER", () => {
+    expect(isSuperViewer(USER_SESSION)).toBe(false);
+  });
+
+  it("devuelve false para sesión null", () => {
+    expect(isSuperViewer(null)).toBe(false);
   });
 });
 
@@ -126,6 +154,12 @@ describe("canViewProject", () => {
     expect(canViewProject(SUPER_ADMIN_SESSION, "cualquier-proyecto")).toBe(true);
   });
 
+  it("SUPER_VIEWER puede ver cualquier proyecto sin membresía", () => {
+    expect(canViewProject(SUPER_VIEWER_SESSION, PROJECT_A)).toBe(true);
+    expect(canViewProject(SUPER_VIEWER_SESSION, PROJECT_B)).toBe(true);
+    expect(canViewProject(SUPER_VIEWER_SESSION, "proyecto-inexistente")).toBe(true);
+  });
+
   it("miembro EMPLOYEE puede ver su proyecto", () => {
     expect(canViewProject(SESSION_EMPLOYEE_A, PROJECT_A)).toBe(true);
   });
@@ -152,11 +186,45 @@ describe("canViewProject", () => {
   });
 });
 
+// ─── canEditProject ───────────────────────────────────────────────────────────
+
+describe("canEditProject", () => {
+  it("SUPER_ADMIN puede editar cualquier proyecto", () => {
+    expect(canEditProject(SUPER_ADMIN_SESSION, PROJECT_A)).toBe(true);
+  });
+
+  it("SUPER_VIEWER NUNCA puede editar (solo lectura)", () => {
+    expect(canEditProject(SUPER_VIEWER_SESSION, PROJECT_A)).toBe(false);
+    expect(canEditProject(SUPER_VIEWER_SESSION, PROJECT_B)).toBe(false);
+    expect(canEditProject(SUPER_VIEWER_SESSION, "cualquier-proyecto")).toBe(false);
+  });
+
+  it("PROJECT_ADMIN puede editar su proyecto", () => {
+    expect(canEditProject(SESSION_PROJECT_ADMIN_A, PROJECT_A)).toBe(true);
+  });
+
+  it("PROJECT_ADMIN no puede editar un proyecto ajeno", () => {
+    expect(canEditProject(SESSION_PROJECT_ADMIN_A, PROJECT_B)).toBe(false);
+  });
+
+  it("EMPLOYEE no puede editar", () => {
+    expect(canEditProject(SESSION_EMPLOYEE_A, PROJECT_A)).toBe(false);
+  });
+
+  it("devuelve false para sesión null", () => {
+    expect(canEditProject(null, PROJECT_A)).toBe(false);
+  });
+});
+
 // ─── hasAdminAccess ───────────────────────────────────────────────────────────
 
 describe("hasAdminAccess", () => {
   it("SUPER_ADMIN tiene acceso de admin", () => {
     expect(hasAdminAccess(SUPER_ADMIN_SESSION)).toBe(true);
+  });
+
+  it("SUPER_VIEWER NO tiene acceso de admin (solo lectura)", () => {
+    expect(hasAdminAccess(SUPER_VIEWER_SESSION)).toBe(false);
   });
 
   it("PROJECT_ADMIN en algún proyecto tiene acceso de admin", () => {

@@ -418,11 +418,13 @@ export default function HomePage() {
   // Navegación de mes
   // ---------------------------------------------------------------------------
   function prevMonth() {
+    setSnapshotAvailable(false);
     if (month === 1) { setMonth(12); setYear((y) => y - 1); }
     else setMonth((m) => m - 1);
   }
 
   function nextMonth() {
+    setSnapshotAvailable(false);
     if (month === 12) { setMonth(1); setYear((y) => y + 1); }
     else setMonth((m) => m + 1);
   }
@@ -517,6 +519,7 @@ export default function HomePage() {
     });
     if (res.ok) {
       showToast("Turno guardado", "success");
+      setSnapshotAvailable(false); // La edición manual invalida el snapshot
     } else {
       showToast("Error al guardar el turno", "error");
     }
@@ -577,6 +580,7 @@ export default function HomePage() {
   // Generación automática (con confirmación si ya hay datos)
   // ---------------------------------------------------------------------------
   const [generating, setGenerating] = useState(false);
+  const [snapshotAvailable, setSnapshotAvailable] = useState(false);
 
   function requestGenerate() {
     if (monthStatus === "generated") {
@@ -589,6 +593,19 @@ export default function HomePage() {
   async function doGenerate() {
     setShowConfirmGenerate(false);
     setGenerating(true);
+    // Guardar snapshot antes de generar
+    if (activeProjectId) {
+      try {
+        await fetch("/api/schedules/snapshot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: activeProjectId, month, year }),
+        });
+        setSnapshotAvailable(true);
+      } catch {
+        // Snapshot opcional — no bloquear la generación
+      }
+    }
     try {
       const res = await fetch("/api/schedules/generate", {
         method: "POST",
@@ -612,6 +629,23 @@ export default function HomePage() {
       showToast("Error al generar el cuadrante", "error");
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function handleUndoGeneration() {
+    if (!activeProjectId) return;
+    try {
+      const res = await fetch("/api/schedules/snapshot/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: activeProjectId, month, year }),
+      });
+      if (!res.ok) throw new Error();
+      showToast("Cuadrante restaurado al estado anterior a la generación.", "success");
+      setSnapshotAvailable(false);
+      await loadSchedule();
+    } catch {
+      showToast("Error al restaurar el cuadrante", "error");
     }
   }
 
@@ -789,6 +823,16 @@ export default function HomePage() {
           </button>
           {/* Badge de estado del mes */}
           {!loading && <MonthStatusBadge status={monthStatus} />}
+          {/* Botón deshacer generación (solo si hay snapshot y aún no se ha editado manualmente) */}
+          {canEdit && snapshotAvailable && (
+            <button
+              data-testid="btn-undo-generation"
+              onClick={() => void handleUndoGeneration()}
+              className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-700 transition-colors print:hidden"
+            >
+              ↩ Deshacer generación
+            </button>
+          )}
           {canEdit && activePrepShiftLabel && (
             <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-1 print:hidden">
               Modo preparación — clic en celda para asignar {activePrepShiftLabel}
