@@ -239,6 +239,7 @@ function ExtraPayTable({
 export default function HomePage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "SUPER_ADMIN";
+  const isSuperViewer = session?.user?.role === "SUPER_VIEWER";
   const router = useRouter();
   const { showToast } = useToast();
 
@@ -265,11 +266,11 @@ export default function HomePage() {
   });
   const [projectSelectionReady, setProjectSelectionReady] = useState(false);
 
-  // PROJECT_ADMIN también puede editar celdas de su proyecto
-  const canEdit = isAdmin || (session?.user?.projectMemberships ?? []).some(
+  // PROJECT_ADMIN también puede editar celdas de su proyecto. SUPER_VIEWER nunca puede editar.
+  const canEdit = !isSuperViewer && (isAdmin || (session?.user?.projectMemberships ?? []).some(
     (m: { projectId: string; role: string }) =>
       m.projectId === activeProjectId && m.role === "PROJECT_ADMIN"
-  );
+  ));
 
   // Validar proyecto activo contra la API y auto-seleccionar el primero si no hay ninguno válido
   useEffect(() => {

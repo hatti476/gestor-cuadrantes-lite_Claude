@@ -76,6 +76,19 @@ async function main() {
     create: { projectId: project.id, userId: pm.id, role: "PROJECT_ADMIN" },
   });
 
+  // ─── SUPER_VIEWER de ejemplo (viewer@cuadrantes.local) ───────────────────
+  const viewerPassword = await bcrypt.hash("Viewer1234!", 12);
+  const viewer = await prisma.user.upsert({
+    where: { email: "viewer@cuadrantes.local" },
+    update: { password: viewerPassword, role: "SUPER_VIEWER" },
+    create: {
+      email: "viewer@cuadrantes.local",
+      password: viewerPassword,
+      role: "SUPER_VIEWER",
+    },
+  });
+  console.log("✓", viewer.email);
+
   // ─── Técnicos (USER con EMPLOYEE en el proyecto) ─────────────────────────
   const techPassword = await bcrypt.hash("Tecnico1234!", 12);
   const employees: { id: string }[] = [];

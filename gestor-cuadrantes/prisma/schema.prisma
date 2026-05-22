@@ -57,7 +57,7 @@ model User {
   id       String  @id @default(cuid())
   email    String  @unique
   password String?
-  role     String  @default("USER") // GlobalRole: SUPER_ADMIN | USER
+  role     String  @default("USER") // GlobalRole: SUPER_ADMIN | SUPER_VIEWER | USER
 
   accounts       Account[]
   sessions       Session[]
@@ -150,4 +150,16 @@ model ShiftChangeLog {
   changedAt  DateTime @default(now())
 
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+// Snapshot del cuadrante antes de una generación — permite un nivel de deshacer
+model ScheduleSnapshot {
+  id        String   @id @default(cuid())
+  projectId String
+  month     Int
+  year      Int
+  snapshot  String   // JSON: [{ employeeId, date, shiftType }]
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, month, year])
 }

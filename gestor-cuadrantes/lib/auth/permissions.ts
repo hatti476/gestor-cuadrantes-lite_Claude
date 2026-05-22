@@ -7,7 +7,7 @@
 import type { Session } from "next-auth";
 
 /** Roles globales */
-export const GLOBAL_ROLES = ["SUPER_ADMIN", "USER"] as const;
+export const GLOBAL_ROLES = ["SUPER_ADMIN", "SUPER_VIEWER", "USER"] as const;
 export type GlobalRole = (typeof GLOBAL_ROLES)[number];
 
 /** Roles dentro de un proyecto */
@@ -25,6 +25,14 @@ export interface ProjectMembership {
  */
 export function isSuperAdmin(session: Session | null): boolean {
   return session?.user?.role === "SUPER_ADMIN";
+}
+
+/**
+ * El usuario es SUPER_VIEWER: puede ver todos los proyectos y cuadrantes
+ * pero no puede realizar ninguna acción de escritura.
+ */
+export function isSuperViewer(session: Session | null): boolean {
+  return session?.user?.role === "SUPER_VIEWER";
 }
 
 /**
@@ -48,7 +56,7 @@ export function isProjectAdmin(
 
 /**
  * El usuario puede ver el proyecto (es miembro con cualquier rol,
- * o es SUPER_ADMIN).
+ * SUPER_ADMIN o SUPER_VIEWER).
  */
 export function canViewProject(
   session: Session | null,
@@ -56,6 +64,7 @@ export function canViewProject(
 ): boolean {
   if (!session) return false;
   if (isSuperAdmin(session)) return true;
+  if (isSuperViewer(session)) return true;
 
   const memberships = (session.user as unknown as { projectMemberships?: ProjectMembership[] })
     .projectMemberships ?? [];
@@ -64,12 +73,26 @@ export function canViewProject(
 }
 
 /**
+ * El usuario puede editar el proyecto (SUPER_ADMIN o PROJECT_ADMIN).
+ * SUPER_VIEWER siempre devuelve false.
+ */
+export function canEditProject(
+  session: Session | null,
+  projectId: string
+): boolean {
+  if (!session) return false;
+  if (isSuperViewer(session)) return false;
+  return isProjectAdmin(session, projectId);
+}
+
+/**
  * Devuelve true si la sesión tiene rol de administración
  * (SUPER_ADMIN globalmente o PROJECT_ADMIN en cualquier proyecto).
- * Útil para verificar acceso genérico a rutas de gestión.
+ * SUPER_VIEWER nunca tiene acceso de administración.
  */
 export function hasAdminAccess(session: Session | null): boolean {
   if (!session) return false;
+  if (isSuperViewer(session)) return false;
   if (isSuperAdmin(session)) return true;
 
   const memberships = (session.user as unknown as { projectMemberships?: ProjectMembership[] })

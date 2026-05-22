@@ -85,7 +85,7 @@ export const authOptions: NextAuthOptions = {
       // Propagamos id, role y projectMemberships al objeto session
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as "SUPER_ADMIN" | "USER";
+        session.user.role = token.role as "SUPER_ADMIN" | "SUPER_VIEWER" | "USER";
         session.user.projectMemberships = (token.projectMemberships ?? []) as import("@/lib/auth/permissions").ProjectMembership[];
       }
       return session;
