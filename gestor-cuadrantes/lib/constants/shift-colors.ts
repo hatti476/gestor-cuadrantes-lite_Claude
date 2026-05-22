@@ -28,53 +28,53 @@ export const SHIFT_COLORS: Record<ShiftType, ShiftConfig> = {
   // Turnos MVP
   M: {
     label: "Mañana",
-    color: "#FF9800",
+    color: "#F97316",
     textColor: "#FFFFFF",
   },
   T: {
     label: "Tarde",
-    color: "#2196F3",
+    color: "#3B82F6",
     textColor: "#FFFFFF",
   },
   N: {
     label: "Noche",
-    color: "#4CAF50",
+    color: "#16A34A",
     textColor: "#FFFFFF",
   },
   J: {
     label: "Jornada normal",
-    color: "#FFC107",
+    color: "#EAB308",
     textColor: "#212121",
   },
   D: {
     label: "Descanso",
-    color: "#F5F5F5",
-    textColor: "#424242",
+    color: "#9CA3AF",
+    textColor: "#FFFFFF",
   },
   V: {
     label: "Vacaciones",
-    color: "#212121",
+    color: "#B45309",
     textColor: "#FFFFFF",
   },
   B: {
     label: "Baja",
-    color: "#37474F",
+    color: "#7C3AED",
     textColor: "#FFFFFF",
   },
-  // Turnos fin de semana (v2)
+  // Turnos fin de semana (v2) — misma familia de color que el turno base
   MF: {
     label: "Mañana Finde",
-    color: "#E65100",
+    color: "#F97316",
     textColor: "#FFFFFF",
   },
   TF: {
     label: "Tarde Finde",
-    color: "#0D47A1",
+    color: "#3B82F6",
     textColor: "#FFFFFF",
   },
   NF: {
     label: "Noche Finde",
-    color: "#1B5E20",
+    color: "#16A34A",
     textColor: "#FFFFFF",
   },
   // Turnos especiales de Navidad
