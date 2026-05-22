@@ -772,6 +772,34 @@ export function generateMonthSchedule(
     });
   }
 
+  // ── Pre-generation availability check (Sprint 18 Tarea 2) ─────────────────
+  // Count employees available (not locked by V/B/manual) per day.
+  // Emit warnings before generation when coverage is critically low.
+  const availablePerDay = new Map<string, number>();
+  for (let avDay = 1; avDay <= daysInMonth; avDay++) {
+    const avDate = new Date(Date.UTC(year, month - 1, avDay));
+    const avDateStr = toDateStr(avDate);
+    const available = sortedEmps.filter(
+      (emp) => !existingDates.has(`${emp.id}|${avDateStr}`)
+    ).length;
+    availablePerDay.set(avDateStr, available);
+    if (available < 2 && options.coverageWarnings) {
+      if (available === 0) {
+        options.coverageWarnings.push({
+          date: avDateStr,
+          employeeId: "",
+          message: `⚠️ Sin cobertura el ${avDateStr.slice(8, 10)}/${avDateStr.slice(5, 7)}: todos los empleados tienen ausencia programada.`,
+        });
+      } else {
+        options.coverageWarnings.push({
+          date: avDateStr,
+          employeeId: "",
+          message: `Atención: el ${avDateStr.slice(8, 10)}/${avDateStr.slice(5, 7)} solo tiene ${available} empleado(s) disponible(s). La cobertura mínima no puede garantizarse.`,
+        });
+      }
+    }
+  }
+
   // ── Day-by-day assignment ─────────────────────────────────────────────────
   const dayCoverage = new Map<string, { M: number; T: number }>();
 
@@ -780,6 +808,49 @@ export function generateMonthSchedule(
   // Weekend package plan: Saturday date string → package owner for MF/TF.
   // Friday/Monday holidays glued to that weekend reuse the same package.
   const weekendPlan = new Map<string, WeekendPackage>();
+
+  // ── Weekend pack continuity from prevMonthTail (Sprint 18 Tarea 1) ─────────
+  // If the previous month ended on a Saturday with MF/TF assignments, and the
+  // first day of the current month is a Sunday, pre-seed the weekendPlan so
+  // that Sunday is assigned to the same employees with the same shift type.
+  {
+    const lastDayOfPrevMonth = new Date(Date.UTC(year, month - 1, 0));
+    if (prevMonthTail.length > 0 && lastDayOfPrevMonth.getUTCDay() === 6) {
+      const lastDayStr = toDateStr(lastDayOfPrevMonth);
+      const mfEntry = prevMonthTail.find(
+        (p) => p.date === lastDayStr && p.shiftType === "MF"
+      );
+      const tfEntry = prevMonthTail.find(
+        (p) => p.date === lastDayStr && p.shiftType === "TF"
+      );
+      if (mfEntry || tfEntry) {
+        // Pre-seed weekendPlan keyed by the Saturday from the previous month
+        weekendPlan.set(lastDayStr, {
+          mfEmpId: mfEntry?.employeeId ?? null,
+          tfEmpId: tfEntry?.employeeId ?? null,
+        });
+        // Reserve weekendShift and weekShift for the first week of the new month
+        const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1));
+        if (firstDayOfMonth.getUTCDay() === 0) {
+          const wk = weekKey(firstDayOfMonth);
+          if (mfEntry) {
+            const st = stateMap.get(mfEntry.employeeId);
+            if (st) {
+              if (!st.weekendShift.has(wk)) st.weekendShift.set(wk, "MF");
+              if (!st.weekShift.has(wk)) st.weekShift.set(wk, "M");
+            }
+          }
+          if (tfEntry) {
+            const st = stateMap.get(tfEntry.employeeId);
+            if (st) {
+              if (!st.weekendShift.has(wk)) st.weekendShift.set(wk, "TF");
+              if (!st.weekShift.has(wk)) st.weekShift.set(wk, "T");
+            }
+          }
+        }
+      }
+    }
+  }
 
   const getPreviousShift = (employeeId: string, date: Date): string | null => {
     const previousDateStr = toDateStr(addDays(date, -1));
@@ -1872,11 +1943,17 @@ export function generateMonthSchedule(
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(Date.UTC(year, month - 1, day));
       const dateStr = toDateStr(date);
-      const isSpecialDay = isWeekend(date) || holidayDates.has(dateStr);
+      // Days with 0 available employees: leave cells empty, skip repair entirely
+      const dayAvailable = availablePerDay.get(dateStr) ?? sortedEmps.length;
+      if (dayAvailable === 0) continue;
 
+      const isSpecialDay = isWeekend(date) || holidayDates.has(dateStr);
       repairCoverage(date, applyChristmasSpecialRule(applySpecialDayRule("N", date, holidayDates), date));
       repairCoverage(date, applyChristmasSpecialRule(isSpecialDay ? "MF" : "M", date));
-      repairCoverage(date, applyChristmasSpecialRule(isSpecialDay ? "TF" : "T", date));
+      // With only 1 available employee, skip T/TF repair — M/MF is the max achievable coverage
+      if (dayAvailable >= 2) {
+        repairCoverage(date, applyChristmasSpecialRule(isSpecialDay ? "TF" : "T", date));
+      }
     }
   };
 

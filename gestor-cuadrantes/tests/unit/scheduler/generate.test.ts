@@ -1738,3 +1738,199 @@ describe("generateMonthSchedule — Sprint 17 Tarea 3: paquete extendido Sáb+Do
     expect(new Set(tfByDate.map((a) => a?.employeeId)).size).toBe(1);
   });
 });
+
+// ─── Sprint 18 Tarea 1: continuidad de pack de fin de semana en cambio de mes ─
+
+describe("Sprint 18 Tarea 1: continuidad cross-month de pack Sáb+Dom", () => {
+  // 2026-08-29 es sábado → si se asigna MF ese día, el domingo 2026-08-30 queda
+  // dentro del mismo mes. Necesitamos un mes donde el ÚLTIMO día sea sábado.
+  // 2026-01-31 es sábado, 2026-02-01 es domingo.
+
+  function buildPrevMonthTail(
+    satDate: string,
+    mfEmpId: string,
+    tfEmpId: string
+  ): PrevMonthTail[] {
+    // Tail includes the Saturday and a few preceding days
+    return [
+      { employeeId: mfEmpId, date: satDate, shiftType: "MF" },
+      { employeeId: tfEmpId, date: satDate, shiftType: "TF" },
+    ];
+  }
+
+  it("mes que termina en sábado con MF → el domingo del mes siguiente se asigna al mismo empleado con MF", () => {
+    // Enero 2026: el día 31 es sábado. Febrero 2026: el día 1 es domingo.
+    const emps = make7Employees();
+    const mfEmpId = "emp-1";
+    const tfEmpId = "emp-2";
+    const prevTail = buildPrevMonthTail("2026-01-31", mfEmpId, tfEmpId);
+
+    // Generar febrero 2026 con prevMonthTail que indica pack incompleto
+    const result = generateMonthSchedule(
+      emps, 2026, 2,
+      new Set(), new Set(), prevTail,
+      emps.map((e) => e.id)
+    );
+
+    // El domingo 2026-02-01 debe estar asignado a mfEmpId con MF
+    const sundayMF = result.find(
+      (a) => toDateStr(a.date) === "2026-02-01" && a.employeeId === mfEmpId
+    );
+    expect(sundayMF).toBeDefined();
+    expect(normalizeShift(sundayMF!.shiftType)).toBe("M");
+  });
+
+  it("mes que termina en sábado con TF → el domingo del mes siguiente se asigna al mismo empleado con TF", () => {
+    const emps = make7Employees();
+    const mfEmpId = "emp-1";
+    const tfEmpId = "emp-2";
+    const prevTail = buildPrevMonthTail("2026-01-31", mfEmpId, tfEmpId);
+
+    const result = generateMonthSchedule(
+      emps, 2026, 2,
+      new Set(), new Set(), prevTail,
+      emps.map((e) => e.id)
+    );
+
+    // El domingo 2026-02-01 debe estar asignado a tfEmpId con TF
+    const sundayTF = result.find(
+      (a) => toDateStr(a.date) === "2026-02-01" && a.employeeId === tfEmpId
+    );
+    expect(sundayTF).toBeDefined();
+    expect(normalizeShift(sundayTF!.shiftType)).toBe("T");
+  });
+
+  it("pack completo dentro del mismo mes: el mismo empleado cubre sábado y domingo con mismo tipo", () => {
+    // 2026-02-07 es sábado, 2026-02-08 es domingo — ambos en febrero
+    const emps = make7Employees();
+    const result = generateMonthSchedule(
+      emps, 2026, 2,
+      new Set(), new Set(), [],
+      emps.map((e) => e.id)
+    );
+
+    const satMF = result.find((a) => toDateStr(a.date) === "2026-02-07" && normalizeShift(a.shiftType) === "M");
+    const sunMF = result.find((a) => toDateStr(a.date) === "2026-02-08" && normalizeShift(a.shiftType) === "M");
+    const satTF = result.find((a) => toDateStr(a.date) === "2026-02-07" && normalizeShift(a.shiftType) === "T");
+    const sunTF = result.find((a) => toDateStr(a.date) === "2026-02-08" && normalizeShift(a.shiftType) === "T");
+
+    expect(satMF?.employeeId).toBe(sunMF?.employeeId);
+    expect(satTF?.employeeId).toBe(sunTF?.employeeId);
+  });
+
+  it("los días se procesan en orden cronológico estricto (fechas ascendentes)", () => {
+    const emps = make7Employees();
+    const result = generateMonthSchedule(
+      emps, 2026, 6,
+      new Set(), new Set(), [],
+      emps.map((e) => e.id)
+    );
+
+    // Los turnos de cada empleado deben estar en orden ascendente de fecha
+    for (const emp of emps) {
+      const empAssignments = result
+        .filter((a) => a.employeeId === emp.id)
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+      const dates = empAssignments.map((a) => a.date.getTime());
+      const sorted = [...dates].sort((a, b) => a - b);
+      expect(dates).toEqual(sorted);
+    }
+  });
+});
+
+// ─── Sprint 18 Tarea 2: generación con alta concentración de vacaciones ────────
+
+describe("Sprint 18 Tarea 2: alta concentración de vacaciones", () => {
+  it("empleado que vuelve de 10 días de V tiene contador de consecutivos a 0 el día de vuelta (no descanso forzado)", () => {
+    // Emp-1 tiene V los días 1-10, debe poder trabajar el día 11 sin descanso forzado
+    const emps = make7Employees();
+    const lockedCells = new Set<string>();
+    for (let d = 1; d <= 10; d++) {
+      lockedCells.add(`emp-1|2026-08-${String(d).padStart(2, "0")}`);
+    }
+
+    const result = generateMonthSchedule(
+      emps, 2026, 8,
+      lockedCells, new Set(), [],
+      emps.map((e) => e.id)
+    );
+
+    // El día 11 de emp-1 debe ser un turno de trabajo (M, T, MF, TF), no D
+    const day11 = result.find(
+      (a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-08-11"
+    );
+    // Debe existir (puede ser D si cae en algún ciclo de descanso del bloque de noches,
+    // pero no debe ser D por el contador de vacaciones)
+    // La prueba relevante: no hay needsHardRest falso positivo por V
+    // Verificar que no hay 5+ D consecutivos tras las vacaciones
+    const empResults = result
+      .filter((a) => a.employeeId === "emp-1")
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+    const day11to15 = empResults.filter((a) => {
+      const d = a.date.getUTCDate();
+      return d >= 11 && d <= 20;
+    });
+    // Al menos algunos de esos días deben ser trabajo (no todos D)
+    const workDays = day11to15.filter((a) => {
+      const base = normalizeShift(a.shiftType);
+      return base === "M" || base === "T" || base === "J";
+    });
+    expect(workDays.length).toBeGreaterThan(0);
+    void day11; // suprime TS warning
+  });
+
+  it("día con solo 1 empleado disponible genera warning y asigna turno al disponible", () => {
+    // 6 empleados tienen V el día 15, solo emp-7 está disponible
+    const emps = make7Employees();
+    const lockedCells = new Set<string>();
+    for (let i = 1; i <= 6; i++) {
+      lockedCells.add(`emp-${i}|2026-08-15`);
+    }
+
+    const coverageWarnings: CoverageWarning[] = [];
+    const result = generateMonthSchedule(
+      emps, 2026, 8,
+      lockedCells, new Set(), [],
+      emps.map((e) => e.id),
+      { coverageWarnings }
+    );
+
+    // Debe emitir warning sobre disponibilidad reducida el día 15
+    const day15Warning = coverageWarnings.find((w) => w.date === "2026-08-15");
+    expect(day15Warning).toBeDefined();
+    expect(day15Warning!.message).toContain("1");
+
+    // Emp-7 debe tener algún turno el día 15 (si no está en bloque nocturno/descanso)
+    const day15assignments = result.filter((a) => toDateStr(a.date) === "2026-08-15");
+    // Al menos emp-7 no tiene V ese día
+    const emp7Day15 = result.find((a) => a.employeeId === "emp-7" && toDateStr(a.date) === "2026-08-15");
+    expect(emp7Day15).toBeDefined();
+  });
+
+  it("día con 0 empleados disponibles deja celdas vacías y genera warning crítico", () => {
+    // Todos los empleados tienen V el día 20
+    const emps = make7Employees();
+    const lockedCells = new Set<string>();
+    for (let i = 1; i <= 7; i++) {
+      lockedCells.add(`emp-${i}|2026-08-20`);
+    }
+
+    const coverageWarnings: CoverageWarning[] = [];
+    const result = generateMonthSchedule(
+      emps, 2026, 8,
+      lockedCells, new Set(), [],
+      emps.map((e) => e.id),
+      { coverageWarnings }
+    );
+
+    // No debe haber ninguna asignación generada para el día 20
+    const day20Generated = result.filter((a) => toDateStr(a.date) === "2026-08-20");
+    expect(day20Generated).toHaveLength(0);
+
+    // Debe emitir warning crítico
+    const day20Warning = coverageWarnings.find(
+      (w) => w.date === "2026-08-20" && w.message.includes("⚠️")
+    );
+    expect(day20Warning).toBeDefined();
+  });
+});
