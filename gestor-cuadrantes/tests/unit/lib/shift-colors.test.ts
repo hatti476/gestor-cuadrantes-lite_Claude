@@ -47,6 +47,36 @@ describe("SHIFT_COLORS", () => {
     expect(SHIFT_COLORS.NF.color).toBe("#16A34A");
   });
 
+  it("MN (Mañana Navidad) comparte el naranja de la familia M (#F97316)", () => {
+    expect(SHIFT_COLORS.MN.color).toBe(SHIFT_COLORS.M.color);
+    expect(SHIFT_COLORS.MN.color).toBe("#F97316");
+  });
+
+  it("TN (Tarde Navidad) comparte el azul de la familia T (#3B82F6)", () => {
+    expect(SHIFT_COLORS.TN.color).toBe(SHIFT_COLORS.T.color);
+    expect(SHIFT_COLORS.TN.color).toBe("#3B82F6");
+  });
+
+  it("NN (Noche Navidad) comparte el verde de la familia N (#16A34A)", () => {
+    expect(SHIFT_COLORS.NN.color).toBe(SHIFT_COLORS.N.color);
+    expect(SHIFT_COLORS.NN.color).toBe("#16A34A");
+  });
+
+  it("familia M: M, MF y MN tienen exactamente el mismo color de fondo", () => {
+    expect(SHIFT_COLORS.MF.color).toBe(SHIFT_COLORS.M.color);
+    expect(SHIFT_COLORS.MN.color).toBe(SHIFT_COLORS.M.color);
+  });
+
+  it("familia T: T, TF y TN tienen exactamente el mismo color de fondo", () => {
+    expect(SHIFT_COLORS.TF.color).toBe(SHIFT_COLORS.T.color);
+    expect(SHIFT_COLORS.TN.color).toBe(SHIFT_COLORS.T.color);
+  });
+
+  it("familia N: N, NF y NN tienen exactamente el mismo color de fondo", () => {
+    expect(SHIFT_COLORS.NF.color).toBe(SHIFT_COLORS.N.color);
+    expect(SHIFT_COLORS.NN.color).toBe(SHIFT_COLORS.N.color);
+  });
+
   it("V (vacaciones) tiene fondo negro", () => {
     expect(SHIFT_COLORS.V.color).toBe("#111827");
     expect(SHIFT_COLORS.V.textColor).toBe("#FFFFFF");
@@ -57,8 +87,8 @@ describe("SHIFT_COLORS", () => {
     expect(SHIFT_COLORS.B.textColor).toBe("#FFFFFF");
   });
 
-  it("NN usa fondo verde oscuro (turno especial de Navidad)", () => {
-    expect(SHIFT_COLORS.NN.color).toBe("#0B6B2B");
+  it("NN usa el mismo verde que N (turno especial de Navidad)", () => {
+    expect(SHIFT_COLORS.NN.color).toBe("#16A34A");
   });
 });
 

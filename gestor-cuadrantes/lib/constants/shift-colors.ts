@@ -77,20 +77,20 @@ export const SHIFT_COLORS: Record<ShiftType, ShiftConfig> = {
     color: "#16A34A",
     textColor: "#FFFFFF",
   },
-  // Turnos especiales de Navidad
+  // Turnos especiales de Navidad — misma familia de color que el turno base
   MN: {
     label: "Mañana Navidad",
-    color: "#BE123C",
+    color: "#F97316",
     textColor: "#FFFFFF",
   },
   TN: {
     label: "Tarde Navidad",
-    color: "#047857",
+    color: "#3B82F6",
     textColor: "#FFFFFF",
   },
   NN: {
     label: "Noche Navidad",
-    color: "#0B6B2B",
+    color: "#16A34A",
     textColor: "#FFFFFF",
   },
 };
