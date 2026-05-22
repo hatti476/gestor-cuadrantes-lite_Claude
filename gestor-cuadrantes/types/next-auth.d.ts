@@ -8,8 +8,8 @@ declare module "next-auth" {
       email: string;
       name?: string | null;
       image?: string | null;
-      /** Rol global: SUPER_ADMIN | USER */
-      role: "SUPER_ADMIN" | "USER";
+      /** Rol global: SUPER_ADMIN | SUPER_VIEWER | USER */
+      role: "SUPER_ADMIN" | "SUPER_VIEWER" | "USER";
       /** Membresías de proyecto (cargadas en el callback session) */
       projectMemberships: ProjectMembership[];
     };

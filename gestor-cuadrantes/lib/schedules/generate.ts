@@ -667,15 +667,21 @@ export function generateMonthSchedule(
       const monthStart = new Date(Date.UTC(year, month - 1, 1));
 
       if (trailingNights > 0 && trailingNights < 7) {
-        // Employee mid-block: add remaining nights + 3D post-rest to nightPlan with priority
+        // Employee mid-block: add remaining nights + 3D post-rest to nightPlan with priority.
+        // Stop immediately if a locked date (V/B/manual) interrupts the continuation —
+        // vacation breaks the block; the employee returns to normal rotation after absence.
         const nightsRemaining = 7 - trailingNights;
         let contDate = monthStart;
+        let actualNightsPlanned = 0;
 
         // Override nightPlan for remaining night dates, clearing conflicting N entries
         for (let i = 0; i < nightsRemaining; i++) {
           if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
           const ds = toDateStr(contDate);
           const empKey = `${empId}|${ds}`;
+          // If the employee has a locked date (V, B, manual), the block is interrupted.
+          // Stop planning — no night continuation and no post-rest after vacation.
+          if (existingDates.has(empKey)) break;
           // Remove conflicting N from any other employee assigned to this date
           for (const [existingKey, existingShift] of nightPlan.entries()) {
             if (existingKey !== empKey && existingKey.endsWith(`|${ds}`) && existingShift === "N") {
@@ -683,26 +689,32 @@ export function generateMonthSchedule(
             }
           }
           nightPlan.set(empKey, "N");
+          actualNightsPlanned++;
           contDate = addDays(contDate, 1);
         }
-        // Add 3D post-rest
-        for (let i = 0; i < 3; i++) {
-          if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
-          const ds = toDateStr(contDate);
-          const empKey = `${empId}|${ds}`;
-          if (nightPlan.get(empKey) !== "N") {
-            nightPlan.set(empKey, "D");
-            crossMonthRestDates.add(empKey);
+        // Add 3D post-rest only if at least one night was actually planned
+        if (actualNightsPlanned > 0) {
+          for (let i = 0; i < 3; i++) {
+            if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
+            const ds = toDateStr(contDate);
+            const empKey = `${empId}|${ds}`;
+            if (existingDates.has(empKey)) break; // vacation/baja covers rest — stop
+            if (nightPlan.get(empKey) !== "N") {
+              nightPlan.set(empKey, "D");
+              crossMonthRestDates.add(empKey);
+            }
+            contDate = addDays(contDate, 1);
           }
-          contDate = addDays(contDate, 1);
         }
       } else if (trailingNights >= 7) {
-        // Employee completed all 7 nights: add 3D post-rest in new month
+        // Employee completed all 7 nights: add 3D post-rest in new month.
+        // Skip if vacation/baja is covering the rest period.
         let contDate = monthStart;
         for (let i = 0; i < 3; i++) {
           if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
           const ds = toDateStr(contDate);
           const empKey = `${empId}|${ds}`;
+          if (existingDates.has(empKey)) break; // vacation/baja acts as rest — stop
           if (nightPlan.get(empKey) !== "N") {
             nightPlan.set(empKey, "D");
             crossMonthRestDates.add(empKey);
@@ -718,6 +730,7 @@ export function generateMonthSchedule(
           if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
           const ds = toDateStr(contDate);
           const empKey = `${empId}|${ds}`;
+          if (existingDates.has(empKey)) break; // vacation/baja covers rest — stop
           if (nightPlan.get(empKey) !== "N") nightPlan.set(empKey, "D");
           contDate = addDays(contDate, 1);
         }
@@ -756,6 +769,7 @@ export function generateMonthSchedule(
     weekendShift: Map<string, "MF" | "TF">; // weekKey → "MF" | "TF"
     mCount: number;
     tCount: number;
+    weekendCount: number; // total weekend packages (Sat+Sun) assigned this month
   }
 
   const stateMap = new Map<string, EmpState>();
@@ -769,7 +783,36 @@ export function generateMonthSchedule(
       weekendShift: new Map(),
       mCount: 0,
       tCount: 0,
+      weekendCount: 0,
     });
+  }
+
+  // ── Pre-generation availability check (Sprint 18 Tarea 2) ─────────────────
+  // Count employees available (not locked by V/B/manual) per day.
+  // Emit warnings before generation when coverage is critically low.
+  const availablePerDay = new Map<string, number>();
+  for (let avDay = 1; avDay <= daysInMonth; avDay++) {
+    const avDate = new Date(Date.UTC(year, month - 1, avDay));
+    const avDateStr = toDateStr(avDate);
+    const available = sortedEmps.filter(
+      (emp) => !existingDates.has(`${emp.id}|${avDateStr}`)
+    ).length;
+    availablePerDay.set(avDateStr, available);
+    if (available < 2 && options.coverageWarnings) {
+      if (available === 0) {
+        options.coverageWarnings.push({
+          date: avDateStr,
+          employeeId: "",
+          message: `⚠️ Sin cobertura el ${avDateStr.slice(8, 10)}/${avDateStr.slice(5, 7)}: todos los empleados tienen ausencia programada.`,
+        });
+      } else {
+        options.coverageWarnings.push({
+          date: avDateStr,
+          employeeId: "",
+          message: `Atención: el ${avDateStr.slice(8, 10)}/${avDateStr.slice(5, 7)} solo tiene ${available} empleado(s) disponible(s). La cobertura mínima no puede garantizarse.`,
+        });
+      }
+    }
   }
 
   // ── Day-by-day assignment ─────────────────────────────────────────────────
@@ -780,6 +823,49 @@ export function generateMonthSchedule(
   // Weekend package plan: Saturday date string → package owner for MF/TF.
   // Friday/Monday holidays glued to that weekend reuse the same package.
   const weekendPlan = new Map<string, WeekendPackage>();
+
+  // ── Weekend pack continuity from prevMonthTail (Sprint 18 Tarea 1) ─────────
+  // If the previous month ended on a Saturday with MF/TF assignments, and the
+  // first day of the current month is a Sunday, pre-seed the weekendPlan so
+  // that Sunday is assigned to the same employees with the same shift type.
+  {
+    const lastDayOfPrevMonth = new Date(Date.UTC(year, month - 1, 0));
+    if (prevMonthTail.length > 0 && lastDayOfPrevMonth.getUTCDay() === 6) {
+      const lastDayStr = toDateStr(lastDayOfPrevMonth);
+      const mfEntry = prevMonthTail.find(
+        (p) => p.date === lastDayStr && p.shiftType === "MF"
+      );
+      const tfEntry = prevMonthTail.find(
+        (p) => p.date === lastDayStr && p.shiftType === "TF"
+      );
+      if (mfEntry || tfEntry) {
+        // Pre-seed weekendPlan keyed by the Saturday from the previous month
+        weekendPlan.set(lastDayStr, {
+          mfEmpId: mfEntry?.employeeId ?? null,
+          tfEmpId: tfEntry?.employeeId ?? null,
+        });
+        // Reserve weekendShift and weekShift for the first week of the new month
+        const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1));
+        if (firstDayOfMonth.getUTCDay() === 0) {
+          const wk = weekKey(firstDayOfMonth);
+          if (mfEntry) {
+            const st = stateMap.get(mfEntry.employeeId);
+            if (st) {
+              if (!st.weekendShift.has(wk)) st.weekendShift.set(wk, "MF");
+              if (!st.weekShift.has(wk)) st.weekShift.set(wk, "M");
+            }
+          }
+          if (tfEntry) {
+            const st = stateMap.get(tfEntry.employeeId);
+            if (st) {
+              if (!st.weekendShift.has(wk)) st.weekendShift.set(wk, "TF");
+              if (!st.weekShift.has(wk)) st.weekShift.set(wk, "T");
+            }
+          }
+        }
+      }
+    }
+  }
 
   const getPreviousShift = (employeeId: string, date: Date): string | null => {
     const previousDateStr = toDateStr(addDays(date, -1));
@@ -1009,6 +1095,7 @@ export function generateMonthSchedule(
       if (!state) return;
       if (!state.weekendShift.has(packageWeekKey)) {
         state.weekendShift.set(packageWeekKey, targetShift);
+        state.weekendCount++; // Track total weekends assigned — used to balance distribution
       }
       const targetBase = targetShift === "MF" ? "M" : "T";
       if (!state.weekShift.has(packageWeekKey)) {
@@ -1872,11 +1959,17 @@ export function generateMonthSchedule(
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(Date.UTC(year, month - 1, day));
       const dateStr = toDateStr(date);
-      const isSpecialDay = isWeekend(date) || holidayDates.has(dateStr);
+      // Days with 0 available employees: leave cells empty, skip repair entirely
+      const dayAvailable = availablePerDay.get(dateStr) ?? sortedEmps.length;
+      if (dayAvailable === 0) continue;
 
+      const isSpecialDay = isWeekend(date) || holidayDates.has(dateStr);
       repairCoverage(date, applyChristmasSpecialRule(applySpecialDayRule("N", date, holidayDates), date));
       repairCoverage(date, applyChristmasSpecialRule(isSpecialDay ? "MF" : "M", date));
-      repairCoverage(date, applyChristmasSpecialRule(isSpecialDay ? "TF" : "T", date));
+      // With only 1 available employee, skip T/TF repair — M/MF is the max achievable coverage
+      if (dayAvailable >= 2) {
+        repairCoverage(date, applyChristmasSpecialRule(isSpecialDay ? "TF" : "T", date));
+      }
     }
   };
 
@@ -2056,6 +2149,7 @@ function _pickWeekendPackageEmployee(
   stateMap: Map<string, {
     mCount: number;
     tCount: number;
+    weekendCount: number;
     weekShift: Map<string, string>;
     weekendShift: Map<string, "MF" | "TF">;
   }>,
@@ -2085,14 +2179,16 @@ function _pickWeekendPackageEmployee(
       a.shiftPreference === null || a.shiftPreference === undefined || a.shiftPreference === targetBase ? 0 : 1;
     const bPreferencePenalty =
       b.shiftPreference === null || b.shiftPreference === undefined || b.shiftPreference === targetBase ? 0 : 1;
-    const aCount = targetBase === "M" ? aState.mCount : aState.tCount;
-    const bCount = targetBase === "M" ? bState.mCount : bState.tCount;
+    // Primary balance: fewest total weekends worked this month, regardless of weekday M/T count.
+    // This prevents employees with many weekday shifts from being permanently deprioritized.
+    const aWeekendCount = aState.weekendCount;
+    const bWeekendCount = bState.weekendCount;
 
     return (
       aCoveragePenalty - bCoveragePenalty ||
       aWeeklyPenalty - bWeeklyPenalty ||
       aPreferencePenalty - bPreferencePenalty ||
-      aCount - bCount ||
+      aWeekendCount - bWeekendCount || // ← weekend equity: fewer weekends worked = higher priority
       a.rotationOrder - b.rotationOrder
     );
   })[0] ?? null;

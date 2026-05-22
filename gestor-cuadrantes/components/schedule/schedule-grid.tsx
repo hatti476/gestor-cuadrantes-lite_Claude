@@ -93,9 +93,9 @@ export function ScheduleGrid({
                   } : undefined}
                   className={`w-9 py-1 text-center border-b border-r border-gray-200 font-medium ${
                     isHoliday
-                      ? "bg-red-100 text-red-700 cursor-pointer select-none"
+                      ? "bg-red-200 text-red-800 cursor-pointer select-none"
                       : isWeekend
-                      ? "bg-blue-50 text-blue-700"
+                      ? "bg-blue-100 text-blue-800"
                       : "text-gray-600"
                   }`}
                 >
@@ -142,6 +142,7 @@ export function ScheduleGrid({
                   const cell = index[emp.id]?.[dateStr];
                   const date = new Date(year, month - 1, day);
                   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                  const isHolidayCell = holidayDates.has(dateStr);
                   const isLocked = lockedCells.has(`${emp.id}|${dateStr}`);
                   const clickable = !!onCellClick && (!isLocked || allowLockedCellClick);
 
@@ -152,7 +153,7 @@ export function ScheduleGrid({
                       onClick={clickable ? () => onCellClick(emp.id, dateStr, cell?.shiftType) : undefined}
                       data-locked={isLocked ? "true" : undefined}
                       className={`w-9 h-8 p-0.5 border-r border-b border-gray-200 relative ${
-                        isWeekend ? "bg-blue-50/30" : ""
+                        isHolidayCell ? "bg-red-50" : isWeekend ? "bg-blue-50" : ""
                       } ${clickable ? "cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset" : ""} ${
                         isLocked ? "ring-2 ring-inset ring-dashed ring-amber-400" : ""
                       }`}

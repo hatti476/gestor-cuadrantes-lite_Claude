@@ -1,6 +1,6 @@
 # Documento de Requisitos — Gestor de Cuadrantes
 
-**Versión**: 3.0.0 (Sprint 17 — correcciones del algoritmo II)
+**Versión**: 3.1.0 (Sprint 18 — UX fixes, SUPER_VIEWER, snapshot undo, equidad fines de semana)
 **Última actualización**: 22/05/2026
 **Estado**: Vivo — se actualiza al cierre de cada sprint
 
@@ -14,12 +14,12 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 
 | Campo | Valor |
 |-------|-------|
-| Versión funcional | 1.7 |
-| Último sprint cerrado | Sprint 17 — correcciones del algoritmo II |
+| Versión funcional | 1.8 |
+| Último sprint cerrado | Sprint 18 — UX fixes, SUPER_VIEWER, snapshot undo, equidad fines de semana |
 | Sprint en curso | — (pendiente de planificación) |
-| Siguiente sprint planificado | Sprint 18 — pendiente de definición |
-| Tests unitarios | 227/227 |
-| Tests E2E declarados | CP-01..CP-115 |
+| Siguiente sprint planificado | Sprint 19 — gestión de usuarios y proyectos (UI CRUD) |
+| Tests unitarios | 257/257 |
+| Tests E2E declarados | CP-01..CP-128 |
 | Bugs abiertos conocidos | 0 |
 
 ---
@@ -29,7 +29,8 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | Rol global | Descripción | Acceso |
 |------------|-------------|--------|
 | `SUPER_ADMIN` | Administrador global con acceso total a todos los proyectos | Lectura + escritura en todo |
-| `USER` | Técnico / empleado estándar | Solo lectura del cuadrante |
+| `SUPER_VIEWER` | Observador global sin membresías explícitas | Solo lectura de todos los proyectos; no puede editar ni generar |
+| `USER` | Técnico / empleado estándar | Solo lectura del cuadrante de sus proyectos |
 
 | Rol de proyecto | Descripción | Acceso |
 |-----------------|-------------|--------|
@@ -54,6 +55,7 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-01.6 | El header muestra el email del usuario autenticado y su rol global como badge | 1 | ✅ |
 | RF-01.7 | La sesión JWT incluye `id`, `role` (global) y `projectMemberships[]` | 6 | ✅ |
 | RF-01.8 | Las membresías de proyecto se cargan desde BD en cada refresco del token | 6 | ✅ |
+| RF-01.9 | El rol `SUPER_VIEWER` permite ver todos los proyectos sin membresías explícitas; el header muestra badge gris "Viewer" | 18 | ✅ |
 
 ---
 
@@ -258,6 +260,9 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-14.14 | El algoritmo detecta empleados que terminaron el mes anterior a mitad de bloque nocturno y los completa al inicio del nuevo mes (continuidad cross-month), seguidos de los días de post-descanso obligatorios | 17 | ✅ |
 | RF-14.15 | Cuando el lunes siguiente a un domingo es festivo, el paquete de fin de semana se extiende a 3 días (Sáb+Dom+Lun); el mismo par de empleados cubre los 3 días con MF/TF | 17 | ✅ |
 | RF-14.16 | Tras ≥5 jornadas diurnas consecutivas (M/T, incluyendo cruce de mes), el algoritmo aplica 2 días de descanso forzado HARD (no reemplazables por la fase de reparación de cobertura) | 17 | ✅ |
+| RF-14.17 | Si el mes anterior termina en sábado con MF/TF, el primer día del mes nuevo (domingo) se asigna al mismo empleado para garantizar continuidad del paquete sáb+dom | 18 | ✅ |
+| RF-14.18 | El bloque nocturno cross-month se interrumpe si el empleado tiene V/B en los días del mes siguiente; no se planifican N ni D sobre vacaciones | 18 | ✅ |
+| RF-14.19 | La equidad de fines de semana se gestiona mediante `weekendCount` en `EmpState`; el empleado con menos fines de semana asignados tiene prioridad | 18 | ✅ |
 
 ---
 
@@ -354,6 +359,32 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-22.1 | `/info` documenta gestión de proyectos, preparación del cuadrante, festivos automáticos y preferencias de turno | 13 | ✅ |
 | RF-22.2 | `/info` muestra contenido diferenciado para administradores y empleados | 13 | ✅ |
 | RF-22.3 | La ayuda incluye los 10 tipos de turno vigentes: M, T, N, MF, TF, NF, J, D, V, B | 13 | ✅ |
+
+---
+
+### RF-23 — Snapshot y deshacer generación
+
+| ID | Descripción | Sprint | Estado |
+|----|-------------|--------|--------|
+| RF-23.1 | Antes de generar, el sistema guarda un snapshot del cuadrante actual en `ScheduleSnapshot` (upsert por `projectId+month+year`) | 18 | ✅ |
+| RF-23.2 | Si el snapshot se guarda correctamente, aparece el botón "↩ Deshacer" junto al título del mes | 18 | ✅ |
+| RF-23.3 | Al pulsar "Deshacer", el sistema restaura el cuadrante al estado previo a la generación eliminando asignaciones generadas y reinsertando el snapshot | 18 | ✅ |
+| RF-23.4 | El botón "Deshacer" desaparece al navegar de mes o al editar manualmente una celda | 18 | ✅ |
+| RF-23.5 | Solo SUPER_ADMIN o PROJECT_ADMIN pueden guardar y restaurar snapshots | 18 | ✅ |
+| RF-23.6 | `ScheduleSnapshot` usa `@@unique([projectId, month, year])`; múltiples generaciones en el mismo mes sobrescriben el mismo snapshot | 18 | ✅ |
+
+---
+
+### RF-24 — Esquema de colores de turno
+
+| ID | Descripción | Sprint | Estado |
+|----|-------------|--------|--------|
+| RF-24.1 | M y MF comparten el mismo color naranja (`#F97316`); texto blanco | 18 | ✅ |
+| RF-24.2 | T y TF comparten el mismo color azul (`#3B82F6`); texto blanco | 18 | ✅ |
+| RF-24.3 | N y NF comparten el mismo color verde (`#16A34A`); texto blanco | 18 | ✅ |
+| RF-24.4 | V (Vacaciones) y B (Baja) usan fondo negro (`#111827`) con texto blanco para máxima visibilidad | 18 | ✅ |
+| RF-24.5 | Las columnas de sábado y domingo tienen cabecera azul (`bg-blue-100 text-blue-800`) y celdas con fondo `bg-blue-50` | 18 | ✅ |
+| RF-24.6 | Las columnas de festivo tienen cabecera rojo intenso (`bg-red-200 text-red-800`) y celdas con fondo `bg-red-50` | 18 | ✅ |
 
 ---
 
@@ -500,17 +531,19 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | Sprint 15 | Sin suite E2E nueva; baseline técnico y documental | — | ✅ |
 | E2E Sprint 16 | CP-99..CP-109 | 11 | ✅ |
 | E2E Sprint 17 | CP-110..CP-115 | 6 | ✅ |
-| **Total E2E** | | **115** | **✅** |
+| E2E Sprint 18 | CP-115..CP-128 | 14 | ✅ |
+| **Total E2E** | | **128** | **✅** |
 
 ---
 
-## 9. Backlog pendiente (Sprint 18+)
+## 9. Backlog pendiente (Sprint 19+)
 
 | Funcionalidad | Requisito | Prioridad |
-|---------------|-----------|-----------|
-| Sprint 18: equidad M/T a largo plazo y reparto equitativo de fines de semana/festivos | RF-14 / RF-16 | Alta |
-| Sprint 18: harness de simulación multi-mes para medir equidad, cobertura y regresiones del generador | Calidad algoritmo | Alta |
-| Sprint 18: diagnósticos del generador en modo test/debug para explicar decisiones de asignación | Calidad algoritmo | Media |
+|---------------|-----------|----------|
+| Sprint 19: UI de gestión de usuarios — crear, editar, eliminar usuarios con roles globales (SUPER_ADMIN, SUPER_VIEWER, USER) | RF-01 | Alta |
+| Sprint 19: UI de gestión mejorada de proyectos — crear/editar/archivar proyectos, gestionar miembros | RF-13 | Alta |
+| Sprint 19: harness de simulación multi-mes para medir equidad, cobertura y regresiones del generador | Calidad algoritmo | Alta |
+| Sprint 19: diagnósticos del generador en modo test/debug para explicar decisiones de asignación | Calidad algoritmo | Media |
 | Robustez de festivos externos con cache/backfill si producción lo necesita | RF-20 / Operativo | Media |
 | Vista personalizada del técnico: próximos turnos y cambios recientes | Nuevo RF | Media |
 | Solicitud/aprobación de vacaciones | Nuevo RF | Alta |
@@ -542,3 +575,4 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | 1.5 | 15 | Saneamiento técnico y documental: lint limpio, E2E CP-29 recuperado, build sin dependencia de Google Fonts, README/requisitos/informe alineados y versionado npm en 1.5.0. |
 | 1.6 | 16 | Correcciones del algoritmo I: toggle V/D en PrepPanel, exclusión pref J de noches, consistencia MF/TF con pauta semanal, 2D obligatorios entre bloques, validación ET Art. 34.3, tabla de complementos económicos, E2E CP-99..CP-109. |
 | 1.7 | 17 | Correcciones del algoritmo II: descanso forzado HARD (Tarea 1), continuidad cross-month de bloque nocturno con protección `crossMonthRestDates` (Tarea 2), paquete extendido Sáb+Dom+Lun festivo (Tarea 3), `coverageWarnings` en API, E2E CP-110..CP-115. |
+| 1.8 | 18 | UX fixes y nuevas funcionalidades: continuidad cross-month del paquete sáb+dom (RF-14.17), SUPER_VIEWER (RF-01.9), columnas sáb/dom en azul y festivos en rojo intenso, colores unificados por familia de turno, snapshot/undo de generación (RF-21), bugfixes N cross-month+vacaciones (RF-14.18), weekendCount equidad (RF-14.19), V/B negro, E2E CP-115..CP-128. |

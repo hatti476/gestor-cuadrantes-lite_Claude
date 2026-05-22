@@ -23,19 +23,41 @@ describe("SHIFT_COLORS", () => {
     });
   });
 
-  it("M es naranja (#FF9800)", () => {
-    expect(SHIFT_COLORS.M.color).toBe("#FF9800");
+  it("M es naranja unificado (#F97316)", () => {
+    expect(SHIFT_COLORS.M.color).toBe("#F97316");
   });
 
-  it("T es azul (#2196F3)", () => {
-    expect(SHIFT_COLORS.T.color).toBe("#2196F3");
+  it("MF tiene el mismo naranja que M (#F97316)", () => {
+    expect(SHIFT_COLORS.MF.color).toBe("#F97316");
   });
 
-  it("N es verde (#4CAF50)", () => {
-    expect(SHIFT_COLORS.N.color).toBe("#4CAF50");
+  it("T es azul unificado (#3B82F6)", () => {
+    expect(SHIFT_COLORS.T.color).toBe("#3B82F6");
   });
 
-  it("NN usa fondo verde para mantener la familia de noches", () => {
+  it("TF tiene el mismo azul que T (#3B82F6)", () => {
+    expect(SHIFT_COLORS.TF.color).toBe("#3B82F6");
+  });
+
+  it("N es verde unificado (#16A34A)", () => {
+    expect(SHIFT_COLORS.N.color).toBe("#16A34A");
+  });
+
+  it("NF tiene el mismo verde que N (#16A34A)", () => {
+    expect(SHIFT_COLORS.NF.color).toBe("#16A34A");
+  });
+
+  it("V (vacaciones) tiene fondo negro", () => {
+    expect(SHIFT_COLORS.V.color).toBe("#111827");
+    expect(SHIFT_COLORS.V.textColor).toBe("#FFFFFF");
+  });
+
+  it("B (baja) tiene fondo negro", () => {
+    expect(SHIFT_COLORS.B.color).toBe("#111827");
+    expect(SHIFT_COLORS.B.textColor).toBe("#FFFFFF");
+  });
+
+  it("NN usa fondo verde oscuro (turno especial de Navidad)", () => {
     expect(SHIFT_COLORS.NN.color).toBe("#0B6B2B");
   });
 });
@@ -43,7 +65,7 @@ describe("SHIFT_COLORS", () => {
 describe("getShiftConfig", () => {
   it("devuelve la config correcta para un turno conocido", () => {
     const config = getShiftConfig("M");
-    expect(config.color).toBe("#FF9800");
+    expect(config.color).toBe("#F97316");
     expect(config.label).toBe("Mañana");
   });
 
