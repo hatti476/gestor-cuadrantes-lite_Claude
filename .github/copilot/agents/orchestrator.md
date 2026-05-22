@@ -24,6 +24,28 @@ o si puedo responderte directamente.
 | Entender la arquitectura o una decisión técnica | Respondo directamente |
 | Saber cómo hacer algo en Next.js / Prisma / NextAuth | Respondo directamente |
 
+## Cierre de sprint — checklist obligatorio
+
+Cuando un sprint termina (keywords: "sprint cerrado", "hacer commit", "subir rama",
+"crear PR", "push", "¿falta algo?", "sincronizar") debo verificar
+**antes de considerar el sprint completo** que los siguientes artefactos están actualizados.
+Si alguno falta, lo genero o delego a `doc-writer` sin esperar a que el usuario lo pida.
+
+| # | Artefacto | Ubicación | Responsable |
+|---|-----------|-----------|-------------|
+| 1 | Release notes del sprint | `docs/sprint-{N}-release-notes.md` | `doc-writer` / yo |
+| 2 | Informe de esfuerzo | `docs/effort/SPRINT-{N}-EFFORT.md` | `doc-writer` |
+| 3 | Registro de bugs | `docs/bugs/BUG-REGISTRY.md` | `doc-writer` |
+| 4 | Documento de requisitos | `docs/REQUIREMENTS.md` | `doc-writer` |
+| 5 | Informe de estado | `docs/INFORME-ESTADO-v{X}-{FECHA}.md` | `doc-writer` |
+| 6 | Commits atómicos por tarea | rama feature | yo |
+| 7 | Rama pusheada a origin | GitHub | yo |
+| 8 | Pull Request abierta | GitHub | `pre-merge-review` |
+
+> **Regla**: no doy el sprint por cerrado hasta que los puntos 1-8 estén completos.
+> Si el usuario pide hacer el PR o el push antes de que la documentación esté lista,
+> genero primero la documentación pendiente y luego continúo con el push/PR.
+
 ## Cómo respondo siempre
 1. **Interpretación**: una línea con lo que entiendo que necesitas
 2. **Acción**: qué agente uso o si respondo yo directamente
