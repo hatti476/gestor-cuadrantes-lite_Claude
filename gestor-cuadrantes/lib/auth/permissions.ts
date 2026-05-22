@@ -100,3 +100,51 @@ export function hasAdminAccess(session: Session | null): boolean {
 
   return memberships.some((m) => m.role === "PROJECT_ADMIN");
 }
+
+/**
+ * Devuelve true si el usuario es PROJECT_ADMIN en al menos un proyecto.
+ * Útil para determinar accesos intermedios (festivos, empleados, historial).
+ */
+export function isAnyProjectAdmin(session: Session | null): boolean {
+  if (!session) return false;
+  const memberships = (session.user as unknown as { projectMemberships?: ProjectMembership[] })
+    .projectMemberships ?? [];
+  return memberships.some((m) => m.role === "PROJECT_ADMIN");
+}
+
+/**
+ * El usuario puede ver la lista de empleados.
+ * Roles permitidos: SUPER_ADMIN, SUPER_VIEWER, PROJECT_ADMIN (en cualquier proyecto).
+ * Los VIEWER (USER sin rol de administración de proyecto) NO tienen acceso.
+ */
+export function canViewEmployees(session: Session | null): boolean {
+  if (!session) return false;
+  if (isSuperAdmin(session)) return true;
+  if (isSuperViewer(session)) return true;
+  return isAnyProjectAdmin(session);
+}
+
+/**
+ * El usuario puede ver los festivos.
+ * Roles permitidos: SUPER_ADMIN, SUPER_VIEWER, PROJECT_ADMIN (en cualquier proyecto).
+ * Los VIEWER (USER sin rol de administración de proyecto) NO tienen acceso.
+ */
+export function canViewHolidays(session: Session | null): boolean {
+  return canViewEmployees(session);
+}
+
+/**
+ * El usuario puede gestionar (crear/eliminar) festivos.
+ * Solo SUPER_ADMIN.
+ */
+export function canManageHolidays(session: Session | null): boolean {
+  return isSuperAdmin(session);
+}
+
+/**
+ * El usuario puede gestionar los miembros de un proyecto (añadir / eliminar).
+ * Según la matriz de permisos: solo SUPER_ADMIN.
+ */
+export function canManageProjectMembers(session: Session | null): boolean {
+  return isSuperAdmin(session);
+}

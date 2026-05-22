@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { isSuperAdmin, isProjectAdmin, canViewProject } from "@/lib/auth/permissions";
+import { isSuperAdmin, canViewProject, canManageProjectMembers } from "@/lib/auth/permissions";
 
 const VALID_PROJECT_ROLES = ["PROJECT_ADMIN", "EMPLOYEE"] as const;
 
@@ -38,7 +38,7 @@ export async function GET(
 // ---------------------------------------------------------------------------
 // POST /api/projects/[id]/members — añadir miembro al proyecto
 // Body: { userId: string, role: "PROJECT_ADMIN" | "EMPLOYEE" }
-// SUPER_ADMIN o PROJECT_ADMIN del proyecto
+// Solo SUPER_ADMIN puede asignar miembros a proyectos
 // ---------------------------------------------------------------------------
 export async function POST(
   req: NextRequest,
@@ -51,7 +51,7 @@ export async function POST(
 
   const { id } = await params;
 
-  if (!isProjectAdmin(session, id)) {
+  if (!canManageProjectMembers(session)) {
     return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 
@@ -64,14 +64,6 @@ export async function POST(
     return NextResponse.json(
       { error: `Rol inválido. Valores válidos: ${VALID_PROJECT_ROLES.join(", ")}` },
       { status: 400 }
-    );
-  }
-
-  // Solo SUPER_ADMIN puede asignar PROJECT_ADMIN
-  if (role === "PROJECT_ADMIN" && !isSuperAdmin(session)) {
-    return NextResponse.json(
-      { error: "Solo el SUPER_ADMIN puede asignar el rol PROJECT_ADMIN" },
-      { status: 403 }
     );
   }
 

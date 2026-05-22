@@ -2,10 +2,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { isSuperAdmin, isProjectAdmin } from "@/lib/auth/permissions";
+import { isSuperAdmin, isProjectAdmin, canViewProject } from "@/lib/auth/permissions";
 
 // ---------------------------------------------------------------------------
 // GET /api/projects/[id] — detalle de un proyecto
+// Acceso: SUPER_ADMIN, PROJECT_ADMIN (propio), SUPER_VIEWER
 // ---------------------------------------------------------------------------
 export async function GET(
   _req: NextRequest,
@@ -18,8 +19,8 @@ export async function GET(
 
   const { id } = await params;
 
-  // Verificar acceso
-  if (!isSuperAdmin(session) && !session.user.projectMemberships.some((m) => m.projectId === id)) {
+  // canViewProject cubre SUPER_ADMIN, SUPER_VIEWER y cualquier miembro del proyecto
+  if (!canViewProject(session, id)) {
     return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 

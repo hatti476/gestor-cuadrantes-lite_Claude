@@ -2,11 +2,18 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { canViewHolidays, canManageHolidays } from "@/lib/auth/permissions";
 
 // GET /api/holidays?year=2026
+// Roles permitidos: SUPER_ADMIN, SUPER_VIEWER, PROJECT_ADMIN
+// Los VIEWER (USER sin rol de admin de proyecto) NO tienen acceso.
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  if (!canViewHolidays(session)) {
+    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
+  }
 
   const yearParam = req.nextUrl.searchParams.get("year");
   const year = yearParam ? parseInt(yearParam, 10) : new Date().getFullYear();
@@ -19,12 +26,12 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(holidays);
 }
 
-// POST /api/holidays — solo ADMIN
+// POST /api/holidays — solo SUPER_ADMIN
 // Body: { date: "YYYY-MM-DD", description: string }
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  if (session.user?.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Prohibido" }, { status: 403 });
+  if (!canManageHolidays(session)) return NextResponse.json({ error: "Prohibido" }, { status: 403 });
 
   let body: unknown;
   try {

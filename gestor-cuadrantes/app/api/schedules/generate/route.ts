@@ -4,17 +4,15 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { generateMonthSchedule, type GenerationWarning, type CoverageWarning, type PrevMonthTail } from "@/lib/schedules/generate";
 import { getMonthRange } from "@/lib/schedules/business-logic";
+import { isSuperAdmin, isProjectAdmin } from "@/lib/auth/permissions";
 
 // POST /api/schedules/generate
-// Body: { year: number, month: number }
-// Solo ADMIN. Genera turnos automáticos respetando los ya asignados.
+// Body: { year: number, month: number, projectId?: string }
+// SUPER_ADMIN o PROJECT_ADMIN del proyecto indicado.
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
-  if (session.user?.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 
   let body: unknown;
@@ -30,6 +28,14 @@ export async function POST(req: NextRequest) {
       { error: "year y month requeridos (month: 1-12)" },
       { status: 400 }
     );
+  }
+
+  // Verificar permisos: SUPER_ADMIN puede generar cualquier proyecto;
+  // PROJECT_ADMIN solo puede generar el suyo propio.
+  if (!isSuperAdmin(session)) {
+    if (!projectId || !isProjectAdmin(session, projectId)) {
+      return NextResponse.json({ error: "Prohibido" }, { status: 403 });
+    }
   }
 
   // Obtener empleados del proyecto activo (o todos si no hay projectId)

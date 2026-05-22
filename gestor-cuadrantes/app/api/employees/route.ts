@@ -4,17 +4,21 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { validateCreateEmployee } from "@/lib/employees/business-logic";
-import { canViewProject, isSuperAdmin } from "@/lib/auth/permissions";
+import { canViewProject, isSuperAdmin, canViewEmployees } from "@/lib/auth/permissions";
 
 // ---------------------------------------------------------------------------
 // GET /api/employees[?projectId=xxx] — lista empleados
-// Sin projectId: SUPER_ADMIN ve todos; USER ve los de sus proyectos
-// Con projectId: filtra por proyecto (verificando acceso)
+// Roles permitidos: SUPER_ADMIN, SUPER_VIEWER, PROJECT_ADMIN (cualquier proyecto)
+// Los VIEWER (USER/EMPLOYEE sin rol de admin de proyecto) NO tienen acceso.
 // ---------------------------------------------------------------------------
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  if (!canViewEmployees(session)) {
+    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 
   const { searchParams } = req.nextUrl;

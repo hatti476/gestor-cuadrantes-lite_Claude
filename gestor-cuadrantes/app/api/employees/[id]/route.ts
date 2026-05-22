@@ -3,12 +3,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { validateUpdateEmployee, isValidPassword, VALID_SHIFT_PREFERENCES, isValidShiftPreference } from "@/lib/employees/business-logic";
-import { isProjectAdmin } from "@/lib/auth/permissions";
+import { isSuperAdmin } from "@/lib/auth/permissions";
 import bcrypt from "bcryptjs";
 
 // ---------------------------------------------------------------------------
 // PATCH /api/employees/[id] — edita nombre, rol, shiftPreference, activa/desactiva
-// SUPER_ADMIN o PROJECT_ADMIN del proyecto del empleado
+// Solo SUPER_ADMIN
 // ---------------------------------------------------------------------------
 export async function PATCH(
   req: NextRequest,
@@ -17,6 +17,10 @@ export async function PATCH(
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  if (!isSuperAdmin(session)) {
+    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 
   const { id } = await params;
@@ -28,14 +32,6 @@ export async function PATCH(
   });
   if (!employee) {
     return NextResponse.json({ error: "Empleado no encontrado" }, { status: 404 });
-  }
-
-  // Verificar permisos: SUPER_ADMIN o PROJECT_ADMIN del proyecto del empleado
-  const hasPermission =
-    session.user.role === "SUPER_ADMIN" ||
-    (employee.projectId !== null && isProjectAdmin(session, employee.projectId));
-  if (!hasPermission) {
-    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 
   const body = await req.json().catch(() => null);
@@ -88,7 +84,7 @@ export async function PATCH(
 }
 
 // ---------------------------------------------------------------------------
-// PUT /api/employees/[id] — cambia contraseña (SUPER_ADMIN o PROJECT_ADMIN)
+// PUT /api/employees/[id] — cambia contraseña (solo SUPER_ADMIN)
 // ---------------------------------------------------------------------------
 export async function PUT(
   req: NextRequest,
@@ -99,6 +95,10 @@ export async function PUT(
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
+  if (!isSuperAdmin(session)) {
+    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
+  }
+
   const { id } = await params;
 
   const employee = await prisma.employee.findUnique({
@@ -107,13 +107,6 @@ export async function PUT(
   });
   if (!employee) {
     return NextResponse.json({ error: "Empleado no encontrado" }, { status: 404 });
-  }
-
-  const hasPermission =
-    session.user.role === "SUPER_ADMIN" ||
-    (employee.projectId !== null && isProjectAdmin(session, employee.projectId));
-  if (!hasPermission) {
-    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 
   const body = await req.json().catch(() => null);
