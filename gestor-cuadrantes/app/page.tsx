@@ -596,12 +596,12 @@ export default function HomePage() {
     // Guardar snapshot antes de generar
     if (activeProjectId) {
       try {
-        await fetch("/api/schedules/snapshot", {
+        const snapRes = await fetch("/api/schedules/snapshot", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ projectId: activeProjectId, month, year }),
         });
-        setSnapshotAvailable(true);
+        if (snapRes.ok) setSnapshotAvailable(true);
       } catch {
         // Snapshot opcional — no bloquear la generación
       }
@@ -830,7 +830,7 @@ export default function HomePage() {
               onClick={() => void handleUndoGeneration()}
               className="text-xs px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-700 transition-colors print:hidden"
             >
-              ↩ Deshacer generación
+              ↩ Deshacer
             </button>
           )}
           {canEdit && activePrepShiftLabel && (

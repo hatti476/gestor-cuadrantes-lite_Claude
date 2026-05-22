@@ -667,15 +667,21 @@ export function generateMonthSchedule(
       const monthStart = new Date(Date.UTC(year, month - 1, 1));
 
       if (trailingNights > 0 && trailingNights < 7) {
-        // Employee mid-block: add remaining nights + 3D post-rest to nightPlan with priority
+        // Employee mid-block: add remaining nights + 3D post-rest to nightPlan with priority.
+        // Stop immediately if a locked date (V/B/manual) interrupts the continuation —
+        // vacation breaks the block; the employee returns to normal rotation after absence.
         const nightsRemaining = 7 - trailingNights;
         let contDate = monthStart;
+        let actualNightsPlanned = 0;
 
         // Override nightPlan for remaining night dates, clearing conflicting N entries
         for (let i = 0; i < nightsRemaining; i++) {
           if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
           const ds = toDateStr(contDate);
           const empKey = `${empId}|${ds}`;
+          // If the employee has a locked date (V, B, manual), the block is interrupted.
+          // Stop planning — no night continuation and no post-rest after vacation.
+          if (existingDates.has(empKey)) break;
           // Remove conflicting N from any other employee assigned to this date
           for (const [existingKey, existingShift] of nightPlan.entries()) {
             if (existingKey !== empKey && existingKey.endsWith(`|${ds}`) && existingShift === "N") {
@@ -683,26 +689,32 @@ export function generateMonthSchedule(
             }
           }
           nightPlan.set(empKey, "N");
+          actualNightsPlanned++;
           contDate = addDays(contDate, 1);
         }
-        // Add 3D post-rest
-        for (let i = 0; i < 3; i++) {
-          if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
-          const ds = toDateStr(contDate);
-          const empKey = `${empId}|${ds}`;
-          if (nightPlan.get(empKey) !== "N") {
-            nightPlan.set(empKey, "D");
-            crossMonthRestDates.add(empKey);
+        // Add 3D post-rest only if at least one night was actually planned
+        if (actualNightsPlanned > 0) {
+          for (let i = 0; i < 3; i++) {
+            if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
+            const ds = toDateStr(contDate);
+            const empKey = `${empId}|${ds}`;
+            if (existingDates.has(empKey)) break; // vacation/baja covers rest — stop
+            if (nightPlan.get(empKey) !== "N") {
+              nightPlan.set(empKey, "D");
+              crossMonthRestDates.add(empKey);
+            }
+            contDate = addDays(contDate, 1);
           }
-          contDate = addDays(contDate, 1);
         }
       } else if (trailingNights >= 7) {
-        // Employee completed all 7 nights: add 3D post-rest in new month
+        // Employee completed all 7 nights: add 3D post-rest in new month.
+        // Skip if vacation/baja is covering the rest period.
         let contDate = monthStart;
         for (let i = 0; i < 3; i++) {
           if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
           const ds = toDateStr(contDate);
           const empKey = `${empId}|${ds}`;
+          if (existingDates.has(empKey)) break; // vacation/baja acts as rest — stop
           if (nightPlan.get(empKey) !== "N") {
             nightPlan.set(empKey, "D");
             crossMonthRestDates.add(empKey);
@@ -718,6 +730,7 @@ export function generateMonthSchedule(
           if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
           const ds = toDateStr(contDate);
           const empKey = `${empId}|${ds}`;
+          if (existingDates.has(empKey)) break; // vacation/baja covers rest — stop
           if (nightPlan.get(empKey) !== "N") nightPlan.set(empKey, "D");
           contDate = addDays(contDate, 1);
         }
@@ -756,6 +769,7 @@ export function generateMonthSchedule(
     weekendShift: Map<string, "MF" | "TF">; // weekKey → "MF" | "TF"
     mCount: number;
     tCount: number;
+    weekendCount: number; // total weekend packages (Sat+Sun) assigned this month
   }
 
   const stateMap = new Map<string, EmpState>();
@@ -769,6 +783,7 @@ export function generateMonthSchedule(
       weekendShift: new Map(),
       mCount: 0,
       tCount: 0,
+      weekendCount: 0,
     });
   }
 
@@ -1080,6 +1095,7 @@ export function generateMonthSchedule(
       if (!state) return;
       if (!state.weekendShift.has(packageWeekKey)) {
         state.weekendShift.set(packageWeekKey, targetShift);
+        state.weekendCount++; // Track total weekends assigned — used to balance distribution
       }
       const targetBase = targetShift === "MF" ? "M" : "T";
       if (!state.weekShift.has(packageWeekKey)) {
@@ -2133,6 +2149,7 @@ function _pickWeekendPackageEmployee(
   stateMap: Map<string, {
     mCount: number;
     tCount: number;
+    weekendCount: number;
     weekShift: Map<string, string>;
     weekendShift: Map<string, "MF" | "TF">;
   }>,
@@ -2162,14 +2179,16 @@ function _pickWeekendPackageEmployee(
       a.shiftPreference === null || a.shiftPreference === undefined || a.shiftPreference === targetBase ? 0 : 1;
     const bPreferencePenalty =
       b.shiftPreference === null || b.shiftPreference === undefined || b.shiftPreference === targetBase ? 0 : 1;
-    const aCount = targetBase === "M" ? aState.mCount : aState.tCount;
-    const bCount = targetBase === "M" ? bState.mCount : bState.tCount;
+    // Primary balance: fewest total weekends worked this month, regardless of weekday M/T count.
+    // This prevents employees with many weekday shifts from being permanently deprioritized.
+    const aWeekendCount = aState.weekendCount;
+    const bWeekendCount = bState.weekendCount;
 
     return (
       aCoveragePenalty - bCoveragePenalty ||
       aWeeklyPenalty - bWeeklyPenalty ||
       aPreferencePenalty - bPreferencePenalty ||
-      aCount - bCount ||
+      aWeekendCount - bWeekendCount || // ← weekend equity: fewer weekends worked = higher priority
       a.rotationOrder - b.rotationOrder
     );
   })[0] ?? null;

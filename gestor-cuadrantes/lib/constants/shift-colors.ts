@@ -53,12 +53,12 @@ export const SHIFT_COLORS: Record<ShiftType, ShiftConfig> = {
   },
   V: {
     label: "Vacaciones",
-    color: "#B45309",
+    color: "#111827",
     textColor: "#FFFFFF",
   },
   B: {
     label: "Baja",
-    color: "#7C3AED",
+    color: "#111827",
     textColor: "#FFFFFF",
   },
   // Turnos fin de semana (v2) — misma familia de color que el turno base

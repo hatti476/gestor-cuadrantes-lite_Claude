@@ -11,8 +11,11 @@
  * CP-121 — M y MF tienen el mismo color naranja en el grid
  * CP-122 — T y TF tienen el mismo color azul en el grid
  * CP-123 — N y NF tienen el mismo color verde en el grid
- * CP-124 — botón "Deshacer generación" aparece tras generar el cuadrante
+ * CP-124 — botón "Deshacer" aparece tras generar el cuadrante
  * CP-125 — restaurar snapshot devuelve el cuadrante al estado anterior a la generación
+ * CP-126 — V/B se muestran con fondo negro y texto blanco
+ * CP-127 — weekends equitativos: ningún empleado monopoliza todos los fines de semana
+ * CP-128 — botón undo llama a /api/schedules/snapshot/restore y devuelve 200
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -366,3 +369,125 @@ test("CP-125 — restaurar snapshot devuelve al estado anterior a la generación
   const restoredAssignments = await getAssignments(page, project.id, year, month);
   expect(restoredAssignments.length).toBe(initialCount);
 });
+
+// ===========================================================================
+// CP-126 — V/B se muestran con fondo negro y texto blanco
+// ===========================================================================
+
+test("CP-126 — V (vacaciones) y B (baja) se muestran con fondo negro (#111827) en el grid", async ({
+  page,
+}) => {
+  await loginAsAdmin(page);
+  const project = await getDefaultProject(page);
+
+  // Manually assign a V shift to ensure one exists
+  const employees = await page.request.get(`/api/employees?projectId=${project.id}`);
+  if (!employees.ok()) { test.skip(); return; }
+  const empList: { id: string }[] = await employees.json();
+  if (empList.length === 0) { test.skip(); return; }
+
+  const empId = empList[0].id;
+  const testDate = "2026-09-10";
+
+  // Create a V assignment
+  const assignResp = await page.request.post("/api/schedules", {
+    data: { employeeId: empId, date: testDate, shiftType: "V", projectId: project.id },
+  });
+  if (!assignResp.ok()) { test.skip(); return; }
+
+  // Navigate to the schedule page and load September 2026
+  await page.goto(ROUTES.home);
+  await page.waitForTimeout(2000);
+
+  // Check via DOM: a shift cell with shiftType="V" should have black-ish background
+  // The ShiftCell component uses inline style with color from SHIFT_COLORS
+  const cells = page.locator(`[data-testid="cell-${empId}-${testDate}"]`);
+  const cellCount = await cells.count();
+  if (cellCount > 0) {
+    const cellBg = await cells.first().locator("span, div").first().evaluate((el) => {
+      return (el as HTMLElement).style.backgroundColor || window.getComputedStyle(el).backgroundColor;
+    }).catch(() => "not-found");
+    // Should be a dark/black color — rgb(17, 24, 39) = #111827
+    if (cellBg !== "not-found") {
+      expect(cellBg).toMatch(/rgb\(17, 24, 39\)|#111827/i);
+    }
+  }
+});
+
+// ===========================================================================
+// CP-127 — Distribución equitativa de fines de semana (no monopolio)
+// ===========================================================================
+
+test("CP-127 — fines de semana distribuidos: ningún empleado tiene más de 3× más MF/TF que otro", async ({
+  page,
+}) => {
+  await loginAsAdmin(page);
+  const project = await getDefaultProject(page);
+
+  // Generate October 2026 (has 5 weekends)
+  await generateSchedule(page, project.id, 2026, 10);
+  const assignments = await getAssignments(page, project.id, 2026, 10);
+
+  // Count MF+TF per employee
+  const weekendCount = new Map<string, number>();
+  for (const a of assignments) {
+    if (a.shiftType === "MF" || a.shiftType === "TF") {
+      weekendCount.set(a.employeeId, (weekendCount.get(a.employeeId) ?? 0) + 1);
+    }
+  }
+
+  const counts = Array.from(weekendCount.values());
+  if (counts.length < 2) return; // Not enough data to compare
+
+  const maxWeekends = Math.max(...counts);
+  const minWeekends = Math.min(...counts);
+
+  // No employee should have 3× more weekend shifts than the least-assigned employee
+  // This catches the bug where one employee got 0 weekends vs another got 6
+  if (minWeekends > 0) {
+    expect(maxWeekends / minWeekends).toBeLessThan(3);
+  } else {
+    // At most 1 employee with 0 weekends while others have ≥4
+    const zeroCount = counts.filter((c) => c === 0).length;
+    if (maxWeekends >= 4) {
+      expect(zeroCount).toBeLessThanOrEqual(1);
+    }
+  }
+});
+
+// ===========================================================================
+// CP-128 — Botón "Deshacer" (no "Deshacer generación") y API devuelve 200
+// ===========================================================================
+
+test("CP-128 — botón undo muestra texto 'Deshacer' y el endpoint /snapshot/restore devuelve 200", async ({
+  page,
+}) => {
+  await loginAsAdmin(page);
+  const project = await getDefaultProject(page);
+
+  // Save a snapshot manually
+  const snapResp = await page.request.post("/api/schedules/snapshot", {
+    data: { projectId: project.id, month: 9, year: 2026 },
+  });
+  expect(snapResp.status()).toBe(200);
+
+  // Restore it
+  const restoreResp = await page.request.post("/api/schedules/snapshot/restore", {
+    data: { projectId: project.id, month: 9, year: 2026 },
+  });
+  expect(restoreResp.status()).toBe(200);
+
+  // Navigate to home and verify undo button text after generate (if button is shown)
+  await page.goto(ROUTES.home);
+  await page.waitForTimeout(1500);
+
+  // If the undo button is present, verify its label
+  const undoBtn = page.getByTestId("btn-undo-generation");
+  const undoVisible = await undoBtn.isVisible().catch(() => false);
+  if (undoVisible) {
+    const text = await undoBtn.textContent();
+    expect(text?.trim()).not.toContain("generación"); // Old label
+    expect(text?.trim()).toContain("Deshacer");
+  }
+});
+

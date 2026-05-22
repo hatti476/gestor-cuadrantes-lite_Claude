@@ -47,6 +47,16 @@ describe("SHIFT_COLORS", () => {
     expect(SHIFT_COLORS.NF.color).toBe("#16A34A");
   });
 
+  it("V (vacaciones) tiene fondo negro", () => {
+    expect(SHIFT_COLORS.V.color).toBe("#111827");
+    expect(SHIFT_COLORS.V.textColor).toBe("#FFFFFF");
+  });
+
+  it("B (baja) tiene fondo negro", () => {
+    expect(SHIFT_COLORS.B.color).toBe("#111827");
+    expect(SHIFT_COLORS.B.textColor).toBe("#FFFFFF");
+  });
+
   it("NN usa fondo verde oscuro (turno especial de Navidad)", () => {
     expect(SHIFT_COLORS.NN.color).toBe("#0B6B2B");
   });
