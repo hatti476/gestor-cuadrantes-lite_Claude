@@ -17,10 +17,12 @@ function getActiveProjectName(): string | null {
 export function Header() {
   const { data: session } = useSession();
   const pathname = usePathname();
-  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
-  const isSuperViewer = session?.user?.role === "SUPER_VIEWER";
+  const role = session?.user?.role;
+  const isSuperAdmin = role === "SUPER_ADMIN";
+  const isSuperViewer = role === "SUPER_VIEWER";
   const isProjectAdmin =
     session?.user?.projectMemberships?.some((m) => m.role === "PROJECT_ADMIN") ?? false;
+  // Can access /projects: SUPER_ADMIN, SUPER_VIEWER, PROJECT_ADMIN
   const canAccessProjects = isSuperAdmin || isSuperViewer || isProjectAdmin;
 
   const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
@@ -58,9 +60,13 @@ export function Header() {
           <Link href="/" className={navClass("/")}>
             Cuadrante
           </Link>
-          {(isSuperAdmin || isSuperViewer) && (
-            <Link href="/employees" className={navClass("/employees")}>
-              Empleados
+          {isSuperAdmin && (
+            <Link
+              href="/admin"
+              className={navClass("/admin")}
+              data-testid="nav-admin"
+            >
+              Administración
             </Link>
           )}
           <Link href="/info" className={navClass("/info")}>
@@ -83,15 +89,15 @@ export function Header() {
               {session.user.email}
               <span
                 className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                  session.user.role === "SUPER_ADMIN"
+                  isSuperAdmin
                     ? "bg-blue-100 text-blue-700"
-                    : session.user.role === "SUPER_VIEWER"
+                    : isSuperViewer
                     ? "bg-gray-200 text-gray-600"
                     : "bg-gray-100 text-gray-600"
                 }`}
                 data-testid="role-badge"
               >
-                {session.user.role === "SUPER_VIEWER" ? "Viewer" : session.user.role}
+                {isSuperViewer ? "Viewer" : role}
               </span>
             </span>
             <button
