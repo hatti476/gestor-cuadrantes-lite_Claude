@@ -2,7 +2,7 @@
 
 **Proyecto:** Gestor de Cuadrantes  
 **Mantenido por:** Agente `doc-writer`  
-**Última actualización:** 2026-05-22  
+**Última actualización:** 2026-05-22 (Sprint 18)
 
 ---
 
@@ -10,10 +10,11 @@
 
 | Total bugs | Críticos | Altos | Medios | Bajos | Abiertos | Resueltos |
 |-----------|----------|-------|--------|-------|----------|-----------|
-| 37 | 0 | 20 | 11 | 6 | 0 | 37 |
+| 40 | 0 | 22 | 12 | 6 | 0 | 40 |
 
 > Sprint 14 cerrado (2026-05-18): BUG-34..BUG-37 corregidos.  
-> Sprints 15-17 (2026-05-19 → 2026-05-22): sin nuevos bugs registrados. Los cambios de estos sprints son correcciones planificadas del algoritmo de generación y mejoras técnicas/documentales, no bugs descubiertos en testing o producción.
+> Sprints 15-17 (2026-05-19 → 2026-05-22): sin nuevos bugs registrados. Los cambios de estos sprints son correcciones planificadas del algoritmo de generación y mejoras técnicas/documentales, no bugs descubiertos en testing o producción.  
+> Sprint 18 (2026-05-22): BUG-38..BUG-40 detectados en pruebas manuales y corregidos en el commit `6c94861`.
 
 ---
 
@@ -58,6 +59,9 @@
 | [BUG-35](#bug-35) | Sprint 14 | 🟠 High | ✅ Fixed | Preferencia M/T no se respeta al asignar MF/TF en fines de semana y festivos |
 | [BUG-36](#bug-36) | Sprint 14 | 🟠 High | ✅ Fixed | Regla de máximo 5 días consecutivos no se aplica al mezclar M/T con MF/TF |
 | [BUG-37](#bug-37) | Sprint 14 | 🟠 High | ✅ Fixed | Turnos de finde/festivo (MF/TF) no se asignan como paquete indivisible Sáb+Dom |
+| [BUG-38](#bug-38) | Sprint 18 | 🟡 Medium | ✅ Fixed | `prisma.scheduleSnapshot` undefined — Prisma client no regenerado tras migración |
+| [BUG-39](#bug-39) | Sprint 18 | 🟠 High | ✅ Fixed | Bloque N cross-month planificaba N/D sobre días de vacaciones del mes siguiente |
+| [BUG-40](#bug-40) | Sprint 18 | 🟠 High | ✅ Fixed | Distribución de fines de semana muy desequilibrada por criterio mCount/tCount |
 
 ---
 
@@ -1360,6 +1364,86 @@ El sábado puede tener al empleado A (MF) y el domingo al empleado B (MF), parti
 
 **Fix aplicado**  
 Añadida pre-selección de paquetes Sáb+Dom en `generateMonthSchedule` (`lib/schedules/generate.ts`): en cada sábado del bucle principal, antes de iterar empleados, se elige un empleado para MF y otro para TF que cubrirán ambos días (Sáb y Dom). La selección respeta disponibilidad (`existingDates`, `nightPlan`, preferencia J) y el límite de consecutivos (excluye empleados con 4+ días de trabajo que necesitarían descanso el domingo). El bucle de empleados consulta el plan pre-computado para asignar MF, TF o D. Añadidos 2 tests de regresión que verifican que el mismo empleado cubre sábado y domingo con el mismo tipo de turno.
+
+---
+
+### BUG-38
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-38 |
+| **Sprint** | Sprint 18 |
+| **Detectado por** | PM — prueba manual del botón "Deshacer generación" |
+| **Fecha detección** | 2026-05-22 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `6c94861` |
+
+**Descripción**  
+Al pulsar el botón "Deshacer generación" después de crear el modelo `ScheduleSnapshot` y aplicar la migración, el servidor devolvía `500 Internal Server Error: TypeError: Cannot read properties of undefined (reading 'upsert') — prisma.scheduleSnapshot is undefined`.
+
+**Causa raíz**  
+El cliente Prisma no fue regenerado (`npx prisma generate`) después de aplicar la migración que añadía el modelo `ScheduleSnapshot`. El bundle de Next.js seguía usando la versión antigua del cliente, que no incluía el accesor `scheduleSnapshot`.
+
+**Ficheros afectados**  
+- `prisma/schema.prisma` — nuevo modelo `ScheduleSnapshot`
+- `prisma/migrations/20260522124917_sprint18_super_viewer_role/`
+- Proceso de build: faltaba paso `prisma generate`
+
+**Fix aplicado**  
+Ejecutado `npx prisma generate` en el workspace. A partir de este sprint, la regla queda documentada: _"Después de cualquier migración o cambio de schema, ejecutar `npx prisma generate` antes de levantar el servidor"_. Adicionalmente, `setSnapshotAvailable(true)` solo se activa si `snapRes.ok` es `true`.
+
+---
+
+### BUG-39
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-39 |
+| **Sprint** | Sprint 18 |
+| **Detectado por** | PM — revisión manual del cuadrante de agosto tras generación de julio |
+| **Fecha detección** | 2026-05-22 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `6c94861` |
+
+**Descripción**  
+Cuando un bloque nocturno comenzaba en los últimos días de julio y el empleado tenía vacaciones (V) en los primeros días de agosto, el generador planificaba igualmente N y D (descanso post-guardia) sobre esos días de vacaciones.
+
+**Causa raíz**  
+Los tres bucles de continuación de bloque nocturno cross-month no comprobaban `existingDates`. Las vacaciones se guardan en `existingDates` antes de la generación, pero el código de `nightPlan.set(empKey, "N")` no validaba esta colección.
+
+**Ficheros afectados**  
+- `lib/schedules/generate.ts` — función `generateMonthSchedule`, sección de pre-seed de `nightPlan`
+
+**Fix aplicado**  
+Añadida comprobación `if (existingDates.has(empKey)) break` al inicio de cada iteración en los tres bucles de continuación nocturna cross-month. La lógica de post-rest solo planifica el día D si al menos un N fue efectivamente planificado (`nightsPlanned > 0`). 3 tests unitarios nuevos cubren los tres escenarios.
+
+---
+
+### BUG-40
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-40 |
+| **Sprint** | Sprint 18 |
+| **Detectado por** | PM — inspección visual del cuadrante: mismo empleado casi todos los fines de semana |
+| **Fecha detección** | 2026-05-22 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `6c94861` |
+
+**Descripción**  
+En cuadrantes con 6+ empleados, uno de ellos acaparaba 4-5 fines de semana mientras otros cubrían 1-2. El desequilibrio era especialmente visible en empleados con preferencia T que habían cubierto muchas mañanas por cobertura urgente.
+
+**Causa raíz**  
+`_pickWeekendPackageEmployee` ordenaba los candidatos por `mCount`/`tCount` como criterio de "menos cargado". El criterio ignoraba completamente cuántos fines de semana había trabajado ya cada empleado.
+
+**Ficheros afectados**  
+- `lib/schedules/generate.ts` — interfaz `EmpState`, funciones `reserveWeekendPattern` y `_pickWeekendPackageEmployee`
+
+**Fix aplicado**  
+Añadido campo `weekendCount: number` a la interfaz `EmpState` (inicializado a 0). `reserveWeekendPattern` lo incrementa en 1 cada vez que asigna un paquete sáb+dom. `_pickWeekendPackageEmployee` ordena primero por `weekendCount` ascendente y usa `mCount`/`tCount` solo como desempate. 2 tests unitarios nuevos verifican que la distribución no tiene ratio máximo/mínimo superior a 2.
 
 ---
 
