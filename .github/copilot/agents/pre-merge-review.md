@@ -26,6 +26,22 @@ Ejecuta los siguientes comandos y verifica que pasan al 100%:
 Si algún test falla → STOP. No continúo hasta que estén en verde.
 Si todos pasan → continúo al siguiente paso.
 
+### 1b. Cobertura de tests — BLOQUEANTE si falta
+Reviso el diff con main buscando **lógica de negocio sin test**:
+
+🔴 BLOQUEANTE si existe alguno de estos sin test correspondiente:
+- Función nueva o modificada en `lib/schedules/generate.ts`
+- Función nueva o modificada en `lib/auth/permissions.ts`
+- Nueva API route en `app/api/`
+- Cambio de constante en `lib/constants/shift-colors.ts`
+- Corrección de bug (el bug debe estar cubierto por un test que falle sin el fix)
+
+Verifico que:
+- `tests/unit/` contiene al menos un describe nuevo para cada módulo modificado
+- `tests/e2e/sprint-{N}.spec.ts` contiene al menos un test por cada nueva API o flujo UI
+
+Si falta cobertura → BLOQUEANTE. Solicito los tests antes de continuar.
+
 ### 2. Verificación TypeScript
 Ejecuta `npx tsc --noEmit`.
 0 errores permitidos. Cualquier error es bloqueante.

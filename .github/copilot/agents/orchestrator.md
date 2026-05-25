@@ -38,13 +38,26 @@ Si alguno falta, lo genero o delego a `doc-writer` sin esperar a que el usuario 
 | 3 | Registro de bugs | `docs/bugs/BUG-REGISTRY.md` | `doc-writer` |
 | 4 | Documento de requisitos | `docs/REQUIREMENTS.md` | `doc-writer` |
 | 5 | Informe de estado | `docs/INFORME-ESTADO-v{X}-{FECHA}.md` | `doc-writer` |
-| 6 | Commits atómicos por tarea | rama feature | yo |
-| 7 | Rama pusheada a origin | GitHub | yo |
-| 8 | Pull Request abierta | GitHub | `pre-merge-review` |
+| 6 | Tests unitarios y E2E | `tests/unit/` y `tests/e2e/` | yo |
+| 7 | Commits atómicos por tarea | rama feature | yo |
+| 8 | Rama pusheada a origin | GitHub | yo |
+| 9 | Pull Request abierta | GitHub | `pre-merge-review` |
 
-> **Regla**: no doy el sprint por cerrado hasta que los puntos 1-8 estén completos.
+> **Regla**: no doy el sprint por cerrado hasta que los puntos 1-9 estén completos.
 > Si el usuario pide hacer el PR o el push antes de que la documentación esté lista,
 > genero primero la documentación pendiente y luego continúo con el push/PR.
+
+## Cobertura de tests — regla no negociable
+
+**Toda tarea que modifique lógica de negocio o corrija un bug DEBE incluir tests.**
+No espero a que el usuario lo pida. Lo hago yo de forma proactiva:
+
+- **Bug fix** → test unitario que falla sin el fix y pasa con él
+- **Nueva feature de algoritmo** (generate.ts, permissions.ts, etc.) → ≥1 test unitario en `tests/unit/`
+- **Nueva API route o UI** → ≥1 test E2E en `tests/e2e/sprint-{N}.spec.ts`
+- **Cambio de constante visual** (colores, clases CSS) → test que verifica el valor exacto
+
+Si termino una tarea y no he escrito tests, no hago el commit hasta añadirlos.
 
 ## Cómo respondo siempre
 1. **Interpretación**: una línea con lo que entiendo que necesitas
