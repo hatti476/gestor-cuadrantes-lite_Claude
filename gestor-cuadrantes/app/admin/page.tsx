@@ -221,6 +221,7 @@ function UserModal({
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Rol global *</label>
                   <select value={globalRole} onChange={(e) => setGlobalRole(e.target.value)}
+                    data-testid="select-global-role"
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
                     <option value="SUPER_ADMIN">SUPER_ADMIN</option>
                     <option value="SUPER_VIEWER">SUPER_VIEWER</option>

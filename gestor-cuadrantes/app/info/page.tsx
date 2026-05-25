@@ -5,6 +5,21 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Header } from "@/components/layout/header";
 
+// Secciones exclusivas para SUPER_ADMIN (usuario administrador global)
+const SUPER_ADMIN_ONLY_SECTIONS = [
+  {
+    title: "Gestión de usuarios",
+    icon: "👥",
+    items: [
+      "Accede a «Admin» desde la barra de navegación para gestionar cuentas de usuario.",
+      "Crea cuentas SUPER_VIEWER (acceso de solo lectura a todos los proyectos) o SUPER_ADMIN desde la pestaña «Usuarios».",
+      "Los usuarios con rol USER deben asociarse a un empleado existente al crearse; los roles SUPER_VIEWER y SUPER_ADMIN no requieren empleado.",
+      "Desactiva una cuenta pulsando «Desactivar» — el usuario no podrá iniciar sesión pero sus datos se conservan.",
+      "La pestaña «Proyectos» de la misma sección permite crear y eliminar proyectos globalmente.",
+    ],
+  },
+];
+
 // Secciones exclusivas para SUPER_ADMIN y PROJECT_ADMIN
 const ADMIN_SECTIONS = [
   {
@@ -27,6 +42,8 @@ const ADMIN_SECTIONS = [
       "3. Bajas — Haz clic en celdas para marcar bajas (B). Quedan bloqueadas igual que vacaciones y descansos manuales.",
       "4. Festivos — Revisa los festivos precargados si el proyecto tiene región configurada, o gestiónalos manualmente desde «Gestionar festivos del mes».",
       "5. Generar — Pulsa «Guardar preparación» para conservar el estado actual y luego «Generar cuadrante» para aplicar la rotación automática sobre los días no bloqueados.",
+      "6. Deshacer — Tras generar, el botón «↩ Deshacer» restaura el estado inmediatamente anterior a la última generación, útil si el resultado no es el esperado.",
+      "Si un día tiene 0 o 1 empleado disponible, aparece un aviso de cobertura crítica en el panel de preparación antes de generar.",
       "Puedes reabrir cualquier paso pulsando sobre él en el panel lateral derecho.",
     ],
   },
@@ -79,12 +96,12 @@ const COMMON_SECTIONS = [
       "D  — Descanso          —  · Color gris claro",
       "V  — Vacaciones        —  · Color negro",
       "B  — Baja              —  · Color gris oscuro",
-      "MF — Mañana en festivo (07:00–15:00)  · Color naranja oscuro",
-      "TF — Tarde en festivo  (15:00–23:00)  · Color azul oscuro",
-      "NF — Noche en festivo  (23:00–07:00)  · Color verde oscuro",
-      "MN — Mañana Navidad    (07:00–15:00)  · Color rojo",
-      "TN — Tarde Navidad     (15:00–23:00)  · Color verde azulado",
-      "NN — Noche Navidad     (23:00–07:00)  · Color verde oscuro",
+      "MF — Mañana en festivo (07:00–15:00)  · Color naranja (igual que M)",
+      "TF — Tarde en festivo  (15:00–23:00)  · Color azul (igual que T)",
+      "NF — Noche en festivo  (23:00–07:00)  · Color verde (igual que N)",
+      "MN — Mañana Navidad    (07:00–15:00)  · Color naranja (igual que M)",
+      "TN — Tarde Navidad     (15:00–23:00)  · Color azul (igual que T)",
+      "NN — Noche Navidad     (23:00–07:00)  · Color verde (igual que N)",
     ],
   },
   {
@@ -105,13 +122,26 @@ const COMMON_SECTIONS = [
     items: [
       "El grid muestra filas de empleados y columnas de días del mes. Cada celda contiene el código de turno asignado.",
       "El badge de estado del mes (arriba a la izquierda) indica: «Sin generar», «En preparación» o «Generado».",
-      "Los días festivos tienen la cabecera en rojo. Pasa el cursor sobre ellos para ver el nombre del festivo.",
+      "Las columnas de sábado y domingo tienen el encabezado en azul claro para distinguirlas de los días laborables.",
+      "Los días festivos tienen la cabecera en rojo intenso. Pasa el cursor sobre ellos para ver el nombre del festivo.",
       "La tabla de contadores bajo el grid muestra cuántos turnos M, T, N, D, V, B tiene cada empleado en el mes.",
       "La tabla de complementos muestra el importe de los turnos MF, TF, N, NF y, en diciembre/enero, MN, TN y NN.",
       "Navega entre meses con los botones ‹ y › situados junto al nombre del mes.",
     ],
   },
 ];
+
+// Sección exclusiva para SUPER_VIEWER
+const VIEWER_SECTION = {
+  title: "Tu acceso como Viewer",
+  icon: "👁️",
+  items: [
+    "El rol Viewer te da acceso de solo lectura a todos los proyectos sin necesidad de membresías explícitas.",
+    "Puedes ver el cuadrante de cualquier proyecto pero no puedes generar, editar turnos ni modificar la preparación.",
+    "El badge «Viewer» en la cabecera identifica tu nivel de acceso.",
+    "Para cambiar de proyecto, usa el selector de proyectos en la cabecera.",
+  ],
+};
 
 // Sección exclusiva para EMPLOYEE
 const EMPLOYEE_OWN_SHIFT_SECTION = {
@@ -135,22 +165,27 @@ export default function InfoPage() {
   if (status === "loading") return null;
 
   const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+  const isSuperViewer = session?.user?.role === "SUPER_VIEWER";
   const isProjectAdmin = (session?.user?.projectMemberships ?? []).some(
     (m: { role: string }) => m.role === "PROJECT_ADMIN"
   );
   const isAdmin = isSuperAdmin || isProjectAdmin;
-  const isEmployee = !isSuperAdmin && !isProjectAdmin;
+  const isEmployee = !isSuperAdmin && !isSuperViewer && !isProjectAdmin;
 
   const roleLabel = isSuperAdmin
     ? "Super Admin"
+    : isSuperViewer
+    ? "Viewer"
     : isProjectAdmin
     ? "Project Admin"
     : "Técnico";
 
   // Construir secciones según rol
   const sections = [
+    ...(isSuperAdmin ? SUPER_ADMIN_ONLY_SECTIONS : []),
     ...(isAdmin ? ADMIN_SECTIONS : []),
     ...COMMON_SECTIONS,
+    ...(isSuperViewer ? [VIEWER_SECTION] : []),
     ...(isEmployee ? [EMPLOYEE_OWN_SHIFT_SECTION] : []),
   ];
 
