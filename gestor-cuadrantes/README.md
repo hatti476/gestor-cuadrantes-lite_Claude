@@ -6,11 +6,11 @@ Aplicacion web para gestionar cuadrantes mensuales de turnos de un equipo de sop
 
 | Campo | Valor |
 |-------|-------|
-| Version funcional | 1.5 |
-| Sprint actual | Sprint 15 - saneamiento tecnico y documental |
-| Ultimo sprint cerrado | Sprint 14 - Estabilizacion |
-| Tests unitarios | 146/146 |
-| Tests E2E declarados | CP-01..CP-98 |
+| Version funcional | 2.0 |
+| Sprint actual | Sprint 21 - planificado (day-loop) |
+| Ultimo sprint cerrado | Sprint 20 - refactor modular de generate.ts |
+| Tests unitarios | 374/374 |
+| Tests E2E declarados | CP-01..CP-141 (142 tests definidos) |
 | Bugs abiertos conocidos | 0 |
 
 ## Stack
@@ -27,7 +27,7 @@ Aplicacion web para gestionar cuadrantes mensuales de turnos de un equipo de sop
 
 ## Funcionalidad principal
 
-- Autenticacion con roles globales `SUPER_ADMIN` y `USER`.
+- Autenticacion con roles globales `SUPER_ADMIN`, `SUPER_VIEWER` y `USER`.
 - Roles por proyecto: `PROJECT_ADMIN` y `EMPLOYEE`.
 - Cuadrante mensual con filas por empleado y columnas por dia.
 - Generacion automatica con bloques de noches, descansos, cobertura minima y preferencias M/T/J.
@@ -70,8 +70,9 @@ npm run db:seed      # datos iniciales
 
 ## Documentacion
 
-- Estado actual: `docs/INFORME-ESTADO-v1.5-2026-05-19.md`
+- Estado por sprint (Sprint 20): `docs/INFORME-ESTADO-S20-2026-05-26.md`
 - Requisitos: `docs/REQUIREMENTS.md`
+- Changelog: `CHANGELOG.md`
 - Bugs: `docs/bugs/BUG-REGISTRY.md`
 - Despliegue: `docs/deployment.md`
 - Release notes: `docs/sprint-*-release-notes.md`

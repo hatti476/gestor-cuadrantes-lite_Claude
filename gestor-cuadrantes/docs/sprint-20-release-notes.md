@@ -1,6 +1,6 @@
 # Sprint 20 Release Notes — Refactoring del Algoritmo de Generación
 
-**Fecha:** 2026-05-28  
+**Fecha:** 2026-05-26  
 **Branch:** `feature/sprint-20-algorithm-refactor`  
 **Tests:** 374/374 ✅ (296 originales + 78 nuevos)  
 **Objetivo:** Refactorizar `lib/schedules/generate.ts` (2350 líneas) en módulos especializados sin cambiar el comportamiento del algoritmo.

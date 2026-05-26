@@ -1,7 +1,7 @@
 # Documento de Requisitos — Gestor de Cuadrantes
 
-**Versión**: 2.4.0 (Sprint 12 — cierre de sprint)  
-**Última actualización**: 14/05/2026  
+**Versión**: 2.0.0 (Sprint 20 — cierre de sprint)  
+**Última actualización**: 26/05/2026  
 **Estado**: Vivo — se actualiza al cierre de cada sprint
 
 ---
@@ -17,6 +17,7 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | Rol global | Descripción | Acceso |
 |------------|-------------|--------|
 | `SUPER_ADMIN` | Administrador global con acceso total a todos los proyectos | Lectura + escritura en todo |
+| `SUPER_VIEWER` | Supervisor global en modo lectura | Lectura global, sin edición |
 | `USER` | Técnico / empleado estándar | Solo lectura del cuadrante |
 
 | Rol de proyecto | Descripción | Acceso |
@@ -388,14 +389,14 @@ Schedule        — id, month, year (registro de última generación)
 | GET | `/api/schedules?year&month[&projectId]` | Autenticado | Lista de turnos + `monthStatus` del mes (filtrable por proyecto) |
 | POST | `/api/schedules` | SUPER_ADMIN / PROJECT_ADMIN | Crear/actualizar turno individual |
 | DELETE | `/api/schedules` | SUPER_ADMIN / PROJECT_ADMIN | Eliminar turno |
-| POST | `/api/schedules/generate` | SUPER_ADMIN | Generar cuadrante automático |
+| POST | `/api/schedules/generate` | SUPER_ADMIN / PROJECT_ADMIN | Generar cuadrante automático (scope por proyecto) |
 | GET | `/api/employees[?projectId]` | Autenticado | Lista de empleados (filtrable por proyecto) |
 | POST | `/api/employees` | SUPER_ADMIN | Crear empleado |
 | PUT | `/api/employees/[id]` | SUPER_ADMIN | Editar empleado |
 | PATCH | `/api/employees/[id]` | SUPER_ADMIN / PROJECT_ADMIN | Editar nombre, `shiftPreference`, rol y estado `active` del empleado |
 | PUT | `/api/employees/[id]` | SUPER_ADMIN / PROJECT_ADMIN | Cambiar contraseña |
 | DELETE | `/api/employees/[id]` | SUPER_ADMIN | Soft-delete empleado (`active = false`) |
-| GET | `/api/employees/[id]/history` | SUPER_ADMIN | Historial de cambios |
+| GET | `/api/employees/[id]/history` | SUPER_ADMIN / SUPER_VIEWER / PROJECT_ADMIN propio | Historial de cambios |
 | GET | `/api/holidays?year` | Autenticado | Lista de festivos del año |
 | POST | `/api/holidays` | SUPER_ADMIN | Añadir festivo |
 | DELETE | `/api/holidays/[id]` | SUPER_ADMIN | Eliminar festivo (revierte MF→M, TF→T, NF→N automáticamente) |
@@ -425,29 +426,11 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 
 ## 8. Cobertura de tests
 
-| Suite | Archivo | Tests | Estado |
-|-------|---------|-------|--------|
-| Unit | `schedules/business-logic` | 12 | ✅ |
-| Unit | `scheduler/generate` (Fase 2) | 40 | ✅ |
-| Unit | `employees/business-logic` (incl. `isValidShiftPreference`: M, T, J, null) | 40 | ✅ |
-| Unit | `auth/permissions` | 25 | ✅ |
-| Unit | `soft-delete / shiftPreference` | 4 | ✅ |
-| Unit | `isValidShiftPreference` (M, T, J, null + rechaza inválidos) | 3 | ✅ |
-| Unit | `schedules/month-status` | 10 | ✅ |
-| **Total unit** | | **140** | **✅** |
-| E2E Sprint 1 | CP-01..CP-11 | 11 | ✅ |
-| E2E Sprint 2 | CP-12..CP-22 | 11 | ✅ |
-| E2E Sprint 3 | CP-23..CP-29 | 7 | ✅ |
-| E2E Sprint 4 | CP-30..CP-39 | 10 | ✅ |
-| E2E Sprint 5 | CP-40..CP-42 | 3 | ✅ |
-| E2E Sprint 6 | CP-43..CP-46 | 4 | ✅ |
-| E2E Sprint 7 | CP-47..CP-56 | 10 | ✅ |
-| E2E Sprint 8 | CP-57..CP-66 | 10 | ✅ |
-| E2E Sprint 9 | CP-67..CP-70 | 4 | ✅ |
-| E2E Sprint 10 | CP-71..CP-78 | 8 | ✅ |
-| E2E Sprint 11 | CP-79..CP-85 | 7 | ✅ |
-| E2E Sprint 12 | CP-86..CP-89 | 4 | ✅ |
-| **Total E2E** | | **84** | **✅** |
+| Suite | Cobertura | Estado |
+|-------|-----------|--------|
+| Unit | 374 tests (296 base + 78 nuevos de Sprint 20) | ✅ |
+| E2E | 142 tests definidos en `tests/e2e/` | ✅ |
+| Alcance Sprint 20 | Nuevas suites para `date-utils`, `rest-rules`, `coverage`, `cross-month` | ✅ |
 
 ---
 
@@ -456,9 +439,9 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | Funcionalidad | Requisito | Prioridad |
 |---------------|-----------|-----------|
 | Festivos por CCAA/proyecto (`ProjectHoliday`), integración con API pública de festivos | RF-07 ampliado | Media |
-| Gestión de packs de fin de semana (Sáb+Dom mismo turno, editables) | RF-14.7 | Baja |
-| Resolver BUG-20: servidor E2E con estado obsoleto (CP-69 verificación DOM) | — | Media || Vista personalizada del técnico (solo sus turnos y próximos días) | Nuevos RF | Baja |
-| Solicitud / aprobación de vacaciones (flujo V con aprobación por PROJECT_ADMIN) | Nuevos RF | Alta || Notificaciones email al técnico cuando se asigna/modifica su turno | Nuevos RF | Alta |
+| Vista personalizada del técnico (solo sus turnos y próximos días) | Nuevos RF | Baja |
+| Solicitud / aprobación de vacaciones (flujo V con aprobación por PROJECT_ADMIN) | Nuevos RF | Alta |
+| Notificaciones email al técnico cuando se asigna/modifica su turno | Nuevos RF | Alta |
 | Dashboard de proyecto: cobertura diaria, ausencias, horas totales | Nuevos RF | Alta |
 | Pipeline CI/CD + deploy automático en producción | Operativo | Media |
 
@@ -482,7 +465,6 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | 1.2 | 12 | Aislamiento de asignaciones por proyecto (BUG-29 + `ShiftAssignment.projectId`), `resolveNightBlocks` (transferencia de bloque en vacaciones), preferencia Jornada (J), fila propia resaltada en el grid (RF-19) |
 | 1.3 | 12 | BUG-30: `_pickWorkdayShift` ignoraba preferencia M/T cuando `weeklyShift` fue fijado por cobertura urgente — corregido con `dailyOrder` (empleados sin preferencia resuelven cobertura primero). BUG-31a: `_pickWeekendShift` no retornaba `"D"` para pref `"J"` — corregido. BUG-31b: `_pickWorkdayShift` asignaba M/T en lugar de `"J"` a empleados con pref `"J"` — corregido retornando `"J"` directamente. Validación `shiftPreference` movida a `business-logic.ts` (testeable). Tests unitarios de regresión BUG-30 y BUG-31 añadidos. |
 | 2.0 | 20 | **Refactor modular de generate.ts**: extracción de 1,190 líneas en 8 módulos independientes (date-utils, night-blocks, rest-rules, shift-transitions, coverage, weekend-packs, workday-shifts, cross-month). Reducción de 2350 → 1605 líneas (-32%). Tests unitarios 296 → 374 (78 nuevos), E2E baseline 142 tests ejecutados. Bugs BUG-38 (missing imports) y BUG-39 (circular deps) encontrados y cerrados. Arquitectura modular con raíz sin deps (date-utils.ts). Sprint Orchestrator formalizado con E2E como requerimiento obligatorio. |
-| 1.3 | 12 | BUG-30: `_pickWorkdayShift` ignoraba preferencia M/T cuando `weeklyShift` fue fijado por cobertura urgente — corregido con `dailyOrder` (empleados sin preferencia resuelven cobertura primero). BUG-31a: `_pickWeekendShift` no retornaba `"D"` para pref `"J"` — corregido. BUG-31b: `_pickWorkdayShift` asignaba M/T en lugar de `"J"` a empleados con pref `"J"` — corregido retornando `"J"` directamente. Validación `shiftPreference` movida a `business-logic.ts` (testeable). Tests unitarios de regresión BUG-30 y BUG-31 añadidos. |
 
 ---
 
