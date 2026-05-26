@@ -2,11 +2,12 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { isSuperAdmin } from "@/lib/auth/permissions";
+import { isSuperAdmin, isSuperViewer } from "@/lib/auth/permissions";
 
 // ---------------------------------------------------------------------------
 // GET /api/projects — lista proyectos accesibles por el usuario
 // SUPER_ADMIN: todos los proyectos
+// SUPER_VIEWER: todos los proyectos (solo lectura)
 // USER: solo los proyectos donde es miembro
 // ---------------------------------------------------------------------------
 export async function GET() {
@@ -15,7 +16,7 @@ export async function GET() {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  const projects = isSuperAdmin(session)
+  const projects = (isSuperAdmin(session) || isSuperViewer(session))
     ? await prisma.project.findMany({
         orderBy: { createdAt: "asc" },
         include: { _count: { select: { members: true, employees: true } } },

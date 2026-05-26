@@ -65,12 +65,19 @@ export function ScheduleGrid({
 
   return (
     <>
-      <div className="overflow-x-auto w-fit rounded-lg border border-gray-200 shadow-sm">
-      <table className="border-collapse text-xs min-w-max">
+      <div data-testid="schedule-grid" className="w-full overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+      <table
+        className="border-collapse text-xs w-full"
+        style={{ tableLayout: "fixed", minWidth: `${150 + daysInMonth * 26}px` }}
+      >
+        <colgroup>
+          <col style={{ width: "150px" }} />
+          {days.map((day) => <col key={day} />)}
+        </colgroup>
         <thead>
           {/* Fila de números de día */}
           <tr className="bg-gray-50">
-            <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-b border-r border-gray-200 min-w-[140px]">
+            <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-b border-r border-gray-200">
               Empleado
             </th>
             {days.map((day) => {
@@ -91,7 +98,7 @@ export function ScheduleGrid({
                       y: rect.bottom + window.scrollY,
                     });
                   } : undefined}
-                  className={`w-9 py-1 text-center border-b border-r border-gray-200 font-medium ${
+                  className={`py-1 text-center border-b border-r border-gray-200 font-medium ${
                     isHoliday
                       ? "bg-red-200 text-red-800 cursor-pointer select-none"
                       : isWeekend
@@ -127,7 +134,7 @@ export function ScheduleGrid({
                 }`}
               >
                 {/* Nombre del empleado */}
-                <td className={`sticky left-0 z-10 ${rowBg} px-3 py-1 font-medium border-r border-b border-gray-200 whitespace-nowrap ${
+                <td className={`sticky left-0 z-10 ${rowBg} px-3 py-1 font-medium border-r border-b border-gray-200 truncate ${
                   isOwnRow ? "text-indigo-700 font-semibold" : "text-gray-700"
                 }`}>
                   {isOwnRow && (
@@ -152,7 +159,7 @@ export function ScheduleGrid({
                       data-testid={`cell-${emp.id}-${dateStr}`}
                       onClick={clickable ? () => onCellClick(emp.id, dateStr, cell?.shiftType) : undefined}
                       data-locked={isLocked ? "true" : undefined}
-                      className={`w-9 h-8 p-0.5 border-r border-b border-gray-200 relative ${
+                      className={`h-8 p-0.5 border-r border-b border-gray-200 relative ${
                         isHolidayCell ? "bg-red-50" : isWeekend ? "bg-blue-50" : ""
                       } ${clickable ? "cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset" : ""} ${
                         isLocked ? "ring-2 ring-inset ring-dashed ring-amber-400" : ""

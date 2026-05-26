@@ -450,11 +450,12 @@ export default function ProjectsPage() {
   const { showToast } = useToast();
 
   const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+  const isSuperViewer = session?.user?.role === "SUPER_VIEWER";
   // PROJECT_ADMIN en al menos un proyecto también puede acceder a /projects
   const isProjectAdmin = session?.user?.projectMemberships?.some(
     (m) => m.role === "PROJECT_ADMIN"
   ) ?? false;
-  const canAccess = isSuperAdmin || isProjectAdmin;
+  const canAccess = isSuperAdmin || isSuperViewer || isProjectAdmin;
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);

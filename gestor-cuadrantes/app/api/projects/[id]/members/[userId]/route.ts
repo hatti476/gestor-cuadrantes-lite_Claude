@@ -2,11 +2,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { isProjectAdmin } from "@/lib/auth/permissions";
+import { canManageProjectMembers } from "@/lib/auth/permissions";
 
 // ---------------------------------------------------------------------------
 // DELETE /api/projects/[id]/members/[userId] — eliminar miembro del proyecto
-// SUPER_ADMIN o PROJECT_ADMIN del proyecto
+// Solo SUPER_ADMIN
 // ---------------------------------------------------------------------------
 export async function DELETE(
   _req: NextRequest,
@@ -19,7 +19,7 @@ export async function DELETE(
 
   const { id, userId } = await params;
 
-  if (!isProjectAdmin(session, id)) {
+  if (!canManageProjectMembers(session)) {
     return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 

@@ -18,6 +18,10 @@ export const USERS = {
     email: process.env.PM_EMAIL ?? "",
     password: process.env.PM_PASSWORD ?? "",
   },
+  viewer: {
+    email: process.env.VIEWER_EMAIL ?? "",
+    password: process.env.VIEWER_PASSWORD ?? "",
+  },
 } as const;
 
 /**

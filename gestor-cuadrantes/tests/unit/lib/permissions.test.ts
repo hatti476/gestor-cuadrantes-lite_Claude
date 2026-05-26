@@ -6,6 +6,11 @@ import {
   canViewProject,
   canEditProject,
   hasAdminAccess,
+  isAnyProjectAdmin,
+  canViewEmployees,
+  canViewHolidays,
+  canManageHolidays,
+  canManageProjectMembers,
   GLOBAL_ROLES,
   PROJECT_ROLES,
 } from "@/lib/auth/permissions";
@@ -246,5 +251,130 @@ describe("hasAdminAccess", () => {
 
   it("sesión con membresías vacías no tiene acceso de admin", () => {
     expect(hasAdminAccess(makeSession("USER", []))).toBe(false);
+  });
+});
+
+// ─── isAnyProjectAdmin ───────────────────────────────────────────────────────
+
+describe("isAnyProjectAdmin", () => {
+  it("true si es PROJECT_ADMIN en al menos un proyecto", () => {
+    expect(isAnyProjectAdmin(SESSION_PROJECT_ADMIN_A)).toBe(true);
+    expect(isAnyProjectAdmin(SESSION_MULTI)).toBe(true);
+  });
+
+  it("false si solo es EMPLOYEE en todos sus proyectos", () => {
+    expect(isAnyProjectAdmin(SESSION_EMPLOYEE_A)).toBe(false);
+  });
+
+  it("false para SUPER_ADMIN (rol global, sin membresías de proyecto)", () => {
+    expect(isAnyProjectAdmin(SUPER_ADMIN_SESSION)).toBe(false);
+  });
+
+  it("false para SUPER_VIEWER", () => {
+    expect(isAnyProjectAdmin(SUPER_VIEWER_SESSION)).toBe(false);
+  });
+
+  it("false para sesión null", () => {
+    expect(isAnyProjectAdmin(null)).toBe(false);
+  });
+});
+
+// ─── canViewEmployees ────────────────────────────────────────────────────────
+
+describe("canViewEmployees", () => {
+  it("SUPER_ADMIN puede ver empleados", () => {
+    expect(canViewEmployees(SUPER_ADMIN_SESSION)).toBe(true);
+  });
+
+  it("SUPER_VIEWER puede ver empleados", () => {
+    expect(canViewEmployees(SUPER_VIEWER_SESSION)).toBe(true);
+  });
+
+  it("PROJECT_ADMIN puede ver empleados", () => {
+    expect(canViewEmployees(SESSION_PROJECT_ADMIN_A)).toBe(true);
+  });
+
+  it("EMPLOYEE puro NO puede ver empleados", () => {
+    expect(canViewEmployees(SESSION_EMPLOYEE_A)).toBe(false);
+  });
+
+  it("USER sin membresías NO puede ver empleados", () => {
+    expect(canViewEmployees(USER_SESSION)).toBe(false);
+  });
+
+  it("false para sesión null", () => {
+    expect(canViewEmployees(null)).toBe(false);
+  });
+});
+
+// ─── canViewHolidays ─────────────────────────────────────────────────────────
+
+describe("canViewHolidays", () => {
+  it("SUPER_ADMIN puede ver festivos", () => {
+    expect(canViewHolidays(SUPER_ADMIN_SESSION)).toBe(true);
+  });
+
+  it("SUPER_VIEWER puede ver festivos", () => {
+    expect(canViewHolidays(SUPER_VIEWER_SESSION)).toBe(true);
+  });
+
+  it("PROJECT_ADMIN puede ver festivos", () => {
+    expect(canViewHolidays(SESSION_PROJECT_ADMIN_A)).toBe(true);
+  });
+
+  it("EMPLOYEE puro NO puede ver festivos", () => {
+    expect(canViewHolidays(SESSION_EMPLOYEE_A)).toBe(false);
+  });
+
+  it("false para sesión null", () => {
+    expect(canViewHolidays(null)).toBe(false);
+  });
+});
+
+// ─── canManageHolidays ───────────────────────────────────────────────────────
+
+describe("canManageHolidays", () => {
+  it("SUPER_ADMIN puede gestionar festivos", () => {
+    expect(canManageHolidays(SUPER_ADMIN_SESSION)).toBe(true);
+  });
+
+  it("SUPER_VIEWER NO puede gestionar festivos", () => {
+    expect(canManageHolidays(SUPER_VIEWER_SESSION)).toBe(false);
+  });
+
+  it("PROJECT_ADMIN NO puede gestionar festivos", () => {
+    expect(canManageHolidays(SESSION_PROJECT_ADMIN_A)).toBe(false);
+  });
+
+  it("USER NO puede gestionar festivos", () => {
+    expect(canManageHolidays(USER_SESSION)).toBe(false);
+  });
+
+  it("false para sesión null", () => {
+    expect(canManageHolidays(null)).toBe(false);
+  });
+});
+
+// ─── canManageProjectMembers ─────────────────────────────────────────────────
+
+describe("canManageProjectMembers", () => {
+  it("SUPER_ADMIN puede gestionar miembros de proyecto", () => {
+    expect(canManageProjectMembers(SUPER_ADMIN_SESSION)).toBe(true);
+  });
+
+  it("SUPER_VIEWER NO puede gestionar miembros", () => {
+    expect(canManageProjectMembers(SUPER_VIEWER_SESSION)).toBe(false);
+  });
+
+  it("PROJECT_ADMIN NO puede gestionar miembros (solo SUPER_ADMIN)", () => {
+    expect(canManageProjectMembers(SESSION_PROJECT_ADMIN_A)).toBe(false);
+  });
+
+  it("USER NO puede gestionar miembros", () => {
+    expect(canManageProjectMembers(USER_SESSION)).toBe(false);
+  });
+
+  it("false para sesión null", () => {
+    expect(canManageProjectMembers(null)).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 # Documento de Requisitos — Gestor de Cuadrantes
 
-**Versión**: 3.1.0 (Sprint 18 — UX fixes, SUPER_VIEWER, snapshot undo, equidad fines de semana)
+**Versión**: 3.2.0 (Sprint 19 — Gestión de usuarios/proyectos, RBAC /admin, permisos auditados)
 **Última actualización**: 22/05/2026
 **Estado**: Vivo — se actualiza al cierre de cada sprint
 
@@ -14,12 +14,12 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 
 | Campo | Valor |
 |-------|-------|
-| Versión funcional | 1.8 |
-| Último sprint cerrado | Sprint 18 — UX fixes, SUPER_VIEWER, snapshot undo, equidad fines de semana |
-| Sprint en curso | — (pendiente de planificación) |
-| Siguiente sprint planificado | Sprint 19 — gestión de usuarios y proyectos (UI CRUD) |
-| Tests unitarios | 257/257 |
-| Tests E2E declarados | CP-01..CP-128 |
+| Versión funcional | 1.9 |
+| Último sprint cerrado | Sprint 19 — Gestión de usuarios/proyectos, RBAC /admin, permisos auditados |
+| Sprint en curso | — (pendiente de planificación Sprint 20) |
+| Siguiente sprint planificado | Sprint 20 — TBD |
+| Tests unitarios | 283/283 |
+| Tests E2E declarados | CP-01..CP-141 |
 | Bugs abiertos conocidos | 0 |
 
 ---
@@ -532,18 +532,17 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | E2E Sprint 16 | CP-99..CP-109 | 11 | ✅ |
 | E2E Sprint 17 | CP-110..CP-115 | 6 | ✅ |
 | E2E Sprint 18 | CP-115..CP-128 | 14 | ✅ |
+| E2E Sprint 19 | CP-129..CP-141 | 13 | ✅ |
 | **Total E2E** | | **128** | **✅** |
 
 ---
 
-## 9. Backlog pendiente (Sprint 19+)
+## 9. Backlog pendiente (Sprint 20+)
 
 | Funcionalidad | Requisito | Prioridad |
 |---------------|-----------|----------|
-| Sprint 19: UI de gestión de usuarios — crear, editar, eliminar usuarios con roles globales (SUPER_ADMIN, SUPER_VIEWER, USER) | RF-01 | Alta |
-| Sprint 19: UI de gestión mejorada de proyectos — crear/editar/archivar proyectos, gestionar miembros | RF-13 | Alta |
-| Sprint 19: harness de simulación multi-mes para medir equidad, cobertura y regresiones del generador | Calidad algoritmo | Alta |
-| Sprint 19: diagnósticos del generador en modo test/debug para explicar decisiones de asignación | Calidad algoritmo | Media |
+| Sprint 20: harness de simulación multi-mes para medir equidad, cobertura y regresiones del generador | Calidad algoritmo | Alta |
+| Sprint 20: diagnósticos del generador en modo test/debug para explicar decisiones de asignación | Calidad algoritmo | Media |
 | Robustez de festivos externos con cache/backfill si producción lo necesita | RF-20 / Operativo | Media |
 | Vista personalizada del técnico: próximos turnos y cambios recientes | Nuevo RF | Media |
 | Solicitud/aprobación de vacaciones | Nuevo RF | Alta |
@@ -576,3 +575,4 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | 1.6 | 16 | Correcciones del algoritmo I: toggle V/D en PrepPanel, exclusión pref J de noches, consistencia MF/TF con pauta semanal, 2D obligatorios entre bloques, validación ET Art. 34.3, tabla de complementos económicos, E2E CP-99..CP-109. |
 | 1.7 | 17 | Correcciones del algoritmo II: descanso forzado HARD (Tarea 1), continuidad cross-month de bloque nocturno con protección `crossMonthRestDates` (Tarea 2), paquete extendido Sáb+Dom+Lun festivo (Tarea 3), `coverageWarnings` en API, E2E CP-110..CP-115. |
 | 1.8 | 18 | UX fixes y nuevas funcionalidades: continuidad cross-month del paquete sáb+dom (RF-14.17), SUPER_VIEWER (RF-01.9), columnas sáb/dom en azul y festivos en rojo intenso, colores unificados por familia de turno, snapshot/undo de generación (RF-21), bugfixes N cross-month+vacaciones (RF-14.18), weekendCount equidad (RF-14.19), V/B negro, E2E CP-115..CP-128. |
+| 1.9 | 19 | Gestión de usuarios y proyectos: sección /admin unificada con tabs Usuarios y Proyectos, auditoría y corrección de permisos en 11 rutas API, navegación adaptativa por rol (cabecera RBAC), middleware /employees→/admin, API /api/admin/users CRUD, PrepPanel visible para PROJECT_ADMIN, SUPER_VIEWER en /projects modo lectura, E2E CP-129..CP-141, 283 unit tests. |

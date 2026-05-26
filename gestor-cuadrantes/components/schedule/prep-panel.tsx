@@ -69,7 +69,8 @@ export function PrepPanel({
   projectId,
   loadingHolidays = false,
 }: PrepPanelProps) {
-  if (!isAdmin) return null;
+  // La visibilidad la controla el padre — aquí siempre se renderiza si se llama.
+  // isAdmin se usa para mostrar el botón "Gestionar Festivos" (solo SUPER_ADMIN).
 
   const stepCounts: Record<string, number> = {
     vacaciones: vacacionesCount,
@@ -154,6 +155,7 @@ export function PrepPanel({
             onClick={onManageHolidays}
             className="w-full text-xs px-3 py-2 rounded border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors"
             data-testid="btn-manage-holidays"
+            style={{ display: isAdmin ? undefined : "none" }}
           >
             Gestionar festivos del mes →
           </button>

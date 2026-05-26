@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { isSuperAdmin } from "@/lib/auth/permissions";
 
 // Mapa de nombre de CCAA → código ISO 3166-2:ES usado por nager.at
 const CCAA_CODE_MAP: Record<string, string> = {
@@ -41,11 +42,16 @@ interface NagerHoliday {
 // GET /api/holidays/public?year=YYYY&region=Madrid
 // Proxy de la API pública de festivos de España (nager.at)
 // Filtra por CCAA si se proporciona la región
+// Solo SUPER_ADMIN puede importar festivos públicos.
 // ---------------------------------------------------------------------------
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  if (!isSuperAdmin(session)) {
+    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 
   const yearParam = req.nextUrl.searchParams.get("year");

@@ -905,8 +905,8 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* Panel de preparación (solo admins) */}
-          {isAdmin && !loading && (
+          {/* Panel de preparación (SUPER_ADMIN y PROJECT_ADMIN del proyecto activo) */}
+          {canEdit && !loading && (
             <div className="w-56 flex-shrink-0 print:hidden">
               <PrepPanel
                 monthStatus={monthStatus}

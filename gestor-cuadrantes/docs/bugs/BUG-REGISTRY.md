@@ -2,7 +2,7 @@
 
 **Proyecto:** Gestor de Cuadrantes  
 **Mantenido por:** Agente `doc-writer`  
-**Última actualización:** 2026-05-22 (Sprint 18)
+**Última actualización:** 2026-05-26  
 
 ---
 
@@ -10,11 +10,7 @@
 
 | Total bugs | Críticos | Altos | Medios | Bajos | Abiertos | Resueltos |
 |-----------|----------|-------|--------|-------|----------|-----------|
-| 40 | 0 | 22 | 12 | 6 | 0 | 40 |
-
-> Sprint 14 cerrado (2026-05-18): BUG-34..BUG-37 corregidos.  
-> Sprints 15-17 (2026-05-19 → 2026-05-22): sin nuevos bugs registrados. Los cambios de estos sprints son correcciones planificadas del algoritmo de generación y mejoras técnicas/documentales, no bugs descubiertos en testing o producción.  
-> Sprint 18 (2026-05-22): BUG-38..BUG-40 detectados en pruebas manuales y corregidos en el commit `6c94861`.
+| 40 | 0 | 23 | 11 | 6 | 0 | 40 |
 
 ---
 
@@ -59,13 +55,82 @@
 | [BUG-35](#bug-35) | Sprint 14 | 🟠 High | ✅ Fixed | Preferencia M/T no se respeta al asignar MF/TF en fines de semana y festivos |
 | [BUG-36](#bug-36) | Sprint 14 | 🟠 High | ✅ Fixed | Regla de máximo 5 días consecutivos no se aplica al mezclar M/T con MF/TF |
 | [BUG-37](#bug-37) | Sprint 14 | 🟠 High | ✅ Fixed | Turnos de finde/festivo (MF/TF) no se asignan como paquete indivisible Sáb+Dom |
-| [BUG-38](#bug-38) | Sprint 18 | 🟡 Medium | ✅ Fixed | `prisma.scheduleSnapshot` undefined — Prisma client no regenerado tras migración |
-| [BUG-39](#bug-39) | Sprint 18 | 🟠 High | ✅ Fixed | Bloque N cross-month planificaba N/D sobre días de vacaciones del mes siguiente |
-| [BUG-40](#bug-40) | Sprint 18 | 🟠 High | ✅ Fixed | Distribución de fines de semana muy desequilibrada por criterio mCount/tCount |
+| [BUG-38](#bug-38) | Sprint 19 | 🟠 High | ✅ Fixed | Transición N→turno de día sin descanso mínimo en path de reparación de última instancia |
+| [BUG-39](#bug-39) | Sprint 19 | 🟠 High | ✅ Fixed | Empleados acumulan 3+ fines de semana consecutivos en planificación inicial |
+| [BUG-40](#bug-40) | Sprint 19 | 🟠 High | ✅ Fixed | `repairSingleRestDays` puede crear 3er fin de semana consecutivo al mover paquetes |
 
 ---
 
 ## Detalle de bugs
+
+---
+
+### BUG-38
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-38 |
+| **Sprint** | Sprint 19 |
+| **Detectado por** | Unit test — Sprint 19 |
+| **Fecha detección** | 2026-05-26 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | Sprint 19 |
+
+**Descripción:**  
+En el camino de reparación de cobertura de última instancia (`repairCoverage → last-resort`), el algoritmo asignaba un turno de día (M, T) inmediatamente después de un turno de noche (N) sin validar el descanso mínimo entre turnos. La transición N→M solo tiene 8h de hueco, inferior al mínimo de 12h requerido.
+
+**Causa raíz:**  
+`repairCoverage` tenía una ruta de último recurso que no llamaba a `validateShiftTransition` para comprobar compatibilidad con los turnos adyacentes.
+
+**Solución:**  
+Añadida validación de `validateShiftTransition` antes y después del día candidato en el path de última instancia de `repairCoverage`.
+
+---
+
+### BUG-39
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-39 |
+| **Sprint** | Sprint 19 |
+| **Detectado por** | Unit test — Sprint 19 |
+| **Fecha detección** | 2026-05-26 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | Sprint 19 |
+
+**Descripción:**  
+Durante la planificación inicial de fines de semana (`ensureWeekendPlan`), el algoritmo podía asignar un 3er fin de semana consecutivo a un empleado cuando había alternativas disponibles. La lógica de selección usaba solo penalización suave en el sort, insuficiente cuando otros factores (coveragePenalty) dominaban.
+
+**Causa raíz:**  
+`availableForPackage` no filtraba empleados con 2 fines de semana consecutivos previos, y la penalización en `_pickWeekendPackageEmployee` no era suficiente para evitarlo.
+
+**Solución:**  
+Restructurado `ensureWeekendPlan` en 3 niveles: Tier 1 (ventana estricta + sin 3er consecutivo), Tier 2 (ventana estricta, permite 3er si es el único disponible), Tier 3 (totalmente relajado). Añadida función `wouldGet3rdConsec`.
+
+---
+
+### BUG-40
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-40 |
+| **Sprint** | Sprint 19 |
+| **Detectado por** | Unit test — Sprint 19 |
+| **Fecha detección** | 2026-05-26 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | Sprint 19 |
+
+**Descripción:**  
+`repairSingleRestDays` podía crear un 3er fin de semana consecutivo para un empleado al mover un paquete de fin de semana como primer intento de reparación, antes de explorar opciones que no violan el límite.
+
+**Causa raíz:**  
+El orden de intentos en `repairSingleRestDays` era: (1) mover paquete sin restricción, (2) convertir adyacente a descanso. Al ser el único candidato válido para el paquete el empleado con 2 fines de semana previos, el movimiento se ejecutaba sin comprobar el límite.
+
+**Solución:**  
+Añadido parámetro `enforceConsecLimit` a `movePackageShiftFromEmployee`. Reordenado `repairSingleRestDays`: (1) mover con `enforceConsecLimit=true`, (2) convertir anterior a descanso, (3) convertir siguiente a descanso, (4) fallbacks con `ignoreMinCoverage`. Eliminado el fallback que permitía silenciosamente el 3er consecutivo.
 
 ---
 
@@ -1262,10 +1327,6 @@ La columna del día 31 no aparece o se renderiza de forma incorrecta.
 **Fix aplicado**  
 Cambiado `overflow-x-hidden` a `overflow-x-auto` en el `<div>` contenedor del grid (`app/page.tsx`). El contenedor usaba `overflow-x-hidden` en lugar de `overflow-x-auto`, impidiendo el scroll horizontal y ocultando las columnas que no cabían en el espacio disponible (como el día 31 cuando el panel PREPA está abierto).
 
----
-
-### BUG-35
-
 | Campo | Valor |
 |-------|-------|
 | **ID** | BUG-35 |
@@ -1297,10 +1358,6 @@ La preferencia M/T se ignora al elegir entre `MF` y `TF` en la función `_pickWe
 **Fix aplicado**  
 Rediseñada la función `_pickWeekendShift` en `lib/schedules/generate.ts`: cuando el empleado tiene un patrón semanal (`weeklyShift`) o una preferencia explícita (`shiftPreference`), se respeta estrictamente — si el slot preferido ya está cubierto, el empleado descansa (D) en lugar de recibir el turno contrario. Los turnos de fin de semana ahora se asignan mediante el plan pre-computado por BUG-37 (paquete Sáb+Dom), por lo que `_pickWeekendShift` solo se llama para festivos en días laborables. Añadidos 2 tests de regresión: uno para preferencia M y otro para preferencia T.
 
----
-
-### BUG-36
-
 | Campo | Valor |
 |-------|-------|
 | **ID** | BUG-36 |
@@ -1331,10 +1388,6 @@ El algoritmo trata MF/TF como un tipo de turno diferente y no los incluye en el 
 **Fix aplicado**  
 Modificada la función `_updateState` en `lib/schedules/generate.ts`: el contador de días consecutivos ahora trata cualquier turno de trabajo (M o T, incluyendo sus variantes MF/TF tras `normalizeShift`) como continuación del streak, independientemente de si el tipo cambia de M a T o viceversa. Solo los turnos no laborables (D, N, J, V, B) reinician el contador. El `needsRest` check se actualizó para dispararse solo cuando `consecutiveShift === "M" || consecutiveShift === "T"`. Añadido 1 test de regresión que verifica que ningún empleado supera 5 días consecutivos de trabajo en todo el mes.
 
----
-
-### BUG-37
-
 | Campo | Valor |
 |-------|-------|
 | **ID** | BUG-37 |
@@ -1364,86 +1417,6 @@ El sábado puede tener al empleado A (MF) y el domingo al empleado B (MF), parti
 
 **Fix aplicado**  
 Añadida pre-selección de paquetes Sáb+Dom en `generateMonthSchedule` (`lib/schedules/generate.ts`): en cada sábado del bucle principal, antes de iterar empleados, se elige un empleado para MF y otro para TF que cubrirán ambos días (Sáb y Dom). La selección respeta disponibilidad (`existingDates`, `nightPlan`, preferencia J) y el límite de consecutivos (excluye empleados con 4+ días de trabajo que necesitarían descanso el domingo). El bucle de empleados consulta el plan pre-computado para asignar MF, TF o D. Añadidos 2 tests de regresión que verifican que el mismo empleado cubre sábado y domingo con el mismo tipo de turno.
-
----
-
-### BUG-38
-
-| Campo | Valor |
-|-------|-------|
-| **ID** | BUG-38 |
-| **Sprint** | Sprint 18 |
-| **Detectado por** | PM — prueba manual del botón "Deshacer generación" |
-| **Fecha detección** | 2026-05-22 |
-| **Severidad** | 🟡 Medium |
-| **Estado** | ✅ Fixed |
-| **Commit fix** | `6c94861` |
-
-**Descripción**  
-Al pulsar el botón "Deshacer generación" después de crear el modelo `ScheduleSnapshot` y aplicar la migración, el servidor devolvía `500 Internal Server Error: TypeError: Cannot read properties of undefined (reading 'upsert') — prisma.scheduleSnapshot is undefined`.
-
-**Causa raíz**  
-El cliente Prisma no fue regenerado (`npx prisma generate`) después de aplicar la migración que añadía el modelo `ScheduleSnapshot`. El bundle de Next.js seguía usando la versión antigua del cliente, que no incluía el accesor `scheduleSnapshot`.
-
-**Ficheros afectados**  
-- `prisma/schema.prisma` — nuevo modelo `ScheduleSnapshot`
-- `prisma/migrations/20260522124917_sprint18_super_viewer_role/`
-- Proceso de build: faltaba paso `prisma generate`
-
-**Fix aplicado**  
-Ejecutado `npx prisma generate` en el workspace. A partir de este sprint, la regla queda documentada: _"Después de cualquier migración o cambio de schema, ejecutar `npx prisma generate` antes de levantar el servidor"_. Adicionalmente, `setSnapshotAvailable(true)` solo se activa si `snapRes.ok` es `true`.
-
----
-
-### BUG-39
-
-| Campo | Valor |
-|-------|-------|
-| **ID** | BUG-39 |
-| **Sprint** | Sprint 18 |
-| **Detectado por** | PM — revisión manual del cuadrante de agosto tras generación de julio |
-| **Fecha detección** | 2026-05-22 |
-| **Severidad** | 🟠 High |
-| **Estado** | ✅ Fixed |
-| **Commit fix** | `6c94861` |
-
-**Descripción**  
-Cuando un bloque nocturno comenzaba en los últimos días de julio y el empleado tenía vacaciones (V) en los primeros días de agosto, el generador planificaba igualmente N y D (descanso post-guardia) sobre esos días de vacaciones.
-
-**Causa raíz**  
-Los tres bucles de continuación de bloque nocturno cross-month no comprobaban `existingDates`. Las vacaciones se guardan en `existingDates` antes de la generación, pero el código de `nightPlan.set(empKey, "N")` no validaba esta colección.
-
-**Ficheros afectados**  
-- `lib/schedules/generate.ts` — función `generateMonthSchedule`, sección de pre-seed de `nightPlan`
-
-**Fix aplicado**  
-Añadida comprobación `if (existingDates.has(empKey)) break` al inicio de cada iteración en los tres bucles de continuación nocturna cross-month. La lógica de post-rest solo planifica el día D si al menos un N fue efectivamente planificado (`nightsPlanned > 0`). 3 tests unitarios nuevos cubren los tres escenarios.
-
----
-
-### BUG-40
-
-| Campo | Valor |
-|-------|-------|
-| **ID** | BUG-40 |
-| **Sprint** | Sprint 18 |
-| **Detectado por** | PM — inspección visual del cuadrante: mismo empleado casi todos los fines de semana |
-| **Fecha detección** | 2026-05-22 |
-| **Severidad** | 🟠 High |
-| **Estado** | ✅ Fixed |
-| **Commit fix** | `6c94861` |
-
-**Descripción**  
-En cuadrantes con 6+ empleados, uno de ellos acaparaba 4-5 fines de semana mientras otros cubrían 1-2. El desequilibrio era especialmente visible en empleados con preferencia T que habían cubierto muchas mañanas por cobertura urgente.
-
-**Causa raíz**  
-`_pickWeekendPackageEmployee` ordenaba los candidatos por `mCount`/`tCount` como criterio de "menos cargado". El criterio ignoraba completamente cuántos fines de semana había trabajado ya cada empleado.
-
-**Ficheros afectados**  
-- `lib/schedules/generate.ts` — interfaz `EmpState`, funciones `reserveWeekendPattern` y `_pickWeekendPackageEmployee`
-
-**Fix aplicado**  
-Añadido campo `weekendCount: number` a la interfaz `EmpState` (inicializado a 0). `reserveWeekendPattern` lo incrementa en 1 cada vez que asigna un paquete sáb+dom. `_pickWeekendPackageEmployee` ordena primero por `weekendCount` ascendente y usa `mCount`/`tCount` solo como desempate. 2 tests unitarios nuevos verifican que la distribución no tiene ratio máximo/mínimo superior a 2.
 
 ---
 

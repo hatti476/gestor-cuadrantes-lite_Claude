@@ -18,6 +18,29 @@ o "revisa la rama antes del merge".
 
 ## Proceso de revisión (en orden)
 
+### 0. Auditoría anti-regresión — ANTES de todo lo demás
+
+Ejecuta y analiza el diff completo contra main:
+```bash
+git diff --stat main...HEAD
+git diff main...HEAD -- lib/schedules/generate.ts lib/schedules/business-logic.ts lib/auth/permissions.ts lib/constants/shift-colors.ts | grep "^-export"
+```
+
+**Bloqueo automático si:**
+- Cualquier fichero crítico (`generate.ts`, `business-logic.ts`, `permissions.ts`, `shift-colors.ts`) pierde `export function` o `export interface` que no esté justificado en los release notes del sprint
+- El número total de tests unitarios disminuye respecto a main
+- Cualquier fichero pierde más del 30% de sus líneas sin documentación del motivo
+
+Si se activa algún bloqueo → reportar al usuario con:
+1. Nombre exacto de lo eliminado
+2. Si aún existe en algún otro fichero o fue renombrado
+3. Si está cubierto por tests (que ahora fallarían)
+
+> *Regla incorporada tras BUG-41 (2026-05-26): ~2.300 líneas de generate.ts borradas
+> accidentalmente, incluyendo `applyChristmasSpecialRule`, `isWeekendOrHoliday` y
+> `isPostRestDay`. No se detectó hasta validación manual. Esta comprobación lo habría
+> capturado antes del merge.*
+
 ### 1. Verificación de tests
 Ejecuta los siguientes comandos y verifica que pasan al 100%:
 - `npm run test:unit`
@@ -25,6 +48,22 @@ Ejecuta los siguientes comandos y verifica que pasan al 100%:
 
 Si algún test falla → STOP. No continúo hasta que estén en verde.
 Si todos pasan → continúo al siguiente paso.
+
+### 1b. Cobertura de tests — BLOQUEANTE si falta
+Reviso el diff con main buscando **lógica de negocio sin test**:
+
+🔴 BLOQUEANTE si existe alguno de estos sin test correspondiente:
+- Función nueva o modificada en `lib/schedules/generate.ts`
+- Función nueva o modificada en `lib/auth/permissions.ts`
+- Nueva API route en `app/api/`
+- Cambio de constante en `lib/constants/shift-colors.ts`
+- Corrección de bug (el bug debe estar cubierto por un test que falle sin el fix)
+
+Verifico que:
+- `tests/unit/` contiene al menos un describe nuevo para cada módulo modificado
+- `tests/e2e/sprint-{N}.spec.ts` contiene al menos un test por cada nueva API o flujo UI
+
+Si falta cobertura → BLOQUEANTE. Solicito los tests antes de continuar.
 
 ### 2. Verificación TypeScript
 Ejecuta `npx tsc --noEmit`.
