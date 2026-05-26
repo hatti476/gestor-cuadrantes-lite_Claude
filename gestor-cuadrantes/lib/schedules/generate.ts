@@ -22,18 +22,12 @@ import {
   isValidShiftType,
   validateShiftTransition,
 } from "./business-logic";
-
-export {
-  isWeekend,
-  toDateStr,
-  fromDateStr,
-  addDays,
-  isWeekendOrHoliday,
-  applySpecialDayRule,
-  applyChristmasSpecialRule,
-  normalizeShift,
-  weekKey,
-} from "./date-utils";
+import {
+  pickWeekendShift as _pickWeekendShift,
+  pickWeekendPackageEmployee as _pickWeekendPackageEmployee,
+} from "./weekend-packs";
+import { pickWorkdayShift as _pickWorkdayShift } from "./workday-shifts";
+import { buildPrevMonthTrailingState, applyCrossMonthNightBlocks, applyCrossMonthWeekendPack } from "./cross-month";
 
 import {
   isWeekend,
@@ -46,6 +40,7 @@ import {
   normalizeShift,
   weekKey,
 } from "./date-utils";
+export { isWeekend, toDateStr, fromDateStr, addDays, isWeekendOrHoliday, applySpecialDayRule, applyChristmasSpecialRule, normalizeShift, weekKey };
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -113,16 +108,6 @@ export const VALID_SHIFTS = [
 
 // ─── Night-block logic (→ see night-blocks.ts) ─────────────────────────────
 
-export {
-  NightBlock,
-  nightBlockDays,
-  computeNightBlocks,
-  resolveNightBlocks,
-  NIGHT_EPOCH_FRIDAY,
-  BLOCK_DAYS,
-  NIGHT_DAYS,
-} from "./night-blocks";
-
 import {
   NightBlock,
   nightBlockDays,
@@ -132,6 +117,7 @@ import {
   BLOCK_DAYS,
   NIGHT_DAYS,
 } from "./night-blocks";
+export { NightBlock, nightBlockDays, computeNightBlocks, resolveNightBlocks, NIGHT_EPOCH_FRIDAY, BLOCK_DAYS, NIGHT_DAYS };
 
 // ─── Normalisation ────────────────────────────────────────────────────────────
 
@@ -139,16 +125,6 @@ import {
 
 // ─── Rest rules + shift helpers (→ see rest-rules.ts) ──────────────────────
 
-export {
-  isDayWorkShift,
-  countTrailingDayWork,
-  countTrailingShift,
-  initialForcedRestDaysRemaining,
-  isPostRestDay,
-  countConsecutiveWorkDays,
-  getExtendedWeekend,
-} from "./rest-rules";
-
 import {
   isDayWorkShift,
   countTrailingDayWork,
@@ -158,6 +134,7 @@ import {
   countConsecutiveWorkDays,
   getExtendedWeekend,
 } from "./rest-rules";
+export { isDayWorkShift, countTrailingDayWork, countTrailingShift, initialForcedRestDaysRemaining, isPostRestDay, countConsecutiveWorkDays, getExtendedWeekend };
 
 // ─── ISO week helper ─────────────────────────────────────────────────────────
 
@@ -1625,15 +1602,4 @@ function _updateState(
   }
 }
 
-// _pickWeekendShift, _pickWeekendPackageEmployee → see weekend-packs.ts
-// (imported as pickWeekendShift and pickWeekendPackageEmployee)
-
-import {
-  pickWeekendShift as _pickWeekendShift,
-  pickWeekendPackageEmployee as _pickWeekendPackageEmployee,
-} from "./weekend-packs";
-
-// _pickWorkdayShift → see workday-shifts.ts (imported as pickWorkdayShift)
-
-import { pickWorkdayShift as _pickWorkdayShift } from "./workday-shifts";
-import { buildPrevMonthTrailingState, applyCrossMonthNightBlocks, applyCrossMonthWeekendPack } from "./cross-month";
+// ─── imports moved to top of file ───────────────────────────────────────────
