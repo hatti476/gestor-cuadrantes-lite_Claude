@@ -15,6 +15,11 @@ import { normalizeShift, toDateStr, addDays, fromDateStr } from "./date-utils";
 
 // ─── SECCIÓN: Selección de turno de fin de semana por empleado ─────────────
 
+/**
+ * Select the appropriate weekend shift for an employee on a specific date.
+ * Returns the MF or TF weekend shift assigned to this employee, or falls back
+ * to the normal weekday equivalent (M/T) if no package is assigned.
+ */
 export function pickWeekendShift(
   emp: ScheduleEmployee,
   state: {
@@ -64,6 +69,10 @@ export function pickWeekendShift(
 
 // ─── SECCIÓN: Selección de empleado para paquete de fin de semana ─────────
 
+/**
+ * Select the best employee from candidates to fill a MF or TF weekend package slot.
+ * Balances weekendCount equity, shift preference, and weekly consistency.
+ */
 export function pickWeekendPackageEmployee(
   targetShift: "MF" | "TF",
   candidates: ScheduleEmployee[],

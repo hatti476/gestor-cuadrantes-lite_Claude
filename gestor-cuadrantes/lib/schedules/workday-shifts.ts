@@ -14,6 +14,11 @@
 
 // ─── SECCIÓN: Selección de turno para día laborable ──────────────────────
 
+/**
+ * Select the best weekday shift (M or T) for an employee based on:
+ * weekly consistency (weekShift), shift preference, and coverage equity.
+ * Returns "M", "T", or "D" (rest day if forced rest is required).
+ */
 export function pickWorkdayShift(
   emp: { id: string; rotationOrder: number; shiftPreference?: string | null },
   state: {

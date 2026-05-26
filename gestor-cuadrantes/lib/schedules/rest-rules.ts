@@ -10,12 +10,14 @@
  */
 
 import { normalizeShift, addDays, toDateStr } from "./date-utils";
+/** Returns true if the normalized shift is a day-work shift (M or T). */
 export function isDayWorkShift(shift: string | null): boolean {
   if (!shift) return false;
   const base = normalizeShift(shift);
   return base === "M" || base === "T" || base === "J";
 }
 
+/** Count consecutive trailing day-work entries (M or T shifts) at the end of tail. */
 export function countTrailingDayWork(entries: { shiftType: string }[], endIndex = entries.length - 1): number {
   let count = 0;
   for (let i = endIndex; i >= 0; i--) {
@@ -25,6 +27,7 @@ export function countTrailingDayWork(entries: { shiftType: string }[], endIndex 
   return count;
 }
 
+/** Count consecutive trailing entries of the given shift type at the end of tail. */
 export function countTrailingShift(entries: { shiftType: string }[], shift: string): number {
   let count = 0;
   for (let i = entries.length - 1; i >= 0; i--) {
@@ -34,6 +37,7 @@ export function countTrailingShift(entries: { shiftType: string }[], shift: stri
   return count;
 }
 
+/** Compute the number of forced rest days still remaining at the start of a new month. */
 export function initialForcedRestDaysRemaining(entries: { shiftType: string }[]): number {
   let trailingRestDays = 0;
   for (let i = entries.length - 1; i >= 0; i--) {
@@ -47,6 +51,7 @@ export function initialForcedRestDaysRemaining(entries: { shiftType: string }[])
   return workBeforeSingleRest >= 5 ? 1 : 0;
 }
 
+/** Returns true when date is a post-night-block rest day for the given employee. */
 export function isPostRestDay(
   employeeId: string,
   date: Date,
@@ -76,6 +81,7 @@ export function isPostRestDay(
  * backward from `date` (not including `date` itself).
  * Looks up assignments and, optionally, prevMonthTail to cross month boundaries.
  */
+/** Count consecutive work days up to and including tail[-1] for an employee. */
 export function countConsecutiveWorkDays(
   employeeId: string,
   date: Date,
@@ -113,6 +119,7 @@ export function countConsecutiveWorkDays(
  * through consecutive holiday weekdays (Fri, Thu, …) and forward through
  * consecutive holiday weekdays (Mon, Tue, …).
  */
+/** Returns extended weekend dates (including adjacent holidays) for the Saturday satDate. */
 export function getExtendedWeekend(
   date: Date,
   holidays: Set<string>
