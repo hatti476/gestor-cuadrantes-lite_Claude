@@ -10,7 +10,7 @@
 
 | Total bugs | Críticos | Altos | Medios | Bajos | Abiertos | Resueltos |
 |-----------|----------|-------|--------|-------|----------|-----------|
-| 40 | 0 | 23 | 11 | 6 | 4 | 36 |
+| 40 | 0 | 23 | 11 | 6 | 0 | 40 |
 
 ---
 
@@ -51,10 +51,10 @@
 | [BUG-31](#bug-31) | Sprint 12 | 🟠 High | ✅ Fixed | Empleado con pref `J` recibía MF/TF en fin de semana y M/T en días laborables |
 | [BUG-32](#bug-32) | Sprint 14 | 🟠 High | ✅ Fixed | Proyecto antiguo de localStorage persiste aunque no exista en la BD |
 | [BUG-33](#bug-33) | Sprint 14 | 🟠 High | ✅ Fixed | Empleado de reemplazo en semana de noches recibe dos bloques consecutivos |
-| [BUG-34](#bug-34) | Sprint 14 | 🟡 Medium | 🔴 Open | Día 31 no se muestra correctamente en meses de 31 días |
-| [BUG-35](#bug-35) | Sprint 14 | 🟠 High | 🔴 Open | Preferencia M/T no se respeta al asignar MF/TF en fines de semana y festivos |
-| [BUG-36](#bug-36) | Sprint 14 | 🟠 High | 🔴 Open | Regla de máximo 5 días consecutivos no se aplica al mezclar M/T con MF/TF |
-| [BUG-37](#bug-37) | Sprint 14 | 🟠 High | 🔴 Open | Turnos de finde/festivo (MF/TF) no se asignan como paquete indivisible Sáb+Dom |
+| [BUG-34](#bug-34) | Sprint 14 | 🟡 Medium | ✅ Fixed | Día 31 no se muestra correctamente en meses de 31 días |
+| [BUG-35](#bug-35) | Sprint 14 | 🟠 High | ✅ Fixed | Preferencia M/T no se respeta al asignar MF/TF en fines de semana y festivos |
+| [BUG-36](#bug-36) | Sprint 14 | 🟠 High | ✅ Fixed | Regla de máximo 5 días consecutivos no se aplica al mezclar M/T con MF/TF |
+| [BUG-37](#bug-37) | Sprint 14 | 🟠 High | ✅ Fixed | Turnos de finde/festivo (MF/TF) no se asignan como paquete indivisible Sáb+Dom |
 | [BUG-38](#bug-38) | Sprint 19 | 🟠 High | ✅ Fixed | Transición N→turno de día sin descanso mínimo en path de reparación de última instancia |
 | [BUG-39](#bug-39) | Sprint 19 | 🟠 High | ✅ Fixed | Empleados acumulan 3+ fines de semana consecutivos en planificación inicial |
 | [BUG-40](#bug-40) | Sprint 19 | 🟠 High | ✅ Fixed | `repairSingleRestDays` puede crear 3er fin de semana consecutivo al mover paquetes |
