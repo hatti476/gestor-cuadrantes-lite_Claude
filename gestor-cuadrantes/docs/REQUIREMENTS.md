@@ -1,7 +1,7 @@
 # Documento de Requisitos — Gestor de Cuadrantes
 
-**Versión**: 3.2.0 (Sprint 19 — Gestión de usuarios/proyectos, RBAC /admin, permisos auditados)
-**Última actualización**: 22/05/2026
+**Versión**: 2.4.0 (Sprint 12 — cierre de sprint)  
+**Última actualización**: 14/05/2026  
 **Estado**: Vivo — se actualiza al cierre de cada sprint
 
 ---
@@ -10,18 +10,6 @@
 
 El **Gestor de Cuadrantes** es una aplicación web para la planificación y gestión de turnos de equipos de trabajo con cobertura 24 h. Permite a los administradores generar cuadrantes mensuales de forma automática mediante una rotación cíclica configurable, editarlos manualmente, gestionar festivos y exportarlos. Los técnicos pueden consultar su turno en tiempo real.
 
-### Estado actual del producto
-
-| Campo | Valor |
-|-------|-------|
-| Versión funcional | 1.9 |
-| Último sprint cerrado | Sprint 19 — Gestión de usuarios/proyectos, RBAC /admin, permisos auditados |
-| Sprint en curso | — (pendiente de planificación Sprint 20) |
-| Siguiente sprint planificado | Sprint 20 — TBD |
-| Tests unitarios | 283/283 |
-| Tests E2E declarados | CP-01..CP-141 |
-| Bugs abiertos conocidos | 0 |
-
 ---
 
 ## 2. Usuarios del sistema
@@ -29,8 +17,7 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | Rol global | Descripción | Acceso |
 |------------|-------------|--------|
 | `SUPER_ADMIN` | Administrador global con acceso total a todos los proyectos | Lectura + escritura en todo |
-| `SUPER_VIEWER` | Observador global sin membresías explícitas | Solo lectura de todos los proyectos; no puede editar ni generar |
-| `USER` | Técnico / empleado estándar | Solo lectura del cuadrante de sus proyectos |
+| `USER` | Técnico / empleado estándar | Solo lectura del cuadrante |
 
 | Rol de proyecto | Descripción | Acceso |
 |-----------------|-------------|--------|
@@ -55,7 +42,6 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-01.6 | El header muestra el email del usuario autenticado y su rol global como badge | 1 | ✅ |
 | RF-01.7 | La sesión JWT incluye `id`, `role` (global) y `projectMemberships[]` | 6 | ✅ |
 | RF-01.8 | Las membresías de proyecto se cargan desde BD en cada refresco del token | 6 | ✅ |
-| RF-01.9 | El rol `SUPER_VIEWER` permite ver todos los proyectos sin membresías explícitas; el header muestra badge gris "Viewer" | 18 | ✅ |
 
 ---
 
@@ -121,7 +107,6 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-05.5 | La generación aplica automáticamente las reglas de festivos y fines de semana (RF-06) | 3/4 | ✅ |
 | RF-05.6 | Solo el SUPER_ADMIN puede disparar la generación automática | 3 | ✅ |
 | RF-05.7 | La generación es idempotente: ejecutarla varias veces produce el mismo resultado | 3/9 | ✅ |
-| RF-05.9 | La respuesta de `POST /api/schedules/generate` incluye `coverageWarnings[]` con los días en que un descanso forzado reduce la cobertura M/T por debajo del mínimo | 17 | ✅ |
 
 ---
 
@@ -257,12 +242,6 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-14.9 | Ningún empleado supera 5 días consecutivos con el mismo turno de trabajo | 9 | ✅ |
 | RF-14.10 | La generación consulta los últimos 7 días del mes anterior (`prevMonthTail`) para aplicar la regla de máximo consecutivo en el inicio del mes | 9 | ✅ |
 | RF-14.11 | Los turnos V/B/J existentes bloquean la celda; los turnos M/T/N/D de generaciones anteriores se regeneran | 9 | ✅ |
-| RF-14.14 | El algoritmo detecta empleados que terminaron el mes anterior a mitad de bloque nocturno y los completa al inicio del nuevo mes (continuidad cross-month), seguidos de los días de post-descanso obligatorios | 17 | ✅ |
-| RF-14.15 | Cuando el lunes siguiente a un domingo es festivo, el paquete de fin de semana se extiende a 3 días (Sáb+Dom+Lun); el mismo par de empleados cubre los 3 días con MF/TF | 17 | ✅ |
-| RF-14.16 | Tras ≥5 jornadas diurnas consecutivas (M/T, incluyendo cruce de mes), el algoritmo aplica 2 días de descanso forzado HARD (no reemplazables por la fase de reparación de cobertura) | 17 | ✅ |
-| RF-14.17 | Si el mes anterior termina en sábado con MF/TF, el primer día del mes nuevo (domingo) se asigna al mismo empleado para garantizar continuidad del paquete sáb+dom | 18 | ✅ |
-| RF-14.18 | El bloque nocturno cross-month se interrumpe si el empleado tiene V/B en los días del mes siguiente; no se planifican N ni D sobre vacaciones | 18 | ✅ |
-| RF-14.19 | La equidad de fines de semana se gestiona mediante `weekendCount` en `EmpState`; el empleado con menos fines de semana asignados tiene prioridad | 18 | ✅ |
 
 ---
 
@@ -326,65 +305,6 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 | RF-16.3 | En días laborables se intenta que sean ≥ 2 en M y ≥ 2 en T cuando hay técnicos suficientes disponibles (soft target) | 9-PO | ✅ |
 | RF-16.4 | Cada día de fin de semana o festivo tiene **como mínimo 1 empleado en MF y 1 en TF** cuando hay ≥ 2 técnicos disponibles (no en D ni N) | 9-PO | ✅ |
 | RF-16.5 | Las noches solo tienen 1 técnico por día (ya garantizado por el bloque de rotación nocturna) | 9 | ✅ |
-
----
-
-### RF-20 — Festivos públicos por Comunidad Autónoma
-
-| ID | Descripción | Sprint | Estado |
-|----|-------------|--------|--------|
-| RF-20.1 | Cada proyecto puede tener asociada una Comunidad Autónoma española mediante selector en `/projects` | 13 | ✅ |
-| RF-20.2 | El proyecto activo persiste `{ id, name, region }` en `localStorage` para que el cuadrante conozca la región | 13 | ✅ |
-| RF-20.3 | Existe `GET /api/holidays/public?year=YYYY&region=REGION` para consultar festivos públicos de nager.at filtrados por CCAA | 13 | ✅ |
-| RF-20.4 | El `PrepPanel` permite cargar festivos automáticamente cuando el proyecto tiene región configurada | 13 | ✅ |
-| RF-20.5 | Si la API externa falla, el sistema muestra error y permite continuar con gestión manual de festivos | 13 | ✅ |
-
----
-
-### RF-21 — Historial paginado y filtrable
-
-| ID | Descripción | Sprint | Estado |
-|----|-------------|--------|--------|
-| RF-21.1 | El historial de cambios acepta `page`, `limit` y `month=YYYY-MM` como parámetros de consulta | 13 | ✅ |
-| RF-21.2 | La respuesta incluye `pagination` y `availableMonths` para construir la UI de paginación/filtro | 13 | ✅ |
-| RF-21.3 | La página de historial permite navegar entre páginas y filtrar por mes | 13 | ✅ |
-| RF-21.4 | `PROJECT_ADMIN` puede consultar historiales de empleados accesibles desde su flujo de gestión | 13 | ✅ |
-
----
-
-### RF-22 — Ayuda Fase 2
-
-| ID | Descripción | Sprint | Estado |
-|----|-------------|--------|--------|
-| RF-22.1 | `/info` documenta gestión de proyectos, preparación del cuadrante, festivos automáticos y preferencias de turno | 13 | ✅ |
-| RF-22.2 | `/info` muestra contenido diferenciado para administradores y empleados | 13 | ✅ |
-| RF-22.3 | La ayuda incluye los 10 tipos de turno vigentes: M, T, N, MF, TF, NF, J, D, V, B | 13 | ✅ |
-
----
-
-### RF-23 — Snapshot y deshacer generación
-
-| ID | Descripción | Sprint | Estado |
-|----|-------------|--------|--------|
-| RF-23.1 | Antes de generar, el sistema guarda un snapshot del cuadrante actual en `ScheduleSnapshot` (upsert por `projectId+month+year`) | 18 | ✅ |
-| RF-23.2 | Si el snapshot se guarda correctamente, aparece el botón "↩ Deshacer" junto al título del mes | 18 | ✅ |
-| RF-23.3 | Al pulsar "Deshacer", el sistema restaura el cuadrante al estado previo a la generación eliminando asignaciones generadas y reinsertando el snapshot | 18 | ✅ |
-| RF-23.4 | El botón "Deshacer" desaparece al navegar de mes o al editar manualmente una celda | 18 | ✅ |
-| RF-23.5 | Solo SUPER_ADMIN o PROJECT_ADMIN pueden guardar y restaurar snapshots | 18 | ✅ |
-| RF-23.6 | `ScheduleSnapshot` usa `@@unique([projectId, month, year])`; múltiples generaciones en el mismo mes sobrescriben el mismo snapshot | 18 | ✅ |
-
----
-
-### RF-24 — Esquema de colores de turno
-
-| ID | Descripción | Sprint | Estado |
-|----|-------------|--------|--------|
-| RF-24.1 | M y MF comparten el mismo color naranja (`#F97316`); texto blanco | 18 | ✅ |
-| RF-24.2 | T y TF comparten el mismo color azul (`#3B82F6`); texto blanco | 18 | ✅ |
-| RF-24.3 | N y NF comparten el mismo color verde (`#16A34A`); texto blanco | 18 | ✅ |
-| RF-24.4 | V (Vacaciones) y B (Baja) usan fondo negro (`#111827`) con texto blanco para máxima visibilidad | 18 | ✅ |
-| RF-24.5 | Las columnas de sábado y domingo tienen cabecera azul (`bg-blue-100 text-blue-800`) y celdas con fondo `bg-blue-50` | 18 | ✅ |
-| RF-24.6 | Las columnas de festivo tienen cabecera rojo intenso (`bg-red-200 text-red-800`) y celdas con fondo `bg-red-50` | 18 | ✅ |
 
 ---
 
@@ -507,13 +427,14 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 
 | Suite | Archivo | Tests | Estado |
 |-------|---------|-------|--------|
-| Unit | `tests/unit/lib/business-logic.test.ts` | 77 | ✅ |
-| Unit | `tests/unit/lib/employees-business-logic.test.ts` | 19 | ✅ |
-| Unit | `tests/unit/lib/permissions.test.ts` | 25 | ✅ |
-| Unit | `tests/unit/lib/shift-colors.test.ts` | 9 | ✅ |
-| Unit | `tests/unit/schedules/month-status.test.ts` | 10 | ✅ |
-| Unit | `tests/unit/scheduler/generate.test.ts` | 87 | ✅ |
-| **Total unit** | | **227** | **✅** |
+| Unit | `schedules/business-logic` | 12 | ✅ |
+| Unit | `scheduler/generate` (Fase 2) | 40 | ✅ |
+| Unit | `employees/business-logic` (incl. `isValidShiftPreference`: M, T, J, null) | 40 | ✅ |
+| Unit | `auth/permissions` | 25 | ✅ |
+| Unit | `soft-delete / shiftPreference` | 4 | ✅ |
+| Unit | `isValidShiftPreference` (M, T, J, null + rechaza inválidos) | 3 | ✅ |
+| Unit | `schedules/month-status` | 10 | ✅ |
+| **Total unit** | | **140** | **✅** |
 | E2E Sprint 1 | CP-01..CP-11 | 11 | ✅ |
 | E2E Sprint 2 | CP-12..CP-22 | 11 | ✅ |
 | E2E Sprint 3 | CP-23..CP-29 | 7 | ✅ |
@@ -526,29 +447,20 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | E2E Sprint 10 | CP-71..CP-78 | 8 | ✅ |
 | E2E Sprint 11 | CP-79..CP-85 | 7 | ✅ |
 | E2E Sprint 12 | CP-86..CP-89 | 4 | ✅ |
-| E2E Sprint 13 | CP-90..CP-98 | 9 | ✅ |
-| Sprint 14 | Sin suite E2E nueva; regresiones cubiertas por unit tests y testing manual | — | ✅ |
-| Sprint 15 | Sin suite E2E nueva; baseline técnico y documental | — | ✅ |
-| E2E Sprint 16 | CP-99..CP-109 | 11 | ✅ |
-| E2E Sprint 17 | CP-110..CP-115 | 6 | ✅ |
-| E2E Sprint 18 | CP-115..CP-128 | 14 | ✅ |
-| E2E Sprint 19 | CP-129..CP-141 | 13 | ✅ |
-| **Total E2E** | | **128** | **✅** |
+| **Total E2E** | | **84** | **✅** |
 
 ---
 
-## 9. Backlog pendiente (Sprint 20+)
+## 9. Backlog pendiente (Sprint 11+)
 
 | Funcionalidad | Requisito | Prioridad |
-|---------------|-----------|----------|
-| Sprint 20: harness de simulación multi-mes para medir equidad, cobertura y regresiones del generador | Calidad algoritmo | Alta |
-| Sprint 20: diagnósticos del generador en modo test/debug para explicar decisiones de asignación | Calidad algoritmo | Media |
-| Robustez de festivos externos con cache/backfill si producción lo necesita | RF-20 / Operativo | Media |
-| Vista personalizada del técnico: próximos turnos y cambios recientes | Nuevo RF | Media |
-| Solicitud/aprobación de vacaciones | Nuevo RF | Alta |
-| Dashboard de proyecto: cobertura diaria, ausencias y alertas | Nuevo RF | Alta |
-| Pipeline CI/CD con lint, unit, build y subset E2E | Operativo | Media |
-| Exportación Excel/PDF maquetada | Nuevo RF | Media |
+|---------------|-----------|-----------|
+| Festivos por CCAA/proyecto (`ProjectHoliday`), integración con API pública de festivos | RF-07 ampliado | Media |
+| Gestión de packs de fin de semana (Sáb+Dom mismo turno, editables) | RF-14.7 | Baja |
+| Resolver BUG-20: servidor E2E con estado obsoleto (CP-69 verificación DOM) | — | Media || Vista personalizada del técnico (solo sus turnos y próximos días) | Nuevos RF | Baja |
+| Solicitud / aprobación de vacaciones (flujo V con aprobación por PROJECT_ADMIN) | Nuevos RF | Alta || Notificaciones email al técnico cuando se asigna/modifica su turno | Nuevos RF | Alta |
+| Dashboard de proyecto: cobertura diaria, ausencias, horas totales | Nuevos RF | Alta |
+| Pipeline CI/CD + deploy automático en producción | Operativo | Media |
 
 ---
 
@@ -569,10 +481,27 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | 1.1 | 11 | Estado del mes (MonthStatus + badge), PrepPanel 4 pasos, campo `manual` en asignaciones, celdas bloqueadas (🔒), revert MF/TF/NF al eliminar festivo, confirmación antes de regenerar |
 | 1.2 | 12 | Aislamiento de asignaciones por proyecto (BUG-29 + `ShiftAssignment.projectId`), `resolveNightBlocks` (transferencia de bloque en vacaciones), preferencia Jornada (J), fila propia resaltada en el grid (RF-19) |
 | 1.3 | 12 | BUG-30: `_pickWorkdayShift` ignoraba preferencia M/T cuando `weeklyShift` fue fijado por cobertura urgente — corregido con `dailyOrder` (empleados sin preferencia resuelven cobertura primero). BUG-31a: `_pickWeekendShift` no retornaba `"D"` para pref `"J"` — corregido. BUG-31b: `_pickWorkdayShift` asignaba M/T en lugar de `"J"` a empleados con pref `"J"` — corregido retornando `"J"` directamente. Validación `shiftPreference` movida a `business-logic.ts` (testeable). Tests unitarios de regresión BUG-30 y BUG-31 añadidos. |
-| 1.4 | 13 | Selector de región por CCAA, carga automática de festivos vía nager.at, historial paginado/filtrado, actualización de `/info` Fase 2 y guía de despliegue. |
-| 1.5 | 14 | Estabilización post-Sprint 13: BUG-32..BUG-37 corregidos, incluyendo localStorage obsoleto, sustituto de noches, día 31, preferencias M/T en MF/TF, máximo de 5 días y pack Sáb+Dom indivisible. |
-| 1.5 | 15 | Saneamiento técnico y documental: lint limpio, E2E CP-29 recuperado, build sin dependencia de Google Fonts, README/requisitos/informe alineados y versionado npm en 1.5.0. |
-| 1.6 | 16 | Correcciones del algoritmo I: toggle V/D en PrepPanel, exclusión pref J de noches, consistencia MF/TF con pauta semanal, 2D obligatorios entre bloques, validación ET Art. 34.3, tabla de complementos económicos, E2E CP-99..CP-109. |
-| 1.7 | 17 | Correcciones del algoritmo II: descanso forzado HARD (Tarea 1), continuidad cross-month de bloque nocturno con protección `crossMonthRestDates` (Tarea 2), paquete extendido Sáb+Dom+Lun festivo (Tarea 3), `coverageWarnings` en API, E2E CP-110..CP-115. |
-| 1.8 | 18 | UX fixes y nuevas funcionalidades: continuidad cross-month del paquete sáb+dom (RF-14.17), SUPER_VIEWER (RF-01.9), columnas sáb/dom en azul y festivos en rojo intenso, colores unificados por familia de turno, snapshot/undo de generación (RF-21), bugfixes N cross-month+vacaciones (RF-14.18), weekendCount equidad (RF-14.19), V/B negro, E2E CP-115..CP-128. |
-| 1.9 | 19 | Gestión de usuarios y proyectos: sección /admin unificada con tabs Usuarios y Proyectos, auditoría y corrección de permisos en 11 rutas API, navegación adaptativa por rol (cabecera RBAC), middleware /employees→/admin, API /api/admin/users CRUD, PrepPanel visible para PROJECT_ADMIN, SUPER_VIEWER en /projects modo lectura, E2E CP-129..CP-141, 283 unit tests. |
+| 2.0 | 20 | **Refactor modular de generate.ts**: extracción de 1,190 líneas en 8 módulos independientes (date-utils, night-blocks, rest-rules, shift-transitions, coverage, weekend-packs, workday-shifts, cross-month). Reducción de 2350 → 1605 líneas (-32%). Tests unitarios 296 → 374 (78 nuevos), E2E baseline 142 tests ejecutados. Bugs BUG-38 (missing imports) y BUG-39 (circular deps) encontrados y cerrados. Arquitectura modular con raíz sin deps (date-utils.ts). Sprint Orchestrator formalizado con E2E como requerimiento obligatorio. |
+| 1.3 | 12 | BUG-30: `_pickWorkdayShift` ignoraba preferencia M/T cuando `weeklyShift` fue fijado por cobertura urgente — corregido con `dailyOrder` (empleados sin preferencia resuelven cobertura primero). BUG-31a: `_pickWeekendShift` no retornaba `"D"` para pref `"J"` — corregido. BUG-31b: `_pickWorkdayShift` asignaba M/T en lugar de `"J"` a empleados con pref `"J"` — corregido retornando `"J"` directamente. Validación `shiftPreference` movida a `business-logic.ts` (testeable). Tests unitarios de regresión BUG-30 y BUG-31 añadidos. |
+
+---
+
+## 11. Sprint 21 — Refactorización de day-loop (Fase 2)
+
+**Estado**: Pendiente | **Versión destino**: 2.1.0 | **Esfuerzo estimado**: 22 horas
+
+Para detalles completos, ver: [docs/sprint-21-requirements.md](sprint-21-requirements.md)
+
+**Resumen**:
+- Extraer loop día-por-día de `generate.ts` a módulo `day-loop.ts`
+- Reducir `generate.ts` de 1605 a ≤300 líneas (-81%)
+- Refactorizar ~15 cierres internos en estructura `DayLoopContext`
+- Agregar mínimo 26 tests unitarios nuevos
+- Ejecutar E2E completo (142 tests, **obligatorio**)
+
+**Requisitos de cierre**:
+- 100% unit tests passing (≥400 tests)
+- 100% E2E tests passing (142 tests)
+- `generate.ts` ≤300 líneas
+- Release notes + documentación completa
+- Sin cambios de comportamiento
