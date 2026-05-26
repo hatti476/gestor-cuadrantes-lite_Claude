@@ -1,8 +1,8 @@
 # Sprint 19 — Release Notes
-**Fecha:** 2026-05-23  
+**Fecha:** 2026-05-26  
 **Rama:** `feature/sprint-19-user-project-management`  
 **Estado:** ✅ Completado  
-**Tests:** 283 unit (↑26 nuevos) · 13 E2E nuevos (CP-129..CP-141)
+**Tests:** 296 unit (↑39 nuevos) · 13 E2E nuevos (CP-129..CP-141)
 
 ---
 
@@ -98,6 +98,30 @@ Sprint 19 implementa la sección de administración unificada `/admin` con gesti
 
 ---
 
+### Task 6 — Corrección de bugs de algoritmo de generación (`fix: scheduler algorithm bugs`)
+
+**`lib/schedules/generate.ts`** — 3 bugs corregidos en el algoritmo de generación:
+
+**Fix 1 — Transición N→trabajo sin descanso mínimo (path de reparación de última instancia)**  
+El camino `repairCoverage → last-resort` podía asignar un turno de día inmediatamente después de un turno de noche sin respetar el descanso mínimo (ej. N→M, 8h de hueco que viola la regla de 12h). Se añade validación de `validateShiftTransition` antes de aplicar asignaciones en ese path.
+
+**Fix 2 — Planificación inicial en 3 niveles para fines de semana consecutivos**  
+Se añade `wouldGet3rdConsec` y se restructura `ensureWeekendPlan` en 3 niveles:
+1. Ventana de descanso estricta + sin 3er fin de semana consecutivo
+2. Ventana de descanso estricta (permite 3er consecutivo si no hay otra opción)
+3. Ventana de descanso relajada (último recurso)
+
+**Fix 3 — Reparación de días D aislados sin violar límite de fines de semana**  
+Se añade parámetro `enforceConsecLimit` a `movePackageShiftFromEmployee` y se reordena `repairSingleRestDays`:
+1. Mover paquete a candidato sin 3er consecutivo (`enforceConsecLimit=true`)
+2. Convertir día anterior a descanso
+3. Convertir día siguiente a descanso
+4. Fallbacks `ignoreMinCoverage=true`
+
+Se elimina el path de último recurso que permitía silenciosamente dar un 3er fin de semana consecutivo.
+
+---
+
 ### Task 5 — Tests (`test: Sprint 19 E2E + unit tests`)
 
 **`tests/e2e/sprint-19.spec.ts`** — 13 tests E2E (CP-129..CP-141):
@@ -114,6 +138,11 @@ Sprint 19 implementa la sección de administración unificada `/admin` con gesti
 - CP-139: SUPER_VIEWER ve cuadrante sin PrepPanel
 - CP-140: SUPER_VIEWER no puede editar celdas
 - CP-141: /employees redirige a /admin
+
+**`tests/unit/scheduler/generate.test.ts`** — 7 tests unitarios nuevos (Sprint 19 algoritmo):
+- `Sprint 19 — Bug: transición N→trabajo sin descanso mínimo` (3 casos)
+- `Sprint 19 — Bug: máximo 2 fines de semana consecutivos por empleado` (2 casos)
+- `Sprint 19 — Sin huecos: todos los días tienen asignación` (2 casos)
 
 **`tests/unit/lib/permissions.test.ts`** — 26 tests unitarios nuevos:
 - `isAnyProjectAdmin`: 5 casos (4 roles + null)
@@ -132,12 +161,13 @@ Sprint 19 implementa la sección de administración unificada `/admin` con gesti
 
 | Métrica | Sprint 18 | Sprint 19 |
 |---------|-----------|-----------|
-| Unit tests | 257 ✅ | 283 ✅ (+26) |
+| Unit tests | 257 ✅ | 296 ✅ (+39) |
 | E2E tests declarados | CP-01..CP-128 | CP-01..CP-141 (+13) |
 | TypeScript errors | 0 | 0 |
 | Rutas API auditadas | — | 11 rutas corregidas |
 | Archivos nuevos | — | 6 |
-| Archivos modificados | — | 12 |
+| Archivos modificados | — | 13 |
+| Bugs algoritmo corregidos | — | 3 (Fix1-Fix3) |
 
 ---
 
@@ -149,4 +179,5 @@ feat: role-based navigation in header
 feat: unified /admin section with users and projects tabs
 fix: PROJECT_ADMIN and SUPER_VIEWER specific access rules
 test: Sprint 19 E2E tests CP-129 to CP-141 and unit tests for new permission functions
+fix: scheduler algorithm bugs - N-to-work rest, consecutive weekends, isolated rest repair
 ```

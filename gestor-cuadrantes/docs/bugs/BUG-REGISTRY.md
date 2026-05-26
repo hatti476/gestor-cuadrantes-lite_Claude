@@ -2,7 +2,7 @@
 
 **Proyecto:** Gestor de Cuadrantes  
 **Mantenido por:** Agente `doc-writer`  
-**Última actualización:** 2026-05-17  
+**Última actualización:** 2026-05-26  
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Total bugs | Críticos | Altos | Medios | Bajos | Abiertos | Resueltos |
 |-----------|----------|-------|--------|-------|----------|-----------|
-| 37 | 0 | 20 | 11 | 6 | 0 | 37 |
+| 40 | 0 | 23 | 11 | 6 | 4 | 36 |
 
 ---
 
@@ -55,10 +55,82 @@
 | [BUG-35](#bug-35) | Sprint 14 | 🟠 High | 🔴 Open | Preferencia M/T no se respeta al asignar MF/TF en fines de semana y festivos |
 | [BUG-36](#bug-36) | Sprint 14 | 🟠 High | 🔴 Open | Regla de máximo 5 días consecutivos no se aplica al mezclar M/T con MF/TF |
 | [BUG-37](#bug-37) | Sprint 14 | 🟠 High | 🔴 Open | Turnos de finde/festivo (MF/TF) no se asignan como paquete indivisible Sáb+Dom |
+| [BUG-38](#bug-38) | Sprint 19 | 🟠 High | ✅ Fixed | Transición N→turno de día sin descanso mínimo en path de reparación de última instancia |
+| [BUG-39](#bug-39) | Sprint 19 | 🟠 High | ✅ Fixed | Empleados acumulan 3+ fines de semana consecutivos en planificación inicial |
+| [BUG-40](#bug-40) | Sprint 19 | 🟠 High | ✅ Fixed | `repairSingleRestDays` puede crear 3er fin de semana consecutivo al mover paquetes |
 
 ---
 
 ## Detalle de bugs
+
+---
+
+### BUG-38
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-38 |
+| **Sprint** | Sprint 19 |
+| **Detectado por** | Unit test — Sprint 19 |
+| **Fecha detección** | 2026-05-26 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | Sprint 19 |
+
+**Descripción:**  
+En el camino de reparación de cobertura de última instancia (`repairCoverage → last-resort`), el algoritmo asignaba un turno de día (M, T) inmediatamente después de un turno de noche (N) sin validar el descanso mínimo entre turnos. La transición N→M solo tiene 8h de hueco, inferior al mínimo de 12h requerido.
+
+**Causa raíz:**  
+`repairCoverage` tenía una ruta de último recurso que no llamaba a `validateShiftTransition` para comprobar compatibilidad con los turnos adyacentes.
+
+**Solución:**  
+Añadida validación de `validateShiftTransition` antes y después del día candidato en el path de última instancia de `repairCoverage`.
+
+---
+
+### BUG-39
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-39 |
+| **Sprint** | Sprint 19 |
+| **Detectado por** | Unit test — Sprint 19 |
+| **Fecha detección** | 2026-05-26 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | Sprint 19 |
+
+**Descripción:**  
+Durante la planificación inicial de fines de semana (`ensureWeekendPlan`), el algoritmo podía asignar un 3er fin de semana consecutivo a un empleado cuando había alternativas disponibles. La lógica de selección usaba solo penalización suave en el sort, insuficiente cuando otros factores (coveragePenalty) dominaban.
+
+**Causa raíz:**  
+`availableForPackage` no filtraba empleados con 2 fines de semana consecutivos previos, y la penalización en `_pickWeekendPackageEmployee` no era suficiente para evitarlo.
+
+**Solución:**  
+Restructurado `ensureWeekendPlan` en 3 niveles: Tier 1 (ventana estricta + sin 3er consecutivo), Tier 2 (ventana estricta, permite 3er si es el único disponible), Tier 3 (totalmente relajado). Añadida función `wouldGet3rdConsec`.
+
+---
+
+### BUG-40
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-40 |
+| **Sprint** | Sprint 19 |
+| **Detectado por** | Unit test — Sprint 19 |
+| **Fecha detección** | 2026-05-26 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | Sprint 19 |
+
+**Descripción:**  
+`repairSingleRestDays` podía crear un 3er fin de semana consecutivo para un empleado al mover un paquete de fin de semana como primer intento de reparación, antes de explorar opciones que no violan el límite.
+
+**Causa raíz:**  
+El orden de intentos en `repairSingleRestDays` era: (1) mover paquete sin restricción, (2) convertir adyacente a descanso. Al ser el único candidato válido para el paquete el empleado con 2 fines de semana previos, el movimiento se ejecutaba sin comprobar el límite.
+
+**Solución:**  
+Añadido parámetro `enforceConsecLimit` a `movePackageShiftFromEmployee`. Reordenado `repairSingleRestDays`: (1) mover con `enforceConsecLimit=true`, (2) convertir anterior a descanso, (3) convertir siguiente a descanso, (4) fallbacks con `ignoreMinCoverage`. Eliminado el fallback que permitía silenciosamente el 3er consecutivo.
 
 ---
 

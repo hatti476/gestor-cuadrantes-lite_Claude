@@ -1074,10 +1074,28 @@ export function generateMonthSchedule(
         preferPreservingWeekdayCoverage
       );
 
-    const strictAvailable = availableForPackage(true);
-    let mfEmp = pickEmployee("MF", strictAvailable);
-    let tfEmp = pickEmployee("TF", strictAvailable, mfEmp?.id);
+    // Filter out employees who would get a 3rd consecutive weekend (when others are available).
+    const prevWeekendKey = toDateStr(addDays(fromDateStr(packageWeekKey), -7));
+    const prev2WeekendKey = toDateStr(addDays(fromDateStr(packageWeekKey), -14));
+    const wouldGet3rdConsec = (e: ScheduleEmployee): boolean => {
+      const st = stateMap.get(e.id);
+      return Boolean(st && st.weekendShift.has(prevWeekendKey) && st.weekendShift.has(prev2WeekendKey));
+    };
 
+    const strictAvailable = availableForPackage(true);
+    const strictNoConsec = strictAvailable.filter((e) => !wouldGet3rdConsec(e));
+
+    // Tier 1: strict rest window AND no 3rd consecutive weekend
+    let mfEmp = pickEmployee("MF", strictNoConsec);
+    let tfEmp = pickEmployee("TF", strictNoConsec, mfEmp?.id);
+
+    // Tier 2: strict rest window, allow 3rd consecutive if no other option
+    if (!mfEmp || !tfEmp) {
+      mfEmp = mfEmp ?? pickEmployee("MF", strictAvailable);
+      tfEmp = tfEmp ?? pickEmployee("TF", strictAvailable, mfEmp?.id);
+    }
+
+    // Tier 3: relax rest window entirely (last resort)
     if (!mfEmp || !tfEmp) {
       const relaxedAvailable = availableForPackage(false);
       mfEmp = mfEmp ?? pickEmployee("MF", relaxedAvailable, undefined, true);
@@ -1675,7 +1693,17 @@ export function generateMonthSchedule(
             if (!Boolean(assignment) || assignment?.shiftType !== "D") return false;
             if (existingDates.has(key)) return false;
             if (forcedRestDates.has(key)) return false; // HARD: never convert forced rest to work
+            if (nightPlan.has(key)) return false; // night-block days (pre/post-rest) cannot become work
             if (employee.shiftPreference === "J") return false;
+            // Transition safety: never create an invalid shift sequence (e.g. N→M)
+            const lrPrev = getGeneratedOrExistingShift(employee.id, addDays(date, -1));
+            if (lrPrev && isValidShiftType(lrPrev) && isValidShiftType(targetShift)) {
+              if (!validateShiftTransition(lrPrev, targetShift).valid) return false;
+            }
+            const lrNext = getGeneratedOrExistingShift(employee.id, addDays(date, 1));
+            if (lrNext && isValidShiftType(lrNext) && isValidShiftType(targetShift)) {
+              if (!validateShiftTransition(targetShift, lrNext).valid) return false;
+            }
             // On weekdays: do not create isolated D at a neighbouring day
             if ((targetBase2 === "M" || targetBase2 === "T") && isWeekdayDate) {
               const prevShift = getGeneratedOrExistingShift(employee.id, addDays(date, -1));
@@ -1710,13 +1738,21 @@ export function generateMonthSchedule(
     const key = `${employeeId}|${toDateStr(date)}`;
     const assignment = resultByKey.get(key);
     if (!assignment) return;
+    const prevShift = assignment.shiftType;
     assignment.shiftType = shiftType;
     generatedShiftByKey.set(key, shiftType);
+
   };
 
   const repairWeekendPackageConsistency = (satDate: Date): void => {
     const packageDates = getWeekendPackageDates(satDate);
     if (packageDates.length < 2) return;
+
+    // Consecutive weekend guard: do not reassign to employees who already had
+    // the two preceding weekend packages (they would get a 3rd in a row).
+    const satWk = weekKey(satDate);
+    const consecPrevWk = toDateStr(addDays(fromDateStr(satWk), -7));
+    const consecPrev2Wk = toDateStr(addDays(fromDateStr(satWk), -14));
 
     for (const targetBase of ["M", "T"] as const) {
       const ownerCounts = new Map<string, number>();
@@ -1736,6 +1772,8 @@ export function generateMonthSchedule(
       const candidateOwners = sortedEmps
         .filter((employee) => employee.shiftPreference !== "J")
         .map((employee) => {
+          const existingCount = ownerCounts.get(employee.id) ?? 0;
+
           const canOwnFullPackage = packageDates.every((packageDate) => {
             const shift = getGeneratedOrExistingShift(employee.id, packageDate);
             if (shift !== null && normalizeShift(shift) === targetBase) return true;
@@ -1746,17 +1784,30 @@ export function generateMonthSchedule(
           });
           if (!canOwnFullPackage) return null;
 
+          // Consecutive weekend penalty: employees who already own none of the
+          // package days AND had the 2 preceding weekends get a high score penalty
+          // so they are only picked when no better candidate exists.
+          const st = stateMap.get(employee.id)!;
+          const consecPenalty =
+            existingCount === 0 &&
+            st.weekendShift.has(consecPrevWk) &&
+            st.weekendShift.has(consecPrev2Wk)
+              ? 1
+              : 0;
+
           const state = stateMap.get(employee.id);
           const targetCount = targetBase === "M" ? state?.mCount ?? 0 : state?.tCount ?? 0;
           return {
             employeeId: employee.id,
-            existingCount: ownerCounts.get(employee.id) ?? 0,
+            existingCount,
             targetCount,
+            consecPenalty,
             rotationOrder: employee.rotationOrder,
           };
         })
         .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null)
         .sort((a, b) =>
+          a.consecPenalty - b.consecPenalty ||  // ← consecutive weekend penalty (soft: last resort)
           b.existingCount - a.existingCount ||
           a.targetCount - b.targetCount ||
           a.rotationOrder - b.rotationOrder
@@ -1832,7 +1883,8 @@ export function generateMonthSchedule(
   const movePackageShiftFromEmployee = (
     employeeId: string,
     packageDate: Date,
-    shiftType: string
+    shiftType: string,
+    enforceConsecLimit = false
   ): boolean => {
     const targetBase = normalizeShift(shiftType);
     if (targetBase !== "M" && targetBase !== "T") return false;
@@ -1843,13 +1895,29 @@ export function generateMonthSchedule(
     const packageDates = getWeekendPackageDates(satDate);
     if (packageDates.length < 2) return false;
 
-    const candidate = sortedEmps.find((employee) => {
+    // Compute consecutive weekend history for the target weekend package.
+    const pkgWk = weekKey(satDate);
+    const pkgPrevWk = toDateStr(addDays(fromDateStr(pkgWk), -7));
+    const pkgPrev2Wk = toDateStr(addDays(fromDateStr(pkgWk), -14));
+
+    const isValidCandidate = (employee: ScheduleEmployee): boolean => {
       if (employee.id === employeeId || employee.shiftPreference === "J") return false;
       return packageDates.every((date) => {
         const targetShift = applyChristmasSpecialRule(targetBase === "M" ? "MF" : "TF", date);
         return canRepairCoverageWithShift(employee.id, date, targetShift);
       });
-    });
+    };
+
+    // Two-pass: prefer candidates who would NOT get a 3rd consecutive weekend.
+    const hasConsecHistory = (employee: ScheduleEmployee): boolean => {
+      const st = stateMap.get(employee.id);
+      return Boolean(st && st.weekendShift.has(pkgPrevWk) && st.weekendShift.has(pkgPrev2Wk));
+    };
+
+    const candidate = enforceConsecLimit
+      ? sortedEmps.find((employee) => isValidCandidate(employee) && !hasConsecHistory(employee))
+      : (sortedEmps.find((employee) => isValidCandidate(employee) && !hasConsecHistory(employee)) ??
+         sortedEmps.find((employee) => isValidCandidate(employee)));
 
     if (!candidate) return false;
 
@@ -1898,11 +1966,14 @@ export function generateMonthSchedule(
             continue;
           }
 
-          if (movePackageShiftFromEmployee(employee.id, next.date, next.shiftType)) {
+          // Try 1: move the adjacent package, but ONLY to an employee who won't get
+          // a 3rd consecutive weekend (enforceConsecLimit=true).
+          if (movePackageShiftFromEmployee(employee.id, next.date, next.shiftType, true)) {
             changed = true;
             break;
           }
 
+          // Try 2 & 3: convert adjacent work day to rest (safe if coverage allows).
           if (canConvertGeneratedWorkToRest(employee.id, previous.date)) {
             convertGeneratedWorkToRest(employee.id, previous.date);
             changed = true;
@@ -2166,6 +2237,12 @@ function _pickWeekendPackageEmployee(
 
   if (compatibleCandidates.length === 0) return null;
 
+  // Consecutive weekend penalty: penalise employees who already worked last week's
+  // weekend (penalty 3) or the last TWO consecutive weekends (additional penalty 5).
+  // This prevents a single employee from accumulating 3+ consecutive weekends.
+  const prevWeekKey = toDateStr(addDays(fromDateStr(wKey), -7));
+  const prev2WeekKey = toDateStr(addDays(fromDateStr(wKey), -14));
+
   return [...compatibleCandidates].sort((a, b) => {
     const aState = stateMap.get(a.id)!;
     const bState = stateMap.get(b.id)!;
@@ -2179,16 +2256,23 @@ function _pickWeekendPackageEmployee(
       a.shiftPreference === null || a.shiftPreference === undefined || a.shiftPreference === targetBase ? 0 : 1;
     const bPreferencePenalty =
       b.shiftPreference === null || b.shiftPreference === undefined || b.shiftPreference === targetBase ? 0 : 1;
-    // Primary balance: fewest total weekends worked this month, regardless of weekday M/T count.
-    // This prevents employees with many weekday shifts from being permanently deprioritized.
+    // Primary balance: fewest total weekends worked this month.
     const aWeekendCount = aState.weekendCount;
     const bWeekendCount = bState.weekendCount;
+    // Consecutive weekend penalty: last week +3, last 2 consecutive weeks +5 extra
+    const aHadLast = aState.weekendShift.has(prevWeekKey);
+    const bHadLast = bState.weekendShift.has(prevWeekKey);
+    const aConsecPenalty = (aHadLast ? 3 : 0) +
+      (aHadLast && aState.weekendShift.has(prev2WeekKey) ? 5 : 0);
+    const bConsecPenalty = (bHadLast ? 3 : 0) +
+      (bHadLast && bState.weekendShift.has(prev2WeekKey) ? 5 : 0);
 
     return (
       aCoveragePenalty - bCoveragePenalty ||
+      aPreferencePenalty - bPreferencePenalty ||  // ← preference first (preserves BUG-35)
+      aConsecPenalty - bConsecPenalty ||           // ← consecutive penalty before weekly (prevents 3+ in a row)
       aWeeklyPenalty - bWeeklyPenalty ||
-      aPreferencePenalty - bPreferencePenalty ||
-      aWeekendCount - bWeekendCount || // ← weekend equity: fewer weekends worked = higher priority
+      aWeekendCount - bWeekendCount ||             // ← weekend equity over the full month
       a.rotationOrder - b.rotationOrder
     );
   })[0] ?? null;
