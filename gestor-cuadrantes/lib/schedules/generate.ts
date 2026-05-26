@@ -63,27 +63,9 @@ export interface GeneratedAssignment {
   shiftType: string;
 }
 
-export interface GenerationWarning {
-  employeeId: string;
-  date: string;
-  prevShift: string;
-  nextShift: string;
-  hoursGap: number;
-  reason: string;
-}
-
-/** Warning emitted when a day has reduced coverage due to mandatory rest rules. */
-export interface CoverageWarning {
-  date: string; // "YYYY-MM-DD"
-  employeeId: string;
-  message: string;
-}
-
-export interface GenerateMonthScheduleOptions {
-  existingAssignments?: Map<string, string>;
-  warnings?: GenerationWarning[];
-  coverageWarnings?: CoverageWarning[];
-}
+// GenerationWarning, CoverageWarning, GenerateMonthScheduleOptions → see coverage.ts
+export type { GenerationWarning, CoverageWarning, GenerateMonthScheduleOptions } from "./coverage";
+import type { GenerationWarning, CoverageWarning, GenerateMonthScheduleOptions } from "./coverage";
 
 /**
  * Previous-month tail data for continuity check.
