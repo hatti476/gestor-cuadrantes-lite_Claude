@@ -250,135 +250,13 @@ export function generateMonthSchedule(
     }
   }
 
-  // ── Night block continuity from prevMonthTail (TAREA 2 fix) ────────────────
-  // Detect employees who were mid-block at the end of the previous month and
-  // give them absolute priority to complete their nights at the start of this month.
-  if (prevMonthTail.length > 0) {
-    const prevByEmpNight = new Map<string, PrevMonthTail[]>();
-    for (const p of prevMonthTail) {
-      if (!prevByEmpNight.has(p.employeeId)) prevByEmpNight.set(p.employeeId, []);
-      prevByEmpNight.get(p.employeeId)!.push(p);
-    }
-
-    for (const [empId, entries] of prevByEmpNight) {
-      const sorted = entries.sort((a, b) => a.date.localeCompare(b.date));
-
-      // Count trailing N/NF nights from the end of prevMonthTail
-      let trailingNights = 0;
-      for (let i = sorted.length - 1; i >= 0; i--) {
-        if (normalizeShift(sorted[i].shiftType) !== "N") break;
-        trailingNights++;
-      }
-
-      // Count trailing D shifts (potential post-rest period)
-      let trailingPostRestD = 0;
-      if (trailingNights === 0) {
-        let checkIdx = sorted.length - 1;
-        while (checkIdx >= 0 && sorted[checkIdx].shiftType === "D") {
-          trailingPostRestD++;
-          checkIdx--;
-        }
-        // Validate: there must be N shifts before the D for it to count as post-rest
-        if (trailingPostRestD > 0 && (checkIdx < 0 || normalizeShift(sorted[checkIdx].shiftType) !== "N")) {
-          trailingPostRestD = 0;
-        }
-      }
-
-      const monthStart = new Date(Date.UTC(year, month - 1, 1));
-
-      if (trailingNights > 0 && trailingNights < 7) {
-        // Employee mid-block: add remaining nights + 3D post-rest to nightPlan with priority.
-        // Stop immediately if a locked date (V/B/manual) interrupts the continuation —
-        // vacation breaks the block; the employee returns to normal rotation after absence.
-        const nightsRemaining = 7 - trailingNights;
-        let contDate = monthStart;
-        let actualNightsPlanned = 0;
-
-        // Override nightPlan for remaining night dates, clearing conflicting N entries
-        for (let i = 0; i < nightsRemaining; i++) {
-          if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
-          const ds = toDateStr(contDate);
-          const empKey = `${empId}|${ds}`;
-          // If the employee has a locked date (V, B, manual), the block is interrupted.
-          // Stop planning — no night continuation and no post-rest after vacation.
-          if (existingDates.has(empKey)) break;
-          // Remove conflicting N from any other employee assigned to this date
-          for (const [existingKey, existingShift] of nightPlan.entries()) {
-            if (existingKey !== empKey && existingKey.endsWith(`|${ds}`) && existingShift === "N") {
-              nightPlan.delete(existingKey);
-            }
-          }
-          nightPlan.set(empKey, "N");
-          actualNightsPlanned++;
-          contDate = addDays(contDate, 1);
-        }
-        // Add 3D post-rest only if at least one night was actually planned
-        if (actualNightsPlanned > 0) {
-          for (let i = 0; i < 3; i++) {
-            if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
-            const ds = toDateStr(contDate);
-            const empKey = `${empId}|${ds}`;
-            if (existingDates.has(empKey)) break; // vacation/baja covers rest — stop
-            if (nightPlan.get(empKey) !== "N") {
-              nightPlan.set(empKey, "D");
-              crossMonthRestDates.add(empKey);
-            }
-            contDate = addDays(contDate, 1);
-          }
-        }
-      } else if (trailingNights >= 7) {
-        // Employee completed all 7 nights: add 3D post-rest in new month.
-        // Skip if vacation/baja is covering the rest period.
-        let contDate = monthStart;
-        for (let i = 0; i < 3; i++) {
-          if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
-          const ds = toDateStr(contDate);
-          const empKey = `${empId}|${ds}`;
-          if (existingDates.has(empKey)) break; // vacation/baja acts as rest — stop
-          if (nightPlan.get(empKey) !== "N") {
-            nightPlan.set(empKey, "D");
-            crossMonthRestDates.add(empKey);
-          }
-          contDate = addDays(contDate, 1);
-        }
-      } else if (trailingPostRestD >= 2 && trailingPostRestD < 3) {
-        // Employee in post-rest: add remaining D days (≥2 trailing D required to be
-        // unambiguously post-rest; a single trailing D might be a mid-block interruption)
-        const postRestNeeded = 3 - trailingPostRestD;
-        let contDate = monthStart;
-        for (let i = 0; i < postRestNeeded; i++) {
-          if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
-          const ds = toDateStr(contDate);
-          const empKey = `${empId}|${ds}`;
-          if (existingDates.has(empKey)) break; // vacation/baja covers rest — stop
-          if (nightPlan.get(empKey) !== "N") nightPlan.set(empKey, "D");
-          contDate = addDays(contDate, 1);
-        }
-      }
-    }
-  }
+  // ── Night block continuity from prevMonthTail ─────────────────────────────
+  // Extracted to cross-month.ts → applyCrossMonthNightBlocks
+  applyCrossMonthNightBlocks(prevMonthTail, year, month, existingDates, nightPlan, crossMonthRestDates);
 
   // ── Prev-month trailing state ─────────────────────────────────────────────
-  const prevTailByEmp = new Map<string, { shift: string; count: number; forcedRestDaysRemaining: number }>();
-  if (prevMonthTail.length > 0) {
-    const byEmp = new Map<string, { date: string; shiftType: string }[]>();
-    for (const p of prevMonthTail) {
-      if (!byEmp.has(p.employeeId)) byEmp.set(p.employeeId, []);
-      byEmp.get(p.employeeId)!.push(p);
-    }
-    for (const [empId, entries] of byEmp) {
-      const sorted = entries.sort((a, b) => a.date.localeCompare(b.date));
-      const lastShift = normalizeShift(sorted[sorted.length - 1].shiftType);
-      const count = isDayWorkShift(lastShift)
-        ? countTrailingDayWork(sorted)
-        : countTrailingShift(sorted, lastShift);
-      prevTailByEmp.set(empId, {
-        shift: lastShift,
-        count,
-        forcedRestDaysRemaining: initialForcedRestDaysRemaining(sorted),
-      });
-    }
-  }
+  // Extracted to cross-month.ts → buildPrevMonthTrailingState
+  const prevTailByEmp = buildPrevMonthTrailingState(prevMonthTail);
 
   // ── Per-employee state ────────────────────────────────────────────────────
   interface EmpState {
@@ -444,49 +322,9 @@ export function generateMonthSchedule(
   // Friday/Monday holidays glued to that weekend reuse the same package.
   const weekendPlan = new Map<string, WeekendPackage>();
 
-  // ── Weekend pack continuity from prevMonthTail (Sprint 18 Tarea 1) ─────────
-  // If the previous month ended on a Saturday with MF/TF assignments, and the
-  // first day of the current month is a Sunday, pre-seed the weekendPlan so
-  // that Sunday is assigned to the same employees with the same shift type.
-  {
-    const lastDayOfPrevMonth = new Date(Date.UTC(year, month - 1, 0));
-    if (prevMonthTail.length > 0 && lastDayOfPrevMonth.getUTCDay() === 6) {
-      const lastDayStr = toDateStr(lastDayOfPrevMonth);
-      const mfEntry = prevMonthTail.find(
-        (p) => p.date === lastDayStr && p.shiftType === "MF"
-      );
-      const tfEntry = prevMonthTail.find(
-        (p) => p.date === lastDayStr && p.shiftType === "TF"
-      );
-      if (mfEntry || tfEntry) {
-        // Pre-seed weekendPlan keyed by the Saturday from the previous month
-        weekendPlan.set(lastDayStr, {
-          mfEmpId: mfEntry?.employeeId ?? null,
-          tfEmpId: tfEntry?.employeeId ?? null,
-        });
-        // Reserve weekendShift and weekShift for the first week of the new month
-        const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1));
-        if (firstDayOfMonth.getUTCDay() === 0) {
-          const wk = weekKey(firstDayOfMonth);
-          if (mfEntry) {
-            const st = stateMap.get(mfEntry.employeeId);
-            if (st) {
-              if (!st.weekendShift.has(wk)) st.weekendShift.set(wk, "MF");
-              if (!st.weekShift.has(wk)) st.weekShift.set(wk, "M");
-            }
-          }
-          if (tfEntry) {
-            const st = stateMap.get(tfEntry.employeeId);
-            if (st) {
-              if (!st.weekendShift.has(wk)) st.weekendShift.set(wk, "TF");
-              if (!st.weekShift.has(wk)) st.weekShift.set(wk, "T");
-            }
-          }
-        }
-      }
-    }
-  }
-
+  // ── Weekend pack continuity from prevMonthTail ─────────────────────────────
+  // Extracted to cross-month.ts → applyCrossMonthWeekendPack
+  applyCrossMonthWeekendPack(prevMonthTail, year, month, weekendPlan, stateMap);
   const getPreviousShift = (employeeId: string, date: Date): string | null => {
     const previousDateStr = toDateStr(addDays(date, -1));
     const key = `${employeeId}|${previousDateStr}`;
@@ -1798,3 +1636,4 @@ import {
 // _pickWorkdayShift → see workday-shifts.ts (imported as pickWorkdayShift)
 
 import { pickWorkdayShift as _pickWorkdayShift } from "./workday-shifts";
+import { buildPrevMonthTrailingState, applyCrossMonthNightBlocks, applyCrossMonthWeekendPack } from "./cross-month";
