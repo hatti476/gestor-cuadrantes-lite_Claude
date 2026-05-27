@@ -117,6 +117,7 @@ Finalizar la modularización de `lib/schedules/generate.ts` extrayendo el loop d
 **Entregables**:
 - Reporte E2E en release notes
 - Sin failed tests (100% pass rate obligatorio)
+- Confirmación explícita de no-regresión funcional (mismo input -> mismo output)
 
 ---
 
@@ -193,6 +194,7 @@ Finalizar la modularización de `lib/schedules/generate.ts` extrayendo el loop d
 - [ ] Sin cambios de comportamiento (refactoring puro)
 - [ ] Misma salida para misma entrada
 - [ ] Algoritmo de generación idéntico
+- [ ] Casos golden comparados antes/después sin diferencias
 
 ✅ **Procedimiento**:
 - [ ] Sprint Orchestrator checklist completado:
@@ -246,3 +248,7 @@ Después de Sprint 21, la deuda técnica será **mínima**:
 - ✅ E2E tests son **obligatorios** (aprendizaje de Sprint 20)
 - ✅ La modularización permite reutilización en futuros sprints
 - ✅ Después de Sprint 21, el codebase será más mantenible
+- ✅ Si no hay cambios tras el baseline, usar commit vacío:
+  `git commit --allow-empty -m "chore: baseline test run before day-loop refactor"`
+- ✅ Mensaje final recomendado de cierre:
+  `"Sprint 21 completado. ≥400 unitarios ✅. 142 E2E ✅. generate.ts ≤300 líneas. Rama pusheada. Listo para merge."`
