@@ -291,6 +291,13 @@ export function executeDayLoop(input: DayLoopInput): DayLoopOutput {
       availableCount,
       dayIsWeekendOrHoliday
     );
+    if (availableCount === 0) {
+      warnings.push({
+        date: dateStr,
+        employeeId: "",
+        message: `Cobertura crítica: 0 empleados disponibles en ${dateStr}.`,
+      });
+    }
     coverageSummary[dateStr] = coverage;
     warnings.push(...coverage.warnings);
   }
