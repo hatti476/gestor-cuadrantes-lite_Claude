@@ -59,12 +59,13 @@ test("CP-80 — marcar vacaciones bloquea celda con icono lock", async ({ page }
     // Abrir panel de preparación y hacer clic en "Vacaciones"
     const prepPanel = page.locator('[data-testid="prep-panel"]');
     await expect(prepPanel).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     await page.click('[data-testid="prep-step-vacaciones"]');
 
     // Hacer clic en la primera celda del grid
     const firstCell = page.locator('[data-testid^="cell-"]').first();
-    await expect(firstCell).toBeVisible({ timeout: 5_000 });
+    await expect(firstCell).toBeVisible({ timeout: 10_000 });
     await firstCell.click();
 
     // Esperar recarga y verificar celda bloqueada

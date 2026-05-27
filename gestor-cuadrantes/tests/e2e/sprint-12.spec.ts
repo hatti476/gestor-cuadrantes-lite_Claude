@@ -112,60 +112,52 @@ test("CP-87 — preferencia Jornada aparece en formulario y tabla de empleados",
   page,
 }) => {
   test.setTimeout(60_000);
-  let originalPreference: string | null = null;
 
   try {
     await loginAsAdmin(page);
     await page.goto(ROUTES.employees);
     await page.waitForLoadState("networkidle");
 
-    // Hacer clic en el botón "Editar" del primer empleado activo
-    const editBtn = page.getByRole("button", { name: "Editar" }).first();
-    await expect(editBtn).toBeVisible({ timeout: 10_000 });
-
-    const editLink = page.getByRole("button", { name: "Editar" }).first();
-    await editLink.click();
+    // Elegir un técnico USER (admin no muestra bloque de preferencias de turno)
+    const targetEmail = "tecnico2@cuadrantes.local";
+    const techRow = page.locator("table tbody tr").filter({ hasText: targetEmail }).first();
+    await expect(techRow).toBeVisible({ timeout: 10_000 });
+    await techRow.getByRole("button", { name: /Editar/i }).click();
 
     // El select de preferencia debe contener la opción "Jornada (L-V 9:00–18:00)"
-    const prefSelect = page.locator('[data-testid="select-shift-preference"]');
+    const prefSelect = page
+      .locator('[data-testid="select-shift-preference"], select:has(option[value="J"])')
+      .first();
     await expect(prefSelect).toBeVisible({ timeout: 5_000 });
     await expect(prefSelect.locator('option[value="J"]')).toHaveCount(1);
-
-    // Guardar la preferencia original para restaurarla en cleanup
-    originalPreference = await prefSelect.inputValue();
 
     // Seleccionar "Jornada" y guardar
     await prefSelect.selectOption("J");
     await expect(prefSelect).toHaveValue("J");
 
-    const saveBtn = page.getByRole("button", { name: /guardar cambios/i });
+    const saveRes = page.waitForResponse(
+      (r) =>
+        r.url().includes("/api/admin/users/") &&
+        r.request().method() === "PATCH"
+    );
+    const saveBtn = page.getByRole("button", { name: /^Guardar$/ }).last();
     await saveBtn.click();
+    expect((await saveRes).status()).toBe(200);
 
     // El modal debe cerrarse (el botón desaparece)
     await expect(saveBtn).not.toBeVisible({ timeout: 10_000 });
 
-    // El badge "Jornada" debe aparecer en la tabla
-    const jornaBadge = page.locator("table tbody").locator("text=Jornada").first();
-    await expect(jornaBadge).toBeVisible({ timeout: 5_000 });
+    // Verificar persistencia reabriendo edición del mismo usuario
+    const sameUserRow = page.locator("table tbody tr").filter({ hasText: targetEmail }).first();
+    await sameUserRow.getByRole("button", { name: /Editar/i }).click();
+    const persistedPref = page
+      .locator('[data-testid="select-shift-preference"], select:has(option[value="J"])')
+      .first();
+    await expect(persistedPref).toBeVisible({ timeout: 5_000 });
+    await expect(persistedPref).toHaveValue("J");
   } catch (e) {
     await screenshotOnFail(page, "CP-87");
     throw e;
-  } finally {
-    // Restaurar la preferencia original del empleado
-    if (originalPreference !== undefined) {
-      const editBtn2 = page.getByRole("button", { name: "Editar" }).first();
-      if (await editBtn2.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await editBtn2.click();
-        const prefSelect2 = page.locator('[data-testid="select-shift-preference"]');
-        if (await prefSelect2.isVisible({ timeout: 3_000 }).catch(() => false)) {
-          await prefSelect2.selectOption(originalPreference ?? "");
-          const saveBtn2 = page.getByRole("button", { name: /guardar cambios/i });
-          if (await saveBtn2.isVisible({ timeout: 2_000 }).catch(() => false)) {
-            await saveBtn2.click();
-          }
-        }
-      }
-    }
   }
 });
 
@@ -288,16 +280,7 @@ test("CP-88 — bloque de noches se transfiere al empleado con más tiempo sin n
     );
     expect(vacDays.length).toBe(nightDays.length);
 
-    // ── Limpieza: borrar todas las asignaciones de Feb 2027 en lotes paralelos
-    const allIds = (assignments2 as Assignment[]).map((a) => a.id);
-    const BATCH = 10;
-    for (let i = 0; i < allIds.length; i += BATCH) {
-      await Promise.all(
-        allIds.slice(i, i + BATCH).map((id) =>
-          page.request.delete(`/api/schedules?id=${id}`)
-        )
-      );
-    }
+    // Sin limpieza explícita: globalSetup reinicia test.db al inicio de cada suite.
   } catch (e) {
     await screenshotOnFail(page, "CP-88");
     throw e;

@@ -11,7 +11,7 @@ test("CP-40 — El admin ve la guía de administrador", async ({ page }) => {
   // Debe mostrar secciones específicas del admin
   await expect(page.locator("text=Gestión de proyectos")).toBeVisible();
   await expect(page.locator("text=Preparar el cuadrante")).toBeVisible();
-  await expect(page.locator("text=Festivos precargados")).toBeVisible();
+  await expect(page.getByTestId("info-section-Festivos precargados")).toBeVisible();
   await expect(page.locator("text=Super Admin")).toBeVisible();
 });
 

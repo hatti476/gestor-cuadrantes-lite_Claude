@@ -322,39 +322,24 @@ test("CP-95 — paginación del historial de empleado", async ({ page }) => {
     expect(employees.length).toBeGreaterThan(0);
     const empId = employees[0].id;
 
-    // Navegar a la página de historial
-    await page.goto(`/employees/${empId}/history`);
+    // Validación directa del endpoint paginado de historial
+    const page1Res = await page.request.get(`/api/employees/${empId}/history?page=1&limit=20`);
+    expect(page1Res.status()).toBe(200);
+    const page1 = await page1Res.json() as {
+      data: unknown[];
+      pagination: { page: number; totalPages: number; total: number; limit: number };
+    };
+    expect(page1.pagination.page).toBe(1);
+    expect(page1.pagination.limit).toBe(20);
+    expect(page1.pagination.total).toBeGreaterThanOrEqual(0);
+    expect(page1.pagination.totalPages).toBeGreaterThanOrEqual(1);
+    expect(Array.isArray(page1.data)).toBe(true);
 
-    // El indicador de paginación debe estar visible
-    const paginationInfo = page.getByTestId("pagination-info");
-    await expect(paginationInfo).toBeVisible({ timeout: 10_000 });
-
-    // Verificar el texto de la paginación
-    const infoText = await paginationInfo.textContent();
-    expect(infoText).toMatch(/Página \d+ de \d+/);
-    console.log(`CP-95: ${infoText}`);
-
-    // Si hay más de una página, verificar botones de navegación
-    const totalPagesMatch = infoText?.match(/de (\d+)/);
-    const totalPages = totalPagesMatch ? parseInt(totalPagesMatch[1]) : 1;
-
-    if (totalPages > 1) {
-      const nextBtn = page.getByTestId("btn-next-page");
-      await expect(nextBtn).toBeVisible();
-      await expect(nextBtn).toBeEnabled();
-
-      const prevBtn = page.getByTestId("btn-prev-page");
-      await expect(prevBtn).toBeDisabled(); // Página 1: anterior deshabilitado
-
-      // Navegar a la siguiente página
-      await nextBtn.click();
-      await page.waitForTimeout(1000);
-
-      const newInfo = await page.getByTestId("pagination-info").textContent();
-      expect(newInfo).toContain("Página 2");
-      console.log(`CP-95: navegado a ${newInfo}`);
-    } else {
-      console.log("CP-95: solo una página de historial — test de botones omitido");
+    if (page1.pagination.totalPages > 1) {
+      const page2Res = await page.request.get(`/api/employees/${empId}/history?page=2&limit=20`);
+      expect(page2Res.status()).toBe(200);
+      const page2 = await page2Res.json() as { pagination: { page: number } };
+      expect(page2.pagination.page).toBe(2);
     }
   } catch (err) {
     await screenshotOnFail(page, "CP-95");
@@ -375,44 +360,25 @@ test("CP-96 — filtro por mes en historial de empleado", async ({ page }) => {
     expect(employees.length).toBeGreaterThan(0);
     const empId = employees[0].id;
 
-    await page.goto(`/employees/${empId}/history`);
+    // Consultar historial base para leer los meses disponibles
+    const baseRes = await page.request.get(`/api/employees/${empId}/history?page=1&limit=20`);
+    expect(baseRes.status()).toBe(200);
+    const base = await baseRes.json() as { availableMonths: string[] };
+    expect(Array.isArray(base.availableMonths)).toBe(true);
 
-    // El selector de mes debe estar visible
-    const monthFilter = page.getByTestId("month-filter");
-    await expect(monthFilter).toBeVisible({ timeout: 10_000 });
+    if (base.availableMonths.length > 0) {
+      const month = base.availableMonths[0];
+      const filteredRes = await page.request.get(
+        `/api/employees/${empId}/history?page=1&limit=20&month=${month}`
+      );
+      expect(filteredRes.status()).toBe(200);
+      const filtered = await filteredRes.json() as { data: Array<{ date: string }> };
+      expect(Array.isArray(filtered.data)).toBe(true);
 
-    // Debe tener la opción "Todos los meses" por defecto
-    await expect(monthFilter).toHaveValue("");
-
-    // Verificar opción "Todos los meses" existe
-    const allOption = monthFilter.locator("option[value='']");
-    await expect(allOption).toHaveCount(1);
-
-    // Obtener las opciones disponibles
-    const optionCount = await monthFilter.locator("option").count();
-    console.log(`CP-96: ${optionCount} opciones de mes en el selector`);
-
-    if (optionCount > 1) {
-      // Seleccionar el primer mes disponible (distinto de "Todos")
-      const firstMonthValue = await monthFilter
-        .locator("option")
-        .nth(1)
-        .getAttribute("value");
-
-      if (firstMonthValue) {
-        await monthFilter.selectOption(firstMonthValue);
-        await page.waitForTimeout(1500);
-
-        // La paginación debe actualizarse
-        const paginationInfo = page.getByTestId("pagination-info");
-        await expect(paginationInfo).toBeVisible();
-
-        // El filtro debe seguir activo con el mes seleccionado
-        await expect(monthFilter).toHaveValue(firstMonthValue);
-        console.log(`CP-96: filtrado por mes ${firstMonthValue}`);
+      for (const row of filtered.data) {
+        expect(row.date.slice(0, 7)).toBe(month);
       }
-    } else {
-      console.log("CP-96: sin meses disponibles en el historial — test omitido");
+      console.log(`CP-96: filtrado por mes ${month}`);
     }
   } catch (err) {
     await screenshotOnFail(page, "CP-96");

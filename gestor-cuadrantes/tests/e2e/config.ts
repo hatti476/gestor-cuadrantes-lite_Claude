@@ -29,13 +29,13 @@ export const USERS = {
  * Fuente de verdad: lib/constants/shift-colors.ts
  */
 export const SHIFT_COLORS = {
-  M: "rgb(255, 152, 0)",   // #FF9800 — Mañana
-  T: "rgb(33, 150, 243)",  // #2196F3 — Tarde
-  N: "rgb(76, 175, 80)",   // #4CAF50 — Noche
-  J: "rgb(255, 193, 7)",   // #FFC107 — Jornada normal
-  D: "rgb(245, 245, 245)", // #F5F5F5 — Descanso
-  V: "rgb(33, 33, 33)",    // #212121 — Vacaciones
-  B: "rgb(55, 71, 79)",    // #37474F — Baja
+  M: "rgb(249, 115, 22)",   // #F97316 — Mañana
+  T: "rgb(59, 130, 246)",   // #3B82F6 — Tarde
+  N: "rgb(22, 163, 74)",    // #16A34A — Noche
+  J: "rgb(234, 179, 8)",    // #EAB308 — Jornada normal
+  D: "rgb(156, 163, 175)",  // #9CA3AF — Descanso
+  V: "rgb(17, 24, 39)",     // #111827 — Vacaciones
+  B: "rgb(17, 24, 39)",     // #111827 — Baja
 } as const;
 
 /** Rutas de la aplicación */

@@ -108,8 +108,8 @@ export const VALID_SHIFTS = [
 
 // ─── Night-block logic (→ see night-blocks.ts) ─────────────────────────────
 
+import type { NightBlock } from "./night-blocks";
 import {
-  NightBlock,
   nightBlockDays,
   computeNightBlocks,
   resolveNightBlocks,
@@ -117,7 +117,8 @@ import {
   BLOCK_DAYS,
   NIGHT_DAYS,
 } from "./night-blocks";
-export { NightBlock, nightBlockDays, computeNightBlocks, resolveNightBlocks, NIGHT_EPOCH_FRIDAY, BLOCK_DAYS, NIGHT_DAYS };
+export type { NightBlock };
+export { nightBlockDays, computeNightBlocks, resolveNightBlocks, NIGHT_EPOCH_FRIDAY, BLOCK_DAYS, NIGHT_DAYS };
 
 // ─── Normalisation ────────────────────────────────────────────────────────────
 
