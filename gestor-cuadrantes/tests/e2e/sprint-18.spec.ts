@@ -34,11 +34,22 @@ type Assignment = {
 };
 
 async function getDefaultProject(page: Page): Promise<Project> {
-  const resp = await page.request.get("/api/projects");
-  expect(resp.status()).toBe(200);
-  const projects: Project[] = await resp.json();
-  expect(projects.length).toBeGreaterThan(0);
-  return projects[0];
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const resp = await page.request.get("/api/projects");
+      expect(resp.status()).toBe(200);
+      const projects: Project[] = await resp.json();
+      expect(projects.length).toBeGreaterThan(0);
+      return projects[0];
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) {
+        await page.waitForTimeout(500 * attempt);
+      }
+    }
+  }
+  throw lastError;
 }
 
 async function getAssignments(

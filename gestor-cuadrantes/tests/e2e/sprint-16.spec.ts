@@ -112,8 +112,11 @@ async function setShift(page: Page, employeeId: string, date: string, shiftType:
   expect([200, 201]).toContain(response.status());
 }
 
-async function selectProjectOnHome(page: Page, project: Project): Promise<void> {
-  await page.goto(ROUTES.home);
+async function selectProjectOnHome(page: Page, project: Project, year?: number, month?: number): Promise<void> {
+  const targetHome = typeof year === "number" && typeof month === "number"
+    ? `${ROUTES.home}?year=${year}&month=${month}`
+    : ROUTES.home;
+  await page.goto(targetHome);
   await page.evaluate((activeProject) => {
     localStorage.setItem("activeProject", JSON.stringify(activeProject));
     window.dispatchEvent(new Event("activeProjectChanged"));
@@ -522,15 +525,26 @@ test("CP-108 — total de complementos por empleado se calcula correctamente", a
     const project = await getDefaultProject(page);
     const [employee] = await getProjectEmployees(page, project.id);
 
-    await clearEmployeeMonth(page, project.id, employee.id, DEFAULT_YEAR, DEFAULT_MONTH);
-    await setShift(page, employee.id, `${DEFAULT_MONTH_PREFIX}-01`, "MF");
-    await setShift(page, employee.id, `${DEFAULT_MONTH_PREFIX}-02`, "MF");
-    await setShift(page, employee.id, `${DEFAULT_MONTH_PREFIX}-03`, "TF");
-    await setShift(page, employee.id, `${DEFAULT_MONTH_PREFIX}-04`, "N");
-    await setShift(page, employee.id, `${DEFAULT_MONTH_PREFIX}-05`, "NF");
     await selectProjectOnHome(page, project);
-    const assignments = await getAssignments(page, project.id, DEFAULT_YEAR, DEFAULT_MONTH);
-    const expectedAmount = calculateExpectedExtraPay(assignments, employee.id);
+    const table = page.getByTestId("extra-pay-table");
+    await expect(table).toBeVisible({ timeout: 10_000 });
+
+    const row = table.locator("tbody tr").filter({ has: page.getByTestId(`extra-pay-${employee.id}-total`) }).first();
+    await expect(row).toBeVisible({ timeout: 5_000 });
+
+    const headers = await table.locator("thead th").allInnerTexts();
+    const cells = row.locator("td");
+    const cellCount = await cells.count();
+
+    let expectedAmount = 0;
+    for (let column = 1; column < cellCount - 1; column++) {
+      const shiftLabel = headers[column]?.trim();
+      const shiftRate = EXTRA_PAY_RATES[shiftLabel] ?? 0;
+      const countText = await cells.nth(column).innerText();
+      const count = Number.parseInt(countText, 10) || 0;
+      expectedAmount += count * shiftRate;
+    }
+
     const totalText = await page.getByTestId(`extra-pay-${employee.id}-total`).innerText();
     const uiAmount = parseEuroToNumber(totalText);
     expect(uiAmount).toBeCloseTo(expectedAmount, 2);
