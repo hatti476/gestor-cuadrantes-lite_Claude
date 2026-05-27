@@ -14,6 +14,7 @@ Genero y mantengo los siguientes artefactos de documentación:
 |-----------|-----------|
 | Registro centralizado de bugs | `docs/bugs/BUG-REGISTRY.md` |
 | Informe de esfuerzo por sprint | `docs/effort/SPRINT-{N}-EFFORT.md` |
+| Changelog del proyecto | `CHANGELOG.md` |
 | Resumen ejecutivo del proyecto | `docs/PROJECT-SUMMARY.md` |
 | Informes de QA (los genera `qa-tester`) | `docs/qa-results/` |
 
@@ -34,7 +35,8 @@ Genero y mantengo los siguientes artefactos de documentación:
 | Informe de esfuerzo | `docs/effort/SPRINT-{N}-EFFORT.md` | Al cerrar cada sprint |
 | Registro de bugs | `docs/bugs/BUG-REGISTRY.md` | Al cerrar cada sprint (aunque no haya bugs nuevos: actualizar fecha y nota) |
 | Documento de requisitos | `docs/REQUIREMENTS.md` | Al cerrar cada sprint: versión, sprint cerrado, tests, RF nuevos, backlog, historial de versiones |
-| Informe de estado | `docs/INFORME-ESTADO-v{X}-{FECHA}.md` | Al cerrar cada sprint: crear nuevo archivo con la versión del sprint |
+| Informe de estado | `docs/INFORME-ESTADO-*.md` | Al cerrar cada sprint: crear nuevo archivo específico del sprint |
+| Changelog del proyecto | `CHANGELOG.md` | Al cerrar cada sprint: añadir entrada de versión con Added/Changed/Fixed |
 | Resumen ejecutivo | `docs/PROJECT-SUMMARY.md` | Al final del proyecto |
 | Informes de QA (los genera `qa-tester`) | `docs/qa-results/` | Tras cada ciclo de QA |
 
@@ -175,13 +177,26 @@ Al final del proyecto genero un documento ejecutivo con:
 
 ---
 
+## 4. Changelog — `CHANGELOG.md`
+
+Mantengo un historial acumulado de versiones/releases.
+
+### Regla mínima por sprint cerrado
+- Crear o actualizar entrada `## [X.Y.Z] - YYYY-MM-DD`
+- Incluir secciones aplicables: `Added`, `Changed`, `Fixed`, `Tests`
+- Referenciar Sprint y artefactos (`release notes`, `requirements`) cuando aplique
+- No duplicar bugs históricos con IDs ambiguos si su numeración cambió entre sprints
+
+---
+
 ## Proceso al invocarme
 
 1. Leo la solicitud del usuario (¿qué quiere documentar? ¿qué sprint? ¿cierre total?)
 2. Leo los informes de QA existentes en `docs/qa-results/`
 3. Leo las release notes del sprint en `docs/sprint-{N}-release-notes.md`
-4. Actualizo o creo los artefactos correspondientes
-5. Informo al usuario de qué ficheros he creado/actualizado
+4. Verifico que `CHANGELOG.md`, `REQUIREMENTS.md` y `README.md` no quedan con versiones contradictorias
+5. Actualizo o creo los artefactos correspondientes
+6. Informo al usuario de qué ficheros he creado/actualizado
 
 ## Base de conocimiento
 Leo siempre `.github/copilot/context.md` antes de generar documentación.

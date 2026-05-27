@@ -22,6 +22,25 @@ import {
   isValidShiftType,
   validateShiftTransition,
 } from "./business-logic";
+import {
+  pickWeekendShift as _pickWeekendShift,
+  pickWeekendPackageEmployee as _pickWeekendPackageEmployee,
+} from "./weekend-packs";
+import { pickWorkdayShift as _pickWorkdayShift } from "./workday-shifts";
+import { buildPrevMonthTrailingState, applyCrossMonthNightBlocks, applyCrossMonthWeekendPack } from "./cross-month";
+
+import {
+  isWeekend,
+  toDateStr,
+  fromDateStr,
+  addDays,
+  isWeekendOrHoliday,
+  applySpecialDayRule,
+  applyChristmasSpecialRule,
+  normalizeShift,
+  weekKey,
+} from "./date-utils";
+export { isWeekend, toDateStr, fromDateStr, addDays, isWeekendOrHoliday, applySpecialDayRule, applyChristmasSpecialRule, normalizeShift, weekKey };
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -39,27 +58,9 @@ export interface GeneratedAssignment {
   shiftType: string;
 }
 
-export interface GenerationWarning {
-  employeeId: string;
-  date: string;
-  prevShift: string;
-  nextShift: string;
-  hoursGap: number;
-  reason: string;
-}
-
-/** Warning emitted when a day has reduced coverage due to mandatory rest rules. */
-export interface CoverageWarning {
-  date: string; // "YYYY-MM-DD"
-  employeeId: string;
-  message: string;
-}
-
-export interface GenerateMonthScheduleOptions {
-  existingAssignments?: Map<string, string>;
-  warnings?: GenerationWarning[];
-  coverageWarnings?: CoverageWarning[];
-}
+// GenerationWarning, CoverageWarning, GenerateMonthScheduleOptions → see coverage.ts
+export type { GenerationWarning, CoverageWarning, GenerateMonthScheduleOptions } from "./coverage";
+import type { GenerationWarning, CoverageWarning, GenerateMonthScheduleOptions } from "./coverage";
 
 /**
  * Previous-month tail data for continuity check.
@@ -91,457 +92,53 @@ export const VALID_SHIFTS = [
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
-/** Returns true when UTC day-of-week is Saturday (6) or Sunday (0) */
-export function isWeekend(date: Date): boolean {
-  const dow = date.getUTCDay();
-  return dow === 0 || dow === 6;
-}
+// isWeekend → see date-utils.ts
 
-/** Returns "YYYY-MM-DD" for a UTC-midnight Date */
-export function toDateStr(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
+// toDateStr → see date-utils.ts
 
-/** UTC midnight Date from "YYYY-MM-DD" */
-export function fromDateStr(s: string): Date {
-  return new Date(s + "T00:00:00.000Z");
-}
+// fromDateStr → see date-utils.ts
 
-/**
- * Returns true if the date is a weekend or a public holiday, OR if the date is
- * a weekday holiday that belongs to an extended weekend (connected to Sat/Sun
- * through a contiguous chain of holidays).
- */
-export function isWeekendOrHoliday(date: Date, holidays: Set<string>): boolean {
-  if (isWeekend(date)) return true;
-  const ds = toDateStr(date);
-  if (!holidays.has(ds)) return false;
-  // Walk forward: check if this holiday connects to Saturday through consecutive holidays
-  let fwd = addDays(date, 1);
-  while (!isWeekend(fwd)) {
-    if (!holidays.has(toDateStr(fwd))) break;
-    fwd = addDays(fwd, 1);
-  }
-  if (fwd.getUTCDay() === 6) return true;
-  // Walk backward: check if this holiday connects to Sunday through consecutive holidays
-  let bwd = addDays(date, -1);
-  while (!isWeekend(bwd)) {
-    if (!holidays.has(toDateStr(bwd))) break;
-    bwd = addDays(bwd, -1);
-  }
-  return isWeekend(bwd);
-}
+// isWeekendOrHoliday → see date-utils.ts
 
-/** Add `n` days (returns new Date) */
-export function addDays(date: Date, n: number): Date {
-  return new Date(date.getTime() + n * 86_400_000);
-}
+// addDays → see date-utils.ts
 
-/**
- * Applies the holiday/weekend rule to a base shift on a given date:
- *   M → MF if the day is a holiday or weekend
- *   T → TF if the day is a holiday or weekend
- *   N → NF if the NEXT day is a holiday or weekend
- *   D / J / V / B → unchanged
- */
-export function applySpecialDayRule(
-  baseShift: string,
-  date: Date,
-  holidayDates: Set<string>
-): string {
-  const isSpecialDay = holidayDates.has(toDateStr(date)) || isWeekend(date);
-  if (baseShift === "M" || baseShift === "T") {
-    if (isSpecialDay) return baseShift + "F";
-  } else if (baseShift === "N") {
-    const next = addDays(date, 1);
-    const nextIsSpecial = holidayDates.has(toDateStr(next)) || isWeekend(next);
-    if (nextIsSpecial) return "NF";
-  }
-  return baseShift;
-}
+// applySpecialDayRule → see date-utils.ts
 
-const CHRISTMAS_MORNING_DATES = new Set(["12-25", "01-01", "01-06"]);
-const CHRISTMAS_AFTERNOON_DATES = new Set(["12-24", "12-25", "12-31", "01-01", "01-05", "01-06"]);
-const CHRISTMAS_NIGHT_DATES = new Set(["12-24", "12-25", "12-31", "01-01", "01-05", "01-06"]);
+// CHRISTMAS_* constants, monthDayKey, applyChristmasSpecialRule → see date-utils.ts
 
-function monthDayKey(date: Date): string {
-  return `${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
-}
+// ─── Night-block logic (→ see night-blocks.ts) ─────────────────────────────
 
-export function applyChristmasSpecialRule(shift: string, date: Date): string {
-  const md = monthDayKey(date);
-  const base = normalizeShift(shift);
-
-  if (base === "M" && CHRISTMAS_MORNING_DATES.has(md)) return "MN";
-  if (base === "T" && CHRISTMAS_AFTERNOON_DATES.has(md)) return "TN";
-  if (base === "N" && CHRISTMAS_NIGHT_DATES.has(md)) return "NN";
-  return shift;
-}
-
-// ─── Night-block logic ───────────────────────────────────────────────────────
-
-/**
- * A NightBlock describes the 12-day cycle: 2D + 7N + 3D.
- * Night shifts run from the first Friday of the block.
- *
- * Days relative to startFriday:
- *   -2 and -1 → D (pre-rest)
- *    0..6     → N (night, Fri–Thu)
- *    7, 8, 9  → D (post-rest)
- */
-export interface NightBlock {
-  employeeId: string;
-  /** The Friday that is the first night shift date (UTC midnight) */
-  startFriday: Date;
-}
-
-/**
- * Returns every day (as "YYYY-MM-DD" → shiftType) that belongs to a NightBlock.
- */
-export function nightBlockDays(block: NightBlock): Map<string, string> {
-  const map = new Map<string, string>();
-  const { startFriday } = block;
-  // pre-rest: days -2 and -1
-  map.set(toDateStr(addDays(startFriday, -2)), "D");
-  map.set(toDateStr(addDays(startFriday, -1)), "D");
-  // 7 nights: days 0..6
-  for (let offset = 0; offset <= 6; offset++) {
-    map.set(toDateStr(addDays(startFriday, offset)), "N");
-  }
-  // post-rest: days 7, 8, 9
-  map.set(toDateStr(addDays(startFriday, 7)), "D");
-  map.set(toDateStr(addDays(startFriday, 8)), "D");
-  map.set(toDateStr(addDays(startFriday, 9)), "D");
-  return map;
-}
-
-/**
- * Reference Friday for the night-block rotation cycle (2026-01-02 is a Friday).
- */
-export const NIGHT_EPOCH_FRIDAY = new Date("2026-01-02T00:00:00.000Z");
-export const BLOCK_DAYS = 12; // 2 + 7 + 3
-/** Days of actual night shifts per block (and offset between consecutive employees) */
-export const NIGHT_DAYS = 7;
-
-/**
- * Given a year/month and an ordered list of employee IDs (night rotation),
- * returns all NightBlocks whose days overlap with that month.
- *
- * Blocks cycle: emp[0] block 0, emp[1] block 1, …, emp[n-1] block n-1,
- * emp[0] block n, …  — each employee's nights start NIGHT_DAYS (7) after the
- * previous employee's nights started, guaranteeing continuous night coverage
- * with no gaps. Pre/post-rest days (D) overlap with adjacent employees' blocks
- * but that is correct — the resting employee is not on night shift.
- *
- * With N employees, the cycle length is N × 7 days.
- */
-export function computeNightBlocks(
-  year: number,
-  month: number,
-  employeeIds: string[]
-): NightBlock[] {
-  if (employeeIds.length === 0) return [];
-
-  const monthStart = new Date(Date.UTC(year, month - 1, 1));
-  const monthEnd = new Date(Date.UTC(year, month, 1));
-  const msPerDay = 86_400_000;
-
-  // How many days from epoch to month start
-  const daysToMonthStart = Math.floor(
-    (monthStart.getTime() - NIGHT_EPOCH_FRIDAY.getTime()) / msPerDay
-  );
-
-  // Each employee's night block starts NIGHT_DAYS after the previous employee,
-  // so consecutive blocks are adjacent with no gap in night coverage.
-  const roundLength = employeeIds.length * NIGHT_DAYS;
-  const roundStart = Math.floor((daysToMonthStart - BLOCK_DAYS) / roundLength) * roundLength;
-
-  const blocks: NightBlock[] = [];
-  const daysInMonth = new Date(year, month, 0).getDate();
-  // Search enough rounds to cover the month
-  const searchRounds = Math.ceil((daysInMonth + 2 * BLOCK_DAYS) / roundLength) + 2;
-
-  for (let r = 0; r < searchRounds; r++) {
-    for (let empIdx = 0; empIdx < employeeIds.length; empIdx++) {
-      const daysFromEpoch = roundStart + r * roundLength + empIdx * NIGHT_DAYS;
-      const startFriday = addDays(NIGHT_EPOCH_FRIDAY, daysFromEpoch);
-
-      // Block spans from startFriday-2 to startFriday+9
-      const blockFirst = addDays(startFriday, -2);
-      const blockLast = addDays(startFriday, 9);
-
-      if (blockLast < monthStart) continue;
-      if (blockFirst >= monthEnd) continue;
-
-      blocks.push({ employeeId: employeeIds[empIdx], startFriday });
-    }
-  }
-
-  return blocks;
-}
-
-// ─── Night-block conflict resolution ─────────────────────────────────────────
-
-/**
- * Resolves night-block assignments by transferring a block from an employee
- * who has any locked day (V, B, manual D…) in its 7 N-shift days to the
- * employee who has gone the longest without doing a night block.
- *
- * If that employee also has conflicts, it tries the next one, and so on.
- * If no one is available, the block is dropped (night coverage gap — rare).
- *
- * Invariants preserved:
- *  - Max 1 employee on N per day (no overlapping N-days between resolved blocks)
- *  - An employee with a conflict does not get assigned that block
- *
- * @param rawBlocks     Output of computeNightBlocks (chronological order)
- * @param existingDates Set of "empId|YYYY-MM-DD" that are locked (V, B, manual)
- * @param nightOrder    Ordered employee IDs for the night rotation
- */
-export function resolveNightBlocks(
-  rawBlocks: NightBlock[],
-  existingDates: Set<string>,
-  nightOrder: string[]
-): NightBlock[] {
-  if (nightOrder.length === 0) return rawBlocks;
-  if (existingDates.size === 0) return rawBlocks; // fast-path: no conflicts possible
-
-  // Track the most recent startFriday (ms) assigned to each employee during resolution.
-  // Employees with no block yet have -Infinity → highest priority for replacement.
-  const lastBlockMs = new Map<string, number>();
-  for (const id of nightOrder) lastBlockMs.set(id, -Infinity);
-
-  const resolved: NightBlock[] = [];
-
-  // Process blocks in chronological order so "busyOnNights" is always accurate.
-  const sorted = [...rawBlocks].sort((a, b) => a.startFriday.getTime() - b.startFriday.getTime());
-
-  for (const block of sorted) {
-    const days = nightBlockDays(block);
-
-    // The 7 actual N-shift date strings of this block
-    const nDays = [...days.entries()]
-      .filter(([, shift]) => shift === "N")
-      .map(([dateStr]) => dateStr);
-
-    // ── Check original employee for conflicts ─────────────────────────────────
-    const originalConflict = nDays.some((d) =>
-      existingDates.has(`${block.employeeId}|${d}`)
-    );
-
-    // Also check if this employee was already assigned another block whose days
-    // overlap with this block's N-days (e.g. received a transferred block from a
-    // previous vacation and now their own subsequent block would cause two
-    // consecutive night-shift weeks).
-    const alreadyHasOverlappingBlock = resolved.some((r) => {
-      if (r.employeeId !== block.employeeId) return false;
-      const rDays = nightBlockDays(r);
-      return nDays.some((d) => rDays.has(d));
-    });
-
-    if (!originalConflict && !alreadyHasOverlappingBlock) {
-      // No conflict — keep as-is and update tracking
-      resolved.push(block);
-      const prev = lastBlockMs.get(block.employeeId) ?? -Infinity;
-      if (block.startFriday.getTime() > prev) {
-        lastBlockMs.set(block.employeeId, block.startFriday.getTime());
-      }
-      continue;
-    }
-
-    // ── Conflict detected — find a replacement ────────────────────────────────
-    // Employees whose blocks already occupy any of this block's N-days
-    // (N-overlap = double night; D-overlap = would overwrite N in nightPlan)
-    const busyOnNights = new Set<string>([block.employeeId]);
-    for (const r of resolved) {
-      const rDays = nightBlockDays(r);
-      if (nDays.some((d) => rDays.has(d))) {
-        busyOnNights.add(r.employeeId);
-      }
-    }
-
-    // Sort candidates: ascending lastBlockMs → longest without nights first
-    const candidates = nightOrder
-      .filter((id) => !busyOnNights.has(id))
-      .sort((a, b) => (lastBlockMs.get(a) ?? -Infinity) - (lastBlockMs.get(b) ?? -Infinity));
-
-    let assigned = false;
-    for (const candidateId of candidates) {
-      const candidateConflict = nDays.some((d) =>
-        existingDates.has(`${candidateId}|${d}`)
-      );
-      if (!candidateConflict) {
-        resolved.push({ employeeId: candidateId, startFriday: block.startFriday });
-        const prev = lastBlockMs.get(candidateId) ?? -Infinity;
-        if (block.startFriday.getTime() > prev) {
-          lastBlockMs.set(candidateId, block.startFriday.getTime());
-        }
-        assigned = true;
-        break;
-      }
-    }
-
-    if (!assigned) {
-      // All employees have conflicts on these N-days — gap in night coverage.
-      // This is an extreme edge case; no block is emitted.
-    }
-  }
-
-  return resolved;
-}
+import {
+  NightBlock,
+  nightBlockDays,
+  computeNightBlocks,
+  resolveNightBlocks,
+  NIGHT_EPOCH_FRIDAY,
+  BLOCK_DAYS,
+  NIGHT_DAYS,
+} from "./night-blocks";
+export { NightBlock, nightBlockDays, computeNightBlocks, resolveNightBlocks, NIGHT_EPOCH_FRIDAY, BLOCK_DAYS, NIGHT_DAYS };
 
 // ─── Normalisation ────────────────────────────────────────────────────────────
 
-/** Return the base shift type (strip the F suffix for holiday variants) */
-export function normalizeShift(shift: string): string {
-  if (shift === "MF") return "M";
-  if (shift === "TF") return "T";
-  if (shift === "NF") return "N";
-  if (shift === "MN") return "M";
-  if (shift === "TN") return "T";
-  if (shift === "NN") return "N";
-  return shift;
-}
+// normalizeShift → see date-utils.ts
 
-function isDayWorkShift(shift: string | null): boolean {
-  if (!shift) return false;
-  const base = normalizeShift(shift);
-  return base === "M" || base === "T" || base === "J";
-}
+// ─── Rest rules + shift helpers (→ see rest-rules.ts) ──────────────────────
 
-function countTrailingDayWork(entries: { shiftType: string }[], endIndex = entries.length - 1): number {
-  let count = 0;
-  for (let i = endIndex; i >= 0; i--) {
-    if (!isDayWorkShift(entries[i].shiftType)) break;
-    count++;
-  }
-  return count;
-}
-
-function countTrailingShift(entries: { shiftType: string }[], shift: string): number {
-  let count = 0;
-  for (let i = entries.length - 1; i >= 0; i--) {
-    if (normalizeShift(entries[i].shiftType) !== shift) break;
-    count++;
-  }
-  return count;
-}
-
-function initialForcedRestDaysRemaining(entries: { shiftType: string }[]): number {
-  let trailingRestDays = 0;
-  for (let i = entries.length - 1; i >= 0; i--) {
-    if (entries[i].shiftType !== "D") break;
-    trailingRestDays++;
-  }
-
-  if (trailingRestDays !== 1) return 0;
-
-  const workBeforeSingleRest = countTrailingDayWork(entries, entries.length - trailingRestDays - 1);
-  return workBeforeSingleRest >= 5 ? 1 : 0;
-}
-
-export function isPostRestDay(
-  employeeId: string,
-  date: Date,
-  assignments: { employeeId: string; date: Date | string; shiftType: string }[]
-): boolean {
-  const previousDate = toDateStr(addDays(date, -1));
-  const secondPreviousDate = toDateStr(addDays(date, -2));
-
-  const shiftByDate = new Map(
-    assignments
-      .filter((assignment) => assignment.employeeId === employeeId)
-      .map((assignment) => {
-        const dateStr = typeof assignment.date === "string"
-          ? assignment.date.slice(0, 10)
-          : toDateStr(assignment.date);
-        return [dateStr, assignment.shiftType] as const;
-      })
-  );
-
-  return shiftByDate.get(previousDate) === "D" && shiftByDate.get(secondPreviousDate) === "D";
-}
-
-// ─── Exported helpers ─────────────────────────────────────────────────────────
-
-/**
- * Counts consecutive work days (M/T/J including their MF/TF variants) going
- * backward from `date` (not including `date` itself).
- * Looks up assignments and, optionally, prevMonthTail to cross month boundaries.
- */
-export function countConsecutiveWorkDays(
-  employeeId: string,
-  date: Date,
-  assignments: { employeeId: string; date: Date | string; shiftType: string }[],
-  prevMonthTail?: PrevMonthTail[]
-): number {
-  const shiftMap = new Map<string, string>();
-  if (prevMonthTail) {
-    for (const p of prevMonthTail) {
-      if (p.employeeId === employeeId) shiftMap.set(p.date, p.shiftType);
-    }
-  }
-  for (const a of assignments) {
-    if (a.employeeId !== employeeId) continue;
-    const ds = typeof a.date === "string" ? a.date.slice(0, 10) : toDateStr(a.date);
-    shiftMap.set(ds, a.shiftType);
-  }
-  let count = 0;
-  let check = addDays(date, -1);
-  for (let i = 0; i < 100; i++) {
-    const ds = toDateStr(check);
-    const shift = shiftMap.get(ds);
-    if (shift === undefined) break;
-    const base = normalizeShift(shift);
-    if (base !== "M" && base !== "T" && base !== "J") break;
-    count++;
-    check = addDays(check, -1);
-  }
-  return count;
-}
-
-/**
- * Returns the extended weekend block that includes `date` (which must be a
- * Saturday or Sunday). The core is always Sat+Sun; it then expands backward
- * through consecutive holiday weekdays (Fri, Thu, …) and forward through
- * consecutive holiday weekdays (Mon, Tue, …).
- */
-export function getExtendedWeekend(
-  date: Date,
-  holidays: Set<string>
-): { start: Date; end: Date; days: Date[] } {
-  const dow = date.getUTCDay();
-  const satDate = dow === 6 ? date : dow === 0 ? addDays(date, -1) : null;
-  if (!satDate) return { start: date, end: date, days: [] };
-
-  const sunDate = addDays(satDate, 1);
-  const days: Date[] = [satDate, sunDate];
-
-  // Expand backward: consecutive holiday weekdays before Saturday
-  let back = addDays(satDate, -1);
-  while (holidays.has(toDateStr(back))) {
-    days.unshift(back);
-    back = addDays(back, -1);
-  }
-
-  // Expand forward: consecutive holiday weekdays after Sunday
-  let fwd = addDays(sunDate, 1);
-  while (holidays.has(toDateStr(fwd))) {
-    days.push(fwd);
-    fwd = addDays(fwd, 1);
-  }
-
-  return { start: days[0], end: days[days.length - 1], days };
-}
+import {
+  isDayWorkShift,
+  countTrailingDayWork,
+  countTrailingShift,
+  initialForcedRestDaysRemaining,
+  isPostRestDay,
+  countConsecutiveWorkDays,
+  getExtendedWeekend,
+} from "./rest-rules";
+export { isDayWorkShift, countTrailingDayWork, countTrailingShift, initialForcedRestDaysRemaining, isPostRestDay, countConsecutiveWorkDays, getExtendedWeekend };
 
 // ─── ISO week helper ─────────────────────────────────────────────────────────
 
-/** Return the Monday of the ISO week containing `date` as "YYYY-MM-DD" key */
-export function weekKey(date: Date): string {
-  const d = date.getUTCDay(); // 0=Sun,1=Mon,...,6=Sat
-  const offset = d === 0 ? -6 : 1 - d;
-  return toDateStr(addDays(date, offset));
-}
+// weekKey → see date-utils.ts
 
 // ─── Main algorithm ──────────────────────────────────────────────────────────
 
@@ -630,135 +227,13 @@ export function generateMonthSchedule(
     }
   }
 
-  // ── Night block continuity from prevMonthTail (TAREA 2 fix) ────────────────
-  // Detect employees who were mid-block at the end of the previous month and
-  // give them absolute priority to complete their nights at the start of this month.
-  if (prevMonthTail.length > 0) {
-    const prevByEmpNight = new Map<string, PrevMonthTail[]>();
-    for (const p of prevMonthTail) {
-      if (!prevByEmpNight.has(p.employeeId)) prevByEmpNight.set(p.employeeId, []);
-      prevByEmpNight.get(p.employeeId)!.push(p);
-    }
-
-    for (const [empId, entries] of prevByEmpNight) {
-      const sorted = entries.sort((a, b) => a.date.localeCompare(b.date));
-
-      // Count trailing N/NF nights from the end of prevMonthTail
-      let trailingNights = 0;
-      for (let i = sorted.length - 1; i >= 0; i--) {
-        if (normalizeShift(sorted[i].shiftType) !== "N") break;
-        trailingNights++;
-      }
-
-      // Count trailing D shifts (potential post-rest period)
-      let trailingPostRestD = 0;
-      if (trailingNights === 0) {
-        let checkIdx = sorted.length - 1;
-        while (checkIdx >= 0 && sorted[checkIdx].shiftType === "D") {
-          trailingPostRestD++;
-          checkIdx--;
-        }
-        // Validate: there must be N shifts before the D for it to count as post-rest
-        if (trailingPostRestD > 0 && (checkIdx < 0 || normalizeShift(sorted[checkIdx].shiftType) !== "N")) {
-          trailingPostRestD = 0;
-        }
-      }
-
-      const monthStart = new Date(Date.UTC(year, month - 1, 1));
-
-      if (trailingNights > 0 && trailingNights < 7) {
-        // Employee mid-block: add remaining nights + 3D post-rest to nightPlan with priority.
-        // Stop immediately if a locked date (V/B/manual) interrupts the continuation —
-        // vacation breaks the block; the employee returns to normal rotation after absence.
-        const nightsRemaining = 7 - trailingNights;
-        let contDate = monthStart;
-        let actualNightsPlanned = 0;
-
-        // Override nightPlan for remaining night dates, clearing conflicting N entries
-        for (let i = 0; i < nightsRemaining; i++) {
-          if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
-          const ds = toDateStr(contDate);
-          const empKey = `${empId}|${ds}`;
-          // If the employee has a locked date (V, B, manual), the block is interrupted.
-          // Stop planning — no night continuation and no post-rest after vacation.
-          if (existingDates.has(empKey)) break;
-          // Remove conflicting N from any other employee assigned to this date
-          for (const [existingKey, existingShift] of nightPlan.entries()) {
-            if (existingKey !== empKey && existingKey.endsWith(`|${ds}`) && existingShift === "N") {
-              nightPlan.delete(existingKey);
-            }
-          }
-          nightPlan.set(empKey, "N");
-          actualNightsPlanned++;
-          contDate = addDays(contDate, 1);
-        }
-        // Add 3D post-rest only if at least one night was actually planned
-        if (actualNightsPlanned > 0) {
-          for (let i = 0; i < 3; i++) {
-            if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
-            const ds = toDateStr(contDate);
-            const empKey = `${empId}|${ds}`;
-            if (existingDates.has(empKey)) break; // vacation/baja covers rest — stop
-            if (nightPlan.get(empKey) !== "N") {
-              nightPlan.set(empKey, "D");
-              crossMonthRestDates.add(empKey);
-            }
-            contDate = addDays(contDate, 1);
-          }
-        }
-      } else if (trailingNights >= 7) {
-        // Employee completed all 7 nights: add 3D post-rest in new month.
-        // Skip if vacation/baja is covering the rest period.
-        let contDate = monthStart;
-        for (let i = 0; i < 3; i++) {
-          if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
-          const ds = toDateStr(contDate);
-          const empKey = `${empId}|${ds}`;
-          if (existingDates.has(empKey)) break; // vacation/baja acts as rest — stop
-          if (nightPlan.get(empKey) !== "N") {
-            nightPlan.set(empKey, "D");
-            crossMonthRestDates.add(empKey);
-          }
-          contDate = addDays(contDate, 1);
-        }
-      } else if (trailingPostRestD >= 2 && trailingPostRestD < 3) {
-        // Employee in post-rest: add remaining D days (≥2 trailing D required to be
-        // unambiguously post-rest; a single trailing D might be a mid-block interruption)
-        const postRestNeeded = 3 - trailingPostRestD;
-        let contDate = monthStart;
-        for (let i = 0; i < postRestNeeded; i++) {
-          if (contDate.getUTCFullYear() !== year || contDate.getUTCMonth() + 1 !== month) break;
-          const ds = toDateStr(contDate);
-          const empKey = `${empId}|${ds}`;
-          if (existingDates.has(empKey)) break; // vacation/baja covers rest — stop
-          if (nightPlan.get(empKey) !== "N") nightPlan.set(empKey, "D");
-          contDate = addDays(contDate, 1);
-        }
-      }
-    }
-  }
+  // ── Night block continuity from prevMonthTail ─────────────────────────────
+  // Extracted to cross-month.ts → applyCrossMonthNightBlocks
+  applyCrossMonthNightBlocks(prevMonthTail, year, month, existingDates, nightPlan, crossMonthRestDates);
 
   // ── Prev-month trailing state ─────────────────────────────────────────────
-  const prevTailByEmp = new Map<string, { shift: string; count: number; forcedRestDaysRemaining: number }>();
-  if (prevMonthTail.length > 0) {
-    const byEmp = new Map<string, { date: string; shiftType: string }[]>();
-    for (const p of prevMonthTail) {
-      if (!byEmp.has(p.employeeId)) byEmp.set(p.employeeId, []);
-      byEmp.get(p.employeeId)!.push(p);
-    }
-    for (const [empId, entries] of byEmp) {
-      const sorted = entries.sort((a, b) => a.date.localeCompare(b.date));
-      const lastShift = normalizeShift(sorted[sorted.length - 1].shiftType);
-      const count = isDayWorkShift(lastShift)
-        ? countTrailingDayWork(sorted)
-        : countTrailingShift(sorted, lastShift);
-      prevTailByEmp.set(empId, {
-        shift: lastShift,
-        count,
-        forcedRestDaysRemaining: initialForcedRestDaysRemaining(sorted),
-      });
-    }
-  }
+  // Extracted to cross-month.ts → buildPrevMonthTrailingState
+  const prevTailByEmp = buildPrevMonthTrailingState(prevMonthTail);
 
   // ── Per-employee state ────────────────────────────────────────────────────
   interface EmpState {
@@ -824,49 +299,9 @@ export function generateMonthSchedule(
   // Friday/Monday holidays glued to that weekend reuse the same package.
   const weekendPlan = new Map<string, WeekendPackage>();
 
-  // ── Weekend pack continuity from prevMonthTail (Sprint 18 Tarea 1) ─────────
-  // If the previous month ended on a Saturday with MF/TF assignments, and the
-  // first day of the current month is a Sunday, pre-seed the weekendPlan so
-  // that Sunday is assigned to the same employees with the same shift type.
-  {
-    const lastDayOfPrevMonth = new Date(Date.UTC(year, month - 1, 0));
-    if (prevMonthTail.length > 0 && lastDayOfPrevMonth.getUTCDay() === 6) {
-      const lastDayStr = toDateStr(lastDayOfPrevMonth);
-      const mfEntry = prevMonthTail.find(
-        (p) => p.date === lastDayStr && p.shiftType === "MF"
-      );
-      const tfEntry = prevMonthTail.find(
-        (p) => p.date === lastDayStr && p.shiftType === "TF"
-      );
-      if (mfEntry || tfEntry) {
-        // Pre-seed weekendPlan keyed by the Saturday from the previous month
-        weekendPlan.set(lastDayStr, {
-          mfEmpId: mfEntry?.employeeId ?? null,
-          tfEmpId: tfEntry?.employeeId ?? null,
-        });
-        // Reserve weekendShift and weekShift for the first week of the new month
-        const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1));
-        if (firstDayOfMonth.getUTCDay() === 0) {
-          const wk = weekKey(firstDayOfMonth);
-          if (mfEntry) {
-            const st = stateMap.get(mfEntry.employeeId);
-            if (st) {
-              if (!st.weekendShift.has(wk)) st.weekendShift.set(wk, "MF");
-              if (!st.weekShift.has(wk)) st.weekShift.set(wk, "M");
-            }
-          }
-          if (tfEntry) {
-            const st = stateMap.get(tfEntry.employeeId);
-            if (st) {
-              if (!st.weekendShift.has(wk)) st.weekendShift.set(wk, "TF");
-              if (!st.weekShift.has(wk)) st.weekShift.set(wk, "T");
-            }
-          }
-        }
-      }
-    }
-  }
-
+  // ── Weekend pack continuity from prevMonthTail ─────────────────────────────
+  // Extracted to cross-month.ts → applyCrossMonthWeekendPack
+  applyCrossMonthWeekendPack(prevMonthTail, year, month, weekendPlan, stateMap);
   const getPreviousShift = (employeeId: string, date: Date): string | null => {
     const previousDateStr = toDateStr(addDays(date, -1));
     const key = `${employeeId}|${previousDateStr}`;
@@ -2167,184 +1602,4 @@ function _updateState(
   }
 }
 
-function _pickWeekendShift(
-  emp: ScheduleEmployee,
-  state: {
-    pref?: string | null;
-    mCount: number;
-    tCount: number;
-    weekShift: Map<string, string>;
-    weekendShift: Map<string, "MF" | "TF">;
-  },
-  cov: { M: number; T: number },
-  wKey: string
-): string {
-  const pref = emp.shiftPreference ?? null;
-
-  // Jornada (J): only works Mon–Fri, always rests on weekends/holidays
-  if (pref === "J") return "D";
-
-  const mOpen = cov.M < 1;
-  const tOpen = cov.T < 1;
-
-  // Hard minimum: both slots filled → rest
-  if (!mOpen && !tOpen) return "D";
-
-  const fixedWeekendShift = state.weekendShift.get(wKey) ?? null;
-  if (fixedWeekendShift === "MF") return mOpen ? "MF" : "D";
-  if (fixedWeekendShift === "TF") return tOpen ? "TF" : "D";
-
-  // Weekly consistency: honor the weekly pattern strictly.
-  // If the employee's preferred slot is already covered, they rest rather than
-  // switching to the opposite shift type (BUG-35 fix).
-  const weeklyShift = state.weekShift.get(wKey) ?? null;
-  if (weeklyShift === "M") return mOpen ? "MF" : "D";
-  if (weeklyShift === "T") return tOpen ? "TF" : "D";
-
-  // No weekly constraint — preference then balance
-  if (pref === "M" && mOpen) return "MF";
-  if (pref === "T" && tOpen) return "TF";
-  // Preference slot taken — rest rather than switch type (BUG-35 fix)
-  if (pref === "M" || pref === "T") return "D";
-
-  if (mOpen && tOpen) {
-    return state.mCount <= state.tCount ? "MF" : "TF";
-  }
-  if (mOpen) return "MF";
-  return "TF";
-}
-
-function _pickWeekendPackageEmployee(
-  targetShift: "MF" | "TF",
-  candidates: ScheduleEmployee[],
-  stateMap: Map<string, {
-    mCount: number;
-    tCount: number;
-    weekendCount: number;
-    weekShift: Map<string, string>;
-    weekendShift: Map<string, "MF" | "TF">;
-  }>,
-  wKey: string,
-  preferPreservingWeekdayCoverage = false
-): ScheduleEmployee | null {
-  const targetBase = targetShift === "MF" ? "M" : "T";
-
-  const compatibleCandidates = candidates.filter((candidate) => {
-    const state = stateMap.get(candidate.id)!;
-    const fixedWeekendShift = state.weekendShift.get(wKey) ?? null;
-    return fixedWeekendShift === null || fixedWeekendShift === targetShift;
-  });
-
-  if (compatibleCandidates.length === 0) return null;
-
-  // Consecutive weekend penalty: penalise employees who already worked last week's
-  // weekend (penalty 3) or the last TWO consecutive weekends (additional penalty 5).
-  // This prevents a single employee from accumulating 3+ consecutive weekends.
-  const prevWeekKey = toDateStr(addDays(fromDateStr(wKey), -7));
-  const prev2WeekKey = toDateStr(addDays(fromDateStr(wKey), -14));
-
-  return [...compatibleCandidates].sort((a, b) => {
-    const aState = stateMap.get(a.id)!;
-    const bState = stateMap.get(b.id)!;
-    const aWeeklyShift = aState.weekShift.get(wKey) ?? null;
-    const bWeeklyShift = bState.weekShift.get(wKey) ?? null;
-    const aCoveragePenalty = preferPreservingWeekdayCoverage && aWeeklyShift === targetBase ? 1 : 0;
-    const bCoveragePenalty = preferPreservingWeekdayCoverage && bWeeklyShift === targetBase ? 1 : 0;
-    const aWeeklyPenalty = aWeeklyShift !== null && aWeeklyShift !== targetBase ? 1 : 0;
-    const bWeeklyPenalty = bWeeklyShift !== null && bWeeklyShift !== targetBase ? 1 : 0;
-    const aPreferencePenalty =
-      a.shiftPreference === null || a.shiftPreference === undefined || a.shiftPreference === targetBase ? 0 : 1;
-    const bPreferencePenalty =
-      b.shiftPreference === null || b.shiftPreference === undefined || b.shiftPreference === targetBase ? 0 : 1;
-    // Primary balance: fewest total weekends worked this month.
-    const aWeekendCount = aState.weekendCount;
-    const bWeekendCount = bState.weekendCount;
-    // Consecutive weekend penalty: last week +3, last 2 consecutive weeks +5 extra
-    const aHadLast = aState.weekendShift.has(prevWeekKey);
-    const bHadLast = bState.weekendShift.has(prevWeekKey);
-    const aConsecPenalty = (aHadLast ? 3 : 0) +
-      (aHadLast && aState.weekendShift.has(prev2WeekKey) ? 5 : 0);
-    const bConsecPenalty = (bHadLast ? 3 : 0) +
-      (bHadLast && bState.weekendShift.has(prev2WeekKey) ? 5 : 0);
-
-    return (
-      aCoveragePenalty - bCoveragePenalty ||
-      aPreferencePenalty - bPreferencePenalty ||  // ← preference first (preserves BUG-35)
-      aConsecPenalty - bConsecPenalty ||           // ← consecutive penalty before weekly (prevents 3+ in a row)
-      aWeeklyPenalty - bWeeklyPenalty ||
-      aWeekendCount - bWeekendCount ||             // ← weekend equity over the full month
-      a.rotationOrder - b.rotationOrder
-    );
-  })[0] ?? null;
-}
-
-function _pickWorkdayShift(
-  emp: ScheduleEmployee,
-  state: {
-    pref?: string | null;
-    mCount: number;
-    tCount: number;
-    weekShift: Map<string, string>;
-    consecutiveShift: string | null;
-    consecutiveCount: number;
-  },
-  cov: { M: number; T: number },
-  wKey: string,
-  preserveWeeklyShiftForLaterCoverage = false,
-  deferShift: "M" | "T" | null = null
-): string {
-  const pref = emp.shiftPreference ?? null;
-
-  // Jornada (J): works Mon–Fri with J shift type, always rests on weekends/holidays.
-  // J does not count toward M/T coverage — handled by _pickWeekendShift returning "D".
-  if (pref === "J") return "J";
-
-  // Weekly consistency: if already assigned M or T this week, prefer keeping same
-  const weeklyShift = state.weekShift.get(wKey) ?? null;
-  if (preserveWeeklyShiftForLaterCoverage && (weeklyShift === "M" || weeklyShift === "T")) {
-    return weeklyShift;
-  }
-
-  // Weekly consistency: maintain same shift type all week. Coverage repair runs
-  // after the first pass and can use a different employee if a slot remains open.
-  if (weeklyShift === "M") return "M";
-  if (weeklyShift === "T") return "T";
-
-  // Hard minimum (RF-16): ≥1M and ≥1T — handle urgency first.
-  // BUG-30 fix: dailyOrder (see caller) processes preference-null employees first each day
-  // so urgency is resolved by neutral employees before preference employees arrive.
-  // These lines then almost never fire against preference, but must remain for the
-  // edge case where all neutral employees are in night blocks (RF-16 must hold).
-  const urgentM = cov.M < 1;
-  const urgentT = cov.T < 1;
-
-  // When both shifts are simultaneously urgent and weeklyShift is null (first day of week),
-  // defer to a later preference employee when available (deferShift indicates which shift
-  // a later preference employee can cover, so this employee takes the opposite).
-  if (urgentM && urgentT && weeklyShift === null) {
-    if (deferShift === "T") return "M"; // a T-pref employee comes later → take M now
-    if (deferShift === "M") return "T"; // an M-pref employee comes later → take T now
-    return state.mCount <= state.tCount ? "M" : "T"; // equity fallback
-  }
-
-  if (urgentM && !urgentT && weeklyShift === null) return "M";
-  if (urgentT && !urgentM && weeklyShift === null) return "T";
-
-  // No weeklyShift yet for this week — seed it with the employee's preference
-  // when coverage is already satisfied, so the rest of the week stays consistent.
-  const softNeedM = cov.M < 2;
-  const softNeedT = cov.T < 2;
-
-  // Prefer seeding with employee's preference when possible
-  if (pref === "M" && !softNeedT) { state.weekShift.set(wKey, "M"); return "M"; }
-  if (pref === "T" && !softNeedM) { state.weekShift.set(wKey, "T"); return "T"; }
-
-  // Soft target ≥2M and ≥2T (best effort — do not override employee preference)
-  if (softNeedM && !softNeedT && pref !== "T") return "M";
-  if (softNeedT && !softNeedM && pref !== "M") return "T";
-
-  // Coverage met (or preference takes priority over soft target) — preference then equitable
-  if (pref === "M") return "M";
-  if (pref === "T") return "T";
-  return state.mCount <= state.tCount ? "M" : "T";
-}
+// ─── imports moved to top of file ───────────────────────────────────────────

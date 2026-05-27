@@ -584,7 +584,83 @@ Añadidos `"MF"`, `"TF"` y `"NF"` al array `shiftOrder` utilizado para generar l
 
 ---
 
+
+---
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-38 |
+| **Sprint** | Sprint 20 — Refactoring algoritmo generate.ts |
+| **Detectado por** | Suite de tests unitarios (npm run test:unit) |
+| **Fecha detección** | 2026-05-28 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 7d179af (refactor: extract weekend pack logic to weekend-packs.ts) |
+
+**Descripción**  
+Al extraer `_pickWeekendShift` y `_pickWeekendPackageEmployee` a `weekend-packs.ts`,
+el nuevo módulo solo importaba `normalizeShift` de `date-utils.ts`, pero las funciones
+extraídas también usan `toDateStr`, `addDays` y `fromDateStr`. Esto causó un
+`ReferenceError: toDateStr is not defined` en tiempo de ejecución, haciendo fallar
+68 de 296 tests unitarios.
+
+**Pasos para reproducir**
+1. Extraer las funciones `_pickWeekendShift` y `_pickWeekendPackageEmployee` a un
+   nuevo módulo `weekend-packs.ts`.
+2. Importar solo `{ normalizeShift }` de `./date-utils` en el nuevo módulo.
+3. Ejecutar `npm run test:unit` → 68 tests fallan con `ReferenceError: toDateStr is not defined`.
+
+**Resultado esperado**  
+Todos los tests pasan (296/296) tras la extracción.
+
+**Resultado obtenido**  
+68/296 tests fallan. El error ocurre porque `toDateStr`, `addDays` y `fromDateStr`
+son usadas dentro de las funciones migradas pero no importadas en el nuevo módulo.
+
+**Ficheros afectados**  
+- `lib/schedules/weekend-packs.ts` — imports incompletos tras la extracción
+
+**Fix aplicado**  
+Ampliado el import de `date-utils` en `weekend-packs.ts`:
+```typescript
+import { normalizeShift, toDateStr, addDays, fromDateStr } from "./date-utils";
+```
+
+---
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-39 |
+| **Sprint** | Sprint 20 — Refactoring algoritmo generate.ts |
+| **Detectado por** | Análisis estático (TypeScript) |
+| **Fecha detección** | 2026-05-28 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 7d179af (refactor: extract weekend pack logic to weekend-packs.ts) |
+
+**Descripción**  
+Al extraer `_pickWorkdayShift` a `workday-shifts.ts`, el parámetro `emp` se tipiaba
+como `ScheduleEmployee`, tipo definido en `generate.ts`. Si `workday-shifts.ts`
+importara `ScheduleEmployee` desde `generate.ts` se crearía una dependencia circular.
+
+**Resultado esperado**  
+`workday-shifts.ts` no depende de `generate.ts` (evita dependencia circular).
+
+**Fix aplicado**  
+Sustituido el tipo `ScheduleEmployee` por una interfaz estructural inline:
+```typescript
+emp: { id: string; rotationOrder: number; shiftPreference?: string | null }
+```
+Este tipo es compatible con `ScheduleEmployee` por structural typing de TypeScript
+sin necesidad de importar el tipo concreto.
+
+**Ficheros afectados**  
+- `lib/schedules/workday-shifts.ts`
+
+---
+
 *Registro mantenido por el agente `doc-writer`. Actualizar tras cada sesión de QA.*
+
 
 ---
 
@@ -1420,4 +1496,80 @@ Añadida pre-selección de paquetes Sáb+Dom en `generateMonthSchedule` (`lib/sc
 
 ---
 
+
+---
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-38 |
+| **Sprint** | Sprint 20 — Refactoring algoritmo generate.ts |
+| **Detectado por** | Suite de tests unitarios (npm run test:unit) |
+| **Fecha detección** | 2026-05-28 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 7d179af (refactor: extract weekend pack logic to weekend-packs.ts) |
+
+**Descripción**  
+Al extraer `_pickWeekendShift` y `_pickWeekendPackageEmployee` a `weekend-packs.ts`,
+el nuevo módulo solo importaba `normalizeShift` de `date-utils.ts`, pero las funciones
+extraídas también usan `toDateStr`, `addDays` y `fromDateStr`. Esto causó un
+`ReferenceError: toDateStr is not defined` en tiempo de ejecución, haciendo fallar
+68 de 296 tests unitarios.
+
+**Pasos para reproducir**
+1. Extraer las funciones `_pickWeekendShift` y `_pickWeekendPackageEmployee` a un
+   nuevo módulo `weekend-packs.ts`.
+2. Importar solo `{ normalizeShift }` de `./date-utils` en el nuevo módulo.
+3. Ejecutar `npm run test:unit` → 68 tests fallan con `ReferenceError: toDateStr is not defined`.
+
+**Resultado esperado**  
+Todos los tests pasan (296/296) tras la extracción.
+
+**Resultado obtenido**  
+68/296 tests fallan. El error ocurre porque `toDateStr`, `addDays` y `fromDateStr`
+son usadas dentro de las funciones migradas pero no importadas en el nuevo módulo.
+
+**Ficheros afectados**  
+- `lib/schedules/weekend-packs.ts` — imports incompletos tras la extracción
+
+**Fix aplicado**  
+Ampliado el import de `date-utils` en `weekend-packs.ts`:
+```typescript
+import { normalizeShift, toDateStr, addDays, fromDateStr } from "./date-utils";
+```
+
+---
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-39 |
+| **Sprint** | Sprint 20 — Refactoring algoritmo generate.ts |
+| **Detectado por** | Análisis estático (TypeScript) |
+| **Fecha detección** | 2026-05-28 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 7d179af (refactor: extract weekend pack logic to weekend-packs.ts) |
+
+**Descripción**  
+Al extraer `_pickWorkdayShift` a `workday-shifts.ts`, el parámetro `emp` se tipiaba
+como `ScheduleEmployee`, tipo definido en `generate.ts`. Si `workday-shifts.ts`
+importara `ScheduleEmployee` desde `generate.ts` se crearía una dependencia circular.
+
+**Resultado esperado**  
+`workday-shifts.ts` no depende de `generate.ts` (evita dependencia circular).
+
+**Fix aplicado**  
+Sustituido el tipo `ScheduleEmployee` por una interfaz estructural inline:
+```typescript
+emp: { id: string; rotationOrder: number; shiftPreference?: string | null }
+```
+Este tipo es compatible con `ScheduleEmployee` por structural typing de TypeScript
+sin necesidad de importar el tipo concreto.
+
+**Ficheros afectados**  
+- `lib/schedules/workday-shifts.ts`
+
+---
+
 *Registro mantenido por el agente `doc-writer`. Actualizar tras cada sesión de QA.*
+

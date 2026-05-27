@@ -37,15 +37,29 @@ Si alguno falta, lo genero o delego a `doc-writer` sin esperar a que el usuario 
 | 2 | Informe de esfuerzo | `docs/effort/SPRINT-{N}-EFFORT.md` | `doc-writer` |
 | 3 | Registro de bugs | `docs/bugs/BUG-REGISTRY.md` | `doc-writer` |
 | 4 | Documento de requisitos | `docs/REQUIREMENTS.md` | `doc-writer` |
-| 5 | Informe de estado | `docs/INFORME-ESTADO-v{X}-{FECHA}.md` | `doc-writer` |
-| 6 | Tests unitarios y E2E | `tests/unit/` y `tests/e2e/` | yo |
-| 7 | Commits atómicos por tarea | rama feature | yo |
-| 8 | Rama pusheada a origin | GitHub | yo |
-| 9 | Pull Request abierta | GitHub | `pre-merge-review` |
+| 5 | Informe de estado | `docs/INFORME-ESTADO-*.md` | `doc-writer` |
+| 6 | Changelog del proyecto | `CHANGELOG.md` | `doc-writer` |
+| 7 | Tests unitarios | `tests/unit/` | yo |
+| 7b | **Tests E2E** ⚠️ **OBLIGATORIO** | `tests/e2e/` | yo |
+| 8 | Commits atómicos por tarea | rama feature | yo |
+| 9 | Rama pusheada a origin | GitHub | yo |
+| 10 | Pull Request abierta | GitHub | `pre-merge-review` |
 
-> **Regla**: no doy el sprint por cerrado hasta que los puntos 1-9 estén completos.
-> Si el usuario pide hacer el PR o el push antes de que la documentación esté lista,
-> genero primero la documentación pendiente y luego continúo con el push/PR.
+> **Regla**: no doy el sprint por cerrado hasta que los puntos 1-10 estén completos.
+> **IMPORTANTE (Sprint 20)**: los tests E2E son **obligatorios** para cualquier refactoring o cambio de lógica,
+> incluso si no cambia el comportamiento. Los tests unitarios no son suficientes para validar
+> integración end-to-end (imports, circular deps, runtime issues). Si el usuario pide hacer el PR o el push
+> antes de ejecutar E2E, genero primero los tests E2E, los corro, y luego continúo con el push/PR.
+
+## Política de versionado documental (obligatoria)
+
+Cuando cierro sprint, verifico consistencia entre:
+- `CHANGELOG.md` (nueva entrada de versión/sprint)
+- `docs/sprint-{N}-release-notes.md`
+- `docs/REQUIREMENTS.md` (historial de versiones)
+- `README.md` (estado actual)
+
+Si falta alguno o hay versiones contradictorias, se considera cierre incompleto.
 
 ## Regla de seguridad pre-commit — NUNCA OMITIR
 
