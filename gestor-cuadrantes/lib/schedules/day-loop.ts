@@ -163,6 +163,24 @@ function updateConsecutiveState(state: DayLoopState, employeeId: string, shiftTy
  *
  * @param input - Parámetros inmutables del loop
  * @returns Asignaciones completas del mes y warnings
+ * @example
+ * ```ts
+ * const output = executeDayLoop({
+ *   projectId: "p1",
+ *   year: 2026,
+ *   month: 6,
+ *   employees,
+ *   holidays,
+ *   lockedCells,
+ *   nightBlockPlan,
+ *   weekendPackPlan,
+ *   prevMonthContext,
+ *   nextMonthContext,
+ * });
+ * ```
+ * @remarks
+ * El orden de prioridad por celda es estricto:
+ * bloqueos manuales > descanso HARD > night block > weekend pack > laborable > transición ET > cobertura.
  */
 export function executeDayLoop(input: DayLoopInput): DayLoopOutput {
   const sortedEmployees = [...input.employees].sort((a, b) => a.rotationOrder - b.rotationOrder);

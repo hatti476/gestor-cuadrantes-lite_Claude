@@ -9,6 +9,11 @@ import type { CoverageStatus, CoverageWarning } from "./coverage";
 
 /**
  * Tipos de turno válidos en el dominio de planificación.
+ *
+ * @example
+ * ```ts
+ * const shift: ShiftType = "MF";
+ * ```
  */
 export type ShiftType =
   | "M"
@@ -27,6 +32,11 @@ export type ShiftType =
 
 /**
  * Empleado elegible para planificación del cuadrante.
+ *
+ * @example
+ * ```ts
+ * const employee: Employee = { id: "e1", rotationOrder: 0, shiftPreference: "M" };
+ * ```
  */
 export interface Employee {
   /** Identificador único del empleado. */
@@ -41,6 +51,11 @@ export interface Employee {
 
 /**
  * Clave canónica de celda en formato `employeeId|YYYY-MM-DD`.
+ *
+ * @example
+ * ```ts
+ * const key: CellKey = "emp-1|2026-06-01";
+ * ```
  */
 export type CellKey = string;
 
@@ -61,6 +76,11 @@ export interface LockedCell {
 
 /**
  * Índice de celdas bloqueadas por clave `employeeId|YYYY-MM-DD`.
+ *
+ * @example
+ * ```ts
+ * const locked: LockedCellMap = new Map();
+ * ```
  */
 export type LockedCellMap = Map<CellKey, LockedCell>;
 
@@ -78,6 +98,11 @@ export interface AssignmentEntry {
 
 /**
  * Mapa de asignaciones del loop indexado por `employeeId|YYYY-MM-DD`.
+ *
+ * @example
+ * ```ts
+ * const assignments: AssignmentMap = new Map();
+ * ```
  */
 export type AssignmentMap = Map<CellKey, AssignmentEntry>;
 
@@ -95,6 +120,11 @@ export interface NightBlockSlot {
 
 /**
  * Plan de bloques de noche indexado por `employeeId|YYYY-MM-DD`.
+ *
+ * @example
+ * ```ts
+ * const nightPlan: NightBlockPlan = new Map();
+ * ```
  */
 export type NightBlockPlan = Map<CellKey, NightBlockSlot>;
 
@@ -110,11 +140,19 @@ export interface WeekendPackOwner {
 
 /**
  * Plan de paquetes de fin de semana indexado por sábado `YYYY-MM-DD`.
+ *
+ * @example
+ * ```ts
+ * const weekendPlan: WeekendPackPlan = new Map();
+ * ```
  */
 export type WeekendPackPlan = Map<string, WeekendPackOwner>;
 
 /**
  * Continuidad del mes previo para resolver transiciones y arrastres.
+ *
+ * @remarks
+ * Se usa para mantener consistencia de descansos y cadenas de turnos en el día 1.
  */
 export interface PrevMonthContext {
   /** Turnos del mes anterior indexados por `employeeId|YYYY-MM-DD`. */
@@ -127,6 +165,9 @@ export interface PrevMonthContext {
 
 /**
  * Contexto preparado para continuidad hacia el mes siguiente.
+ *
+ * @remarks
+ * Permite exportar pistas para la generación del mes posterior sin acoplar módulos.
  */
 export interface NextMonthContext {
   /** Fecha ISO del primer día del mes siguiente. */
@@ -137,6 +178,22 @@ export interface NextMonthContext {
 
 /**
  * Parámetros de entrada del loop (inmutables durante la ejecución).
+ *
+ * @example
+ * ```ts
+ * const input: DayLoopInput = {
+ *   projectId: "p1",
+ *   year: 2026,
+ *   month: 6,
+ *   employees: [],
+ *   holidays: [],
+ *   lockedCells: new Map(),
+ *   nightBlockPlan: new Map(),
+ *   weekendPackPlan: new Map(),
+ *   prevMonthContext,
+ *   nextMonthContext,
+ * };
+ * ```
  */
 export interface DayLoopInput {
   projectId: string;
@@ -153,6 +210,9 @@ export interface DayLoopInput {
 
 /**
  * Estado mutable que evoluciona día a día.
+ *
+ * @remarks
+ * Este estado se reinicializa por ejecución de mes y no debe persistirse fuera del loop.
  */
 export interface DayLoopState {
   assignments: AssignmentMap;
@@ -164,6 +224,11 @@ export interface DayLoopState {
 
 /**
  * Resultados acumulados del loop.
+ *
+ * @example
+ * ```ts
+ * const result: DayLoopOutput = executeDayLoop(input);
+ * ```
  */
 export interface DayLoopOutput {
   assignments: AssignmentMap;
