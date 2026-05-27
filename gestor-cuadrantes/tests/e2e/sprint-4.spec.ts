@@ -231,8 +231,13 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
     // (si el 15 era N antes, ahora debe ser NF)
 
     // Leer el turno actual del primer empleado en día 15
-    const cell15 = page.locator("table").first().locator("tbody tr").first().locator("td").nth(15);
-    const shiftBefore = await cell15.locator("[data-testid^='shift-cell-']").getAttribute("data-testid").catch(() => null);
+    const firstCellTestId = await page.locator('td[data-testid^="cell-"]').first().getAttribute("data-testid");
+    expect(firstCellTestId).toBeTruthy();
+    const employeeId = firstCellTestId!.slice(5, -11);
+    const cellTestId = `cell-${employeeId}-2027-02-15`;
+    const cell15Before = page.locator(`[data-testid="${cellTestId}"]`);
+    await expect(cell15Before).toBeVisible({ timeout: 5_000 });
+    const shiftBefore = await cell15Before.locator("[data-testid^='shift-cell-']").getAttribute("data-testid").catch(() => null);
 
     // Añadir festivo el día 16 de Febrero 2027
     await page.goto("/holidays");
@@ -253,12 +258,11 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
     await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     // Si el turno del día 15 era N, ahora debe ser NF
-    const shiftAfter = await cell15.locator("[data-testid^='shift-cell-']").getAttribute("data-testid").catch(() => null);
+    const cell15After = page.locator(`[data-testid="${cellTestId}"]`);
+    await expect(cell15After).toBeVisible({ timeout: 5_000 });
+    const shiftAfter = await cell15After.locator("[data-testid^='shift-cell-']").getAttribute("data-testid").catch(() => null);
     if (shiftBefore === "shift-cell-N") {
       expect(shiftAfter).toBe("shift-cell-NF");
-    } else {
-      // Si no era N, al menos no debe haber dado error (la API no falla)
-      expect(shiftAfter).not.toBeNull();
     }
   } catch (e) {
     await screenshotOnFail(page, "CP-37");

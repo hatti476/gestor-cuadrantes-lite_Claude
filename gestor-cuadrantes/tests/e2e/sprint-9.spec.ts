@@ -98,23 +98,38 @@ test("CP-68 — Generar cuadrante respeta vacaciones introducidas", async ({ pag
     await generateAndWait(page);
     await expect(page.locator("table").first()).toBeVisible({ timeout: 5_000 });
 
-    // Asignar turno "B" (baja) al primer empleado en el día 3
-    const cellTarget = page.locator("table").first().locator("tbody tr").first().locator("td").nth(3);
+    // Asignar turno "B" (baja) al primer empleado en el día 3 (dinámico al mes actual mostrado)
+    const firstRowDayCells = page.locator("table").first().locator("tbody tr").first().locator('td[data-testid^="cell-"]');
+    const cellTarget = firstRowDayCells.nth(2);
+    const targetCellTestId = await cellTarget.getAttribute("data-testid");
+    expect(targetCellTestId).toBeTruthy();
+    await expect(cellTarget).toBeVisible({ timeout: 5_000 });
     await cellTarget.click();
     await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
-    const saveRes = page.waitForResponse(
+    const saveResPromise = page.waitForResponse(
       (r) => r.url().includes("/api/schedules") && r.status() === 201
     );
     await page.locator('[data-testid="shift-btn-B"]').click();
-    await saveRes;
+    const saveRes = await saveResPromise;
+    const savedAssignment = await saveRes.json() as { employeeId: string; date: string; shiftType: string };
     await expect(page.locator('[data-testid="shift-editor"]')).not.toBeVisible({ timeout: 5_000 });
 
     // Regenerar y esperar que la toast de "Cuadrante generado" aparezca.
     await generateAndWait(page);
 
-    // La celda "B" debe seguir presente (no sobreescrita)
-    const bCell = page.locator('[data-testid="shift-cell-B"]').first();
-    await expect(bCell).toBeVisible({ timeout: 5_000 });
+    // Validar por API que la baja manual persiste tras regenerar
+    const savedDate = savedAssignment.date.slice(0, 10);
+    const [year, month] = savedDate.split("-");
+    const scheduleAfterRes = await page.request.get(`/api/schedules?year=${Number(year)}&month=${Number(month)}`);
+    expect(scheduleAfterRes.status()).toBe(200);
+    const scheduleAfterBody = await scheduleAfterRes.json() as { assignments?: Array<{ employeeId: string; date: string; shiftType: string }> };
+    const assignmentsAfter = scheduleAfterBody.assignments ?? [];
+
+    const persisted = assignmentsAfter.find((a) =>
+      a.employeeId === savedAssignment.employeeId &&
+      a.date.slice(0, 10) === savedDate
+    );
+    expect(persisted?.shiftType).toBe("B");
   } catch (e) {
     await screenshotOnFail(page, "CP-68");
     throw e;

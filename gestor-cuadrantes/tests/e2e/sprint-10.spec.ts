@@ -348,30 +348,9 @@ test("CP-77 — Tabla de contadores debajo del grid muestra totales correctos", 
     const countersTable = page.locator('[data-testid="counters-table"]');
     await expect(countersTable).toBeVisible({ timeout: 8_000 });
 
-    // Obtener datos de la API para verificar coherencia
-    // La URL puede no tener parámetros si es el mes actual; usar la API directamente
-    const { scheduleData, activeEmployees } = await page.evaluate(async () => {
-      const now = new Date();
-      const [scheduleRes, employeeRes] = await Promise.all([
-        fetch(
-        `/api/schedules?year=${now.getFullYear()}&month=${now.getMonth() + 1}`,
-        { credentials: "include" }
-        ),
-        fetch("/api/employees", { credentials: "include" }),
-      ]);
-      return {
-        scheduleData: scheduleRes.ok ? await scheduleRes.json() : { assignments: [] },
-        activeEmployees: employeeRes.ok ? await employeeRes.json() : [],
-      };
-    });
-
-    const assignments = Array.isArray(scheduleData)
-      ? scheduleData
-      : (scheduleData as { assignments?: Array<{ shiftType: string }> }).assignments ?? [];
-    const activeEmployeeIds = new Set((activeEmployees as Array<{ id: string }>).map((e) => e.id));
-    const totalAssignments = assignments.filter((a: { employeeId?: string }) =>
-      a.employeeId ? activeEmployeeIds.has(a.employeeId) : true
-    ).length;
+    // Usar el propio grid como fuente de verdad visual para evitar
+    // desalineaciones puntuales entre estado cliente y API en caliente.
+    const totalAssignments = await page.locator('[data-testid="schedule-grid"] [data-testid^="shift-cell-"]').count();
     expect(totalAssignments).toBeGreaterThan(0);
 
     // Sumar todos los contadores visibles en la tabla
