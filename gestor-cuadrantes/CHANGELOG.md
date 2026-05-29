@@ -4,6 +4,18 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
+## [2.1.0] - 2026-05-27
+
+### Refactoring
+- Extraído `day-loop.ts` del núcleo de `generate.ts`.
+- `generate.ts` reducido a 10 líneas (orquestador/facade, objetivo `<=300` cumplido).
+- `DayLoopContext` introducido como estructura de datos explícita del loop.
+- Arquitectura modular completada en `lib/schedules/` con `day-loop` y contratos dedicados.
+
+### Tests
+- Unit: 404/404 en verde.
+- E2E: 142/142 en verde.
+
 ## [2.0.0] - 2026-05-26
 
 ### Changed

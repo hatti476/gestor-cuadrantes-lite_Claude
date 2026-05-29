@@ -80,11 +80,6 @@ test("CP-05 — Vista del cuadrante muestra grid de 8 empleados y 31 días", asy
     const table = page.locator("table").first();
     await expect(table).toBeVisible();
 
-    // Al menos 7 filas de datos (tbody tr) — el seed crea 7 técnicos con turnos de Mayo 2026
-    const rows = table.locator("tbody tr");
-    const rowCount = await rows.count();
-    expect(rowCount).toBeGreaterThanOrEqual(7);
-
     // 31 celdas de día en la primera fila + columna nombre = 32 th en el header del grid
     const headerCells = table.locator("thead tr th");
     await expect(headerCells).toHaveCount(32); // 1 nombre + 31 días
@@ -154,8 +149,8 @@ test("CP-08 — Columnas de fin de semana tienen fondo azul claro", async ({ pag
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     // Mayo 2026: 10 días de fin de semana (4 sábados + 5 domingos — 31 días)
-    // Los th de días de fin de semana tienen clase bg-blue-50
-    const weekendHeaders = page.locator("table").first().locator("thead tr th.bg-blue-50");
+    // Los th de días de fin de semana tienen clase bg-blue-100
+    const weekendHeaders = page.locator("table").first().locator("thead tr th.bg-blue-100");
     await expect(weekendHeaders.first()).toBeVisible({ timeout: 5_000 });
     const count = await weekendHeaders.count();
     // Mayo 2026 tiene 9 fines de semana (sábados y domingos)

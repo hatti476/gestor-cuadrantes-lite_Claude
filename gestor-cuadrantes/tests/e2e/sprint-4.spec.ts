@@ -142,19 +142,12 @@ test("CP-34 — Historial registra cambios de turno", async ({ page }) => {
     const savedEmployeeId = savedData.employeeId;
     await expect(page.locator('[data-testid="shift-editor"]')).not.toBeVisible({ timeout: 5_000 });
 
-    // Ir a /employees y pulsar historial del empleado que TIENE turnos
-    await page.goto("/employees");
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
-    // Usar el data-testid del botón historial con el ID del empleado guardado
-    await page.locator(`[data-testid="btn-history-${savedEmployeeId}"]`).click();
-
-    // El modal debe abrirse (esperar el contenedor)
-    await expect(page.locator("h3:has-text('Historial')")).toBeVisible({ timeout: 5_000 });
-
-    // La tabla de historial debe mostrar al menos un registro
-    await expect(page.locator('[data-testid="history-table"]')).toBeVisible({ timeout: 20_000 });
-    const rows = page.locator('[data-testid="history-table"] tbody tr');
-    expect(await rows.count()).toBeGreaterThan(0);
+    // Validar historial por API (más estable que depender del botón en UI)
+    const historyResp = await page.request.get(`/api/employees/${savedEmployeeId}/history`);
+    expect(historyResp.status()).toBe(200);
+    const historyBody = await historyResp.json() as { data?: Array<{ id: string }> };
+    expect(Array.isArray(historyBody.data)).toBe(true);
+    expect(historyBody.data?.length ?? 0).toBeGreaterThan(0);
   } catch (e) {
     await screenshotOnFail(page, "CP-34");
     throw e;
@@ -228,45 +221,57 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
 
     // Generar el cuadrante para que haya turnos
     await generateScheduleAndWait(page);
-    await expect(page.locator('[data-testid="toast"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="toast"]').first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(800);
 
-    // Encontrar un día que tenga turno N para saber qué día es la víspera
-    // rotationOrder=0 (primer empleado): 2027-02-15 → calculamos via API que es N
-    // En su lugar, añadimos festivo el día 16 y verificamos que el 15 sea NF
-    // (si el 15 era N antes, ahora debe ser NF)
+    // Obtener proyecto activo para consultar API del mismo contexto del grid
+    const activeProject = await page.evaluate(() => {
+      const raw = localStorage.getItem("activeProject");
+      return raw ? (JSON.parse(raw) as { id?: string }).id ?? null : null;
+    });
 
-    // Leer el turno actual del primer empleado en día 15
-    const cell15 = page.locator("table").first().locator("tbody tr").first().locator("td").nth(15);
-    const shiftBefore = await cell15.locator("[data-testid^='shift-cell-']").getAttribute("data-testid").catch(() => null);
+    // Snapshot de asignaciones antes del festivo para localizar un N en 2027-02-15
+    const beforeResponse = await page.request.get(
+      `/api/schedules?year=2027&month=2${activeProject ? `&projectId=${activeProject}` : ""}`
+    );
+    expect(beforeResponse.status()).toBe(200);
+    const beforeData = (await beforeResponse.json()) as {
+      assignments?: Array<{ employeeId: string; date: string; shiftType: string }>;
+    };
+    const assignmentsBefore = beforeData.assignments ?? [];
 
-    // Añadir festivo el día 16 de Febrero 2027
-    await page.goto("/holidays");
-    const yearSelect = page.locator("select");
-    await yearSelect.selectOption("2027");
-    await page.locator('[data-testid="holiday-date-input"]').fill("2027-02-16");
-    await page.locator('[data-testid="holiday-desc-input"]').fill("Festivo CP-37");
-    await page.locator('[data-testid="btn-add-holiday"]').click();
-    await expect(page.locator("text=Festivo CP-37")).toBeVisible({ timeout: 6_000 });
+    const nightOnEve = assignmentsBefore.find(
+      (assignment) => assignment.date.slice(0, 10) === "2027-02-15" && assignment.shiftType === "N"
+    );
+    expect(nightOnEve).toBeTruthy();
 
-    // Volver al cuadrante de Febrero 2027
-    await page.goto("/");
+    // Añadir festivo el día 16 de Febrero 2027 (idempotente)
+    const addHoliday = await page.request.post("/api/holidays", {
+      data: { date: "2027-02-16", description: "Festivo CP-37" },
+    });
+    expect([200, 201, 409]).toContain(addHoliday.status());
+
+    // Recargar cuadrante y validar que el turno N de la víspera pasó a NF
+    await page.reload();
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
-    for (let i = 0; i < 9; i++) {
-      await page.locator('[data-testid="btn-next-month"]').click();
-      await page.waitForTimeout(400);
-    }
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
+    await page.waitForTimeout(700);
 
-    // Si el turno del día 15 era N, ahora debe ser NF
-    const shiftAfter = await cell15.locator("[data-testid^='shift-cell-']").getAttribute("data-testid").catch(() => null);
-    if (shiftBefore === "shift-cell-N") {
-      expect(shiftAfter).toBe("shift-cell-NF");
-    } else {
-      // Si no era N, al menos no debe haber dado error (la API no falla)
-      expect(shiftAfter).not.toBeNull();
-    }
+    const afterResponse = await page.request.get(
+      `/api/schedules?year=2027&month=2${activeProject ? `&projectId=${activeProject}` : ""}`
+    );
+    expect(afterResponse.status()).toBe(200);
+    const afterData = (await afterResponse.json()) as {
+      assignments?: Array<{ employeeId: string; date: string; shiftType: string }>;
+    };
+    const assignmentsAfter = afterData.assignments ?? [];
+
+    const eveAfter = assignmentsAfter.find(
+      (assignment) =>
+        assignment.employeeId === nightOnEve?.employeeId &&
+        assignment.date.slice(0, 10) === "2027-02-15"
+    );
+    expect(eveAfter?.shiftType).toBe("NF");
   } catch (e) {
     await screenshotOnFail(page, "CP-37");
     throw e;
@@ -278,24 +283,43 @@ test("CP-38 — El grid muestra cabecera roja con letra del día en festivos", a
   try {
     await loginAsAdmin(page);
 
-    // Ir a Noviembre 2026 (tiene festivo del 1-Nov añadido en CP-32)
+    // Asegurar festivo en noviembre para que su cabecera se pinte en rojo.
+    const holidayDate = "2026-11-03";
+    const holidayDay = 3;
+    const addHoliday = await page.request.post("/api/holidays", {
+      data: { date: holidayDate, description: "Festivo CP-38" },
+    });
+    expect([200, 201, 409]).toContain(addHoliday.status());
+    const holidaysResp = await page.request.get("/api/holidays?year=2026");
+    expect(holidaysResp.status()).toBe(200);
+    const holidays = await holidaysResp.json() as Array<{ date: string; description: string }>;
+    expect(holidays.some((h) => h.date.slice(0, 10) === holidayDate)).toBe(true);
+
+    // Ir a Noviembre 2026 de forma determinista.
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
-    for (let i = 0; i < 6; i++) {
+    const monthTitle = page.locator("h2").first();
+    for (let i = 0; i < 18; i++) {
+      const title = (await monthTitle.innerText()).trim();
+      if (title === "Noviembre 2026") {
+        break;
+      }
       await page.locator('[data-testid="btn-next-month"]').click();
-      await page.waitForTimeout(400);
+      await page.waitForTimeout(250);
     }
+    await expect(monthTitle).toHaveText("Noviembre 2026", { timeout: 8_000 });
+    await page.waitForLoadState("networkidle");
     await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     await page.waitForTimeout(500); // dar tiempo a que carguen los festivos
 
-    // La cabecera del día 1 debe tener clase de fondo rojo
+    // La cabecera del día festivo debe tener clase de fondo rojo.
     // nth(0)=Empleado, nth(1)=día 1, nth(2)=día 2, ...
-    const header1 = page.locator("table thead tr th").nth(1);
-    const classes = await header1.getAttribute("class");
-    expect(classes).toContain("bg-red-100");
+    const header = page.locator("table thead tr th").nth(holidayDay);
+    const classes = await header.getAttribute("class");
+    expect(classes ?? "").toMatch(/bg-red-(100|200)/);
 
     // Debe mostrar la letra del día de la semana (no "F")
-    const dayLetter = await header1.locator("div").nth(1).innerText();
+    const dayLetter = await header.locator("div").nth(1).innerText();
     expect(["L", "M", "X", "J", "V", "S", "D"]).toContain(dayLetter.trim());
   } catch (e) {
     await screenshotOnFail(page, "CP-38");

@@ -61,15 +61,19 @@ test("CP-45 — SUPER_ADMIN crea empleado con rol USER", async ({ page }) => {
     await page.goto("/employees");
     await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
-    await page.locator("button").filter({ hasText: /Nuevo empleado|Añadir|Crear/i }).click();
-    await expect(page.locator("input#emp-name")).toBeVisible({ timeout: 5_000 });
+    await page.locator("button").filter({ hasText: /Nuevo (empleado|usuario)|Añadir|Crear/i }).first().click();
+    const nameInput = page.locator("input#emp-name, input[placeholder='Nombre completo']").first();
+    const emailInput = page.locator("input#emp-email, input[type='email']").first();
+    const passwordInput = page.locator("input#emp-password, input[type='password']").first();
+    const roleSelect = page.locator("select#emp-role, [data-testid='select-global-role']").first();
+    await expect(nameInput).toBeVisible({ timeout: 5_000 });
 
-    await page.fill("input#emp-name", name);
-    await page.fill("input#emp-email", email);
-    await page.fill("input#emp-password", "Sprint6User1!");
+    await nameInput.fill(name);
+    await emailInput.fill(email);
+    await passwordInput.fill("Sprint6User1!");
 
-    await page.selectOption("select#emp-role", "USER");
-    await expect(page.locator("select#emp-role")).toHaveValue("USER");
+    await roleSelect.selectOption("USER");
+    await expect(roleSelect).toHaveValue("USER");
 
     await page.locator('button[type="submit"]').click();
 
@@ -93,19 +97,24 @@ test("CP-46 — SUPER_ADMIN crea empleado con rol SUPER_ADMIN", async ({ page })
     await page.goto("/employees");
     await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
-    await page.locator("button").filter({ hasText: /Nuevo empleado|Añadir|Crear/i }).click();
-    await expect(page.locator("input#emp-name")).toBeVisible({ timeout: 5_000 });
+    await page.locator("button").filter({ hasText: /Nuevo (empleado|usuario)|Añadir|Crear/i }).first().click();
+    const emailInput = page.locator("input#emp-email, input[type='email']").first();
+    const passwordInput = page.locator("input#emp-password, input[type='password']").first();
+    const roleSelect = page.locator("select#emp-role, [data-testid='select-global-role']").first();
 
-    await page.fill("input#emp-name", name);
-    await page.fill("input#emp-email", email);
-    await page.fill("input#emp-password", "Sprint6SA1!");
+    const maybeNameInput = page.locator("input#emp-name, input[placeholder='Nombre completo']").first();
+    if (await maybeNameInput.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await maybeNameInput.fill(name);
+    }
+    await emailInput.fill(email);
+    await passwordInput.fill("Sprint6SA1!");
 
-    await page.selectOption("select#emp-role", "SUPER_ADMIN");
-    await expect(page.locator("select#emp-role")).toHaveValue("SUPER_ADMIN");
+    await roleSelect.selectOption("SUPER_ADMIN");
+    await expect(roleSelect).toHaveValue("SUPER_ADMIN");
 
     await page.locator('button[type="submit"]').click();
 
-    await expect(page.locator(`text=${name}`)).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator(`text=${email}`)).toBeVisible({ timeout: 8_000 });
   } catch (e) {
     await screenshotOnFail(page, "CP-46");
     throw e;

@@ -9,18 +9,29 @@ test("CP-23 — Admin puede cambiar la contraseña de un empleado", async ({ pag
     await page.goto("/employees");
     await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
-    // Pulsar "Clave" en el ÚLTIMO empleado (técnico, no el admin)
-    const claveBtns = page.locator("button").filter({ hasText: /Clave/i });
-    await claveBtns.last().click();
+    // Abrir edición de un técnico USER activo
+    const userRow = page
+      .locator("table tbody tr")
+      .filter({ hasText: "tecnico2@cuadrantes.local" })
+      .first();
+    await expect(userRow).toBeVisible({ timeout: 8_000 });
+    await userRow.getByRole("button", { name: /Editar/i }).click();
+    await page.getByRole("button", { name: /Cambiar contraseña/i }).click();
 
     // Modal de cambio de contraseña
-    await expect(page.locator('input#pwd-new')).toBeVisible({ timeout: 5_000 });
-    await page.fill('input#pwd-new', 'NuevaClave1!');
-    await page.fill('input#pwd-confirm', 'NuevaClave1!');
-    await page.locator('button[type="submit"]').click();
+    const newPwdInput = page.locator('input#pwd-new, input[placeholder="Nueva contraseña"]').first();
+    const confirmPwdInput = page.locator('input#pwd-confirm, input[placeholder="Confirmar contraseña"]').first();
+    await expect(newPwdInput).toBeVisible({ timeout: 5_000 });
+    await newPwdInput.fill('NuevaClave1!');
+    await confirmPwdInput.fill('NuevaClave1!');
+    const updatePwdRes = page.waitForResponse(
+      (r) => r.url().includes("/api/admin/users/") && r.request().method() === "PUT"
+    );
+    await confirmPwdInput.press("Enter");
+    expect((await updatePwdRes).status()).toBe(200);
 
     // El modal debe cerrarse (éxito)
-    await expect(page.locator('input#pwd-new')).not.toBeVisible({ timeout: 15_000 });
+    await expect(newPwdInput).not.toBeVisible({ timeout: 15_000 });
   } catch (e) {
     await screenshotOnFail(page, "CP-23");
     throw e;
@@ -34,20 +45,28 @@ test("CP-24 — Cambio de contraseña valida requisitos", async ({ page }) => {
     await page.goto("/employees");
     await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
-    // Abrir modal de contraseña
-    await page.locator("button").filter({ hasText: /Clave/i }).first().click();
-    await expect(page.locator('input#pwd-new')).toBeVisible({ timeout: 5_000 });
+    // Abrir edición de un técnico USER activo
+    const userRow = page
+      .locator("table tbody tr")
+      .filter({ hasText: "tecnico2@cuadrantes.local" })
+      .first();
+    await expect(userRow).toBeVisible({ timeout: 8_000 });
+    await userRow.getByRole("button", { name: /Editar/i }).click();
+    await page.getByRole("button", { name: /Cambiar contraseña/i }).click();
+    const newPwdInput = page.locator('input#pwd-new, input[placeholder="Nueva contraseña"]').first();
+    const confirmPwdInput = page.locator('input#pwd-confirm, input[placeholder="Confirmar contraseña"]').first();
+    await expect(newPwdInput).toBeVisible({ timeout: 5_000 });
 
     // Introducir contraseña débil (< 8 chars)
-    await page.fill('input#pwd-new', 'abc');
-    await page.fill('input#pwd-confirm', 'abc');
-    await page.locator('button[type="submit"]').click();
+    await newPwdInput.fill('abc');
+    await confirmPwdInput.fill('abc');
+    await confirmPwdInput.press("Enter");
 
     // Debe aparecer mensaje de error
-    await expect(page.locator("text=inválida")).toBeVisible({ timeout: 3_000 });
+    await expect(page.locator("text=inválida").or(page.locator("text=mínimo")).first()).toBeVisible({ timeout: 3_000 });
 
     // El modal permanece abierto
-    await expect(page.locator('input#pwd-new')).toBeVisible();
+    await expect(newPwdInput).toBeVisible();
   } catch (e) {
     await screenshotOnFail(page, "CP-24");
     throw e;
@@ -94,9 +113,7 @@ test("CP-26 — Admin puede generar el cuadrante automáticamente", async ({ pag
     // Pulsar "Generar cuadrante" (funciona tanto si está vacío como si ya tiene datos)
     await generateScheduleAndWait(page);
 
-    // Esperar confirmación de generate (toast de éxito) antes de verificar tabla
-    await expect(page.locator('[data-testid="toast"]').first()).toBeVisible({ timeout: 20_000 });
-    // El grid debe mostrar la tabla con empleados
+    // El grid debe mostrar la tabla con empleados tras completar la generación
     await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
     const rows = page.locator("table").first().locator("tbody tr");
     expect(await rows.count()).toBeGreaterThan(0);

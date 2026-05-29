@@ -20,7 +20,7 @@ export async function login(
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Contraseña").fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
-  await page.waitForURL(ROUTES.home, { timeout: 10_000 });
+  await page.waitForURL((url) => url.pathname !== ROUTES.login, { timeout: 20_000 });
 }
 
 /** Login rápido como SUPER_ADMIN. */

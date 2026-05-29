@@ -1,7 +1,7 @@
 # Documento de Requisitos — Gestor de Cuadrantes
 
-**Versión**: 2.0.0 (Sprint 20 — cierre de sprint)  
-**Última actualización**: 26/05/2026  
+**Versión**: 2.1.0 (Sprint 21 — cierre de sprint)  
+**Última actualización**: 27/05/2026  
 **Estado**: Vivo — se actualiza al cierre de cada sprint
 
 ---
@@ -411,6 +411,27 @@ Schedule        — id, month, year (registro de última generación)
 
 ---
 
+## 6.1 Arquitectura actual del motor de planificación (`lib/schedules/`)
+
+```text
+generate.ts (orquestador, 10 líneas)
+└── generate-core.ts
+    └── day-loop.ts (loop día-a-día)
+        ├── night-blocks.ts
+        ├── weekend-packs.ts
+        ├── workday-shifts.ts
+        ├── rest-rules.ts
+        ├── coverage.ts
+        ├── shift-transitions.ts
+        ├── cross-month.ts
+        ├── date-utils.ts
+        └── day-loop-context.ts
+```
+
+> `date-utils.ts` se mantiene como módulo raíz sin dependencias de negocio.
+
+---
+
 ## 7. Reglas de autorización (resumen)
 
 ```
@@ -428,9 +449,9 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 
 | Suite | Cobertura | Estado |
 |-------|-----------|--------|
-| Unit | 374 tests (296 base + 78 nuevos de Sprint 20) | ✅ |
+| Unit | 404 tests (incluye DL-01..DL-20 del Sprint 21) | ✅ |
 | E2E | 142 tests definidos en `tests/e2e/` | ✅ |
-| Alcance Sprint 20 | Nuevas suites para `date-utils`, `rest-rules`, `coverage`, `cross-month` | ✅ |
+| Alcance Sprint 21 | Refactor `day-loop` + estabilización E2E de regresión | ✅ |
 
 ---
 
@@ -444,6 +465,8 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | Notificaciones email al técnico cuando se asigna/modifica su turno | Nuevos RF | Alta |
 | Dashboard de proyecto: cobertura diaria, ausencias, horas totales | Nuevos RF | Alta |
 | Pipeline CI/CD + deploy automático en producción | Operativo | Media |
+
+> Las tareas de refactor de Sprints 20 y 21 se han completado y retirado del backlog activo.
 
 ---
 
@@ -465,25 +488,24 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | 1.2 | 12 | Aislamiento de asignaciones por proyecto (BUG-29 + `ShiftAssignment.projectId`), `resolveNightBlocks` (transferencia de bloque en vacaciones), preferencia Jornada (J), fila propia resaltada en el grid (RF-19) |
 | 1.3 | 12 | BUG-30: `_pickWorkdayShift` ignoraba preferencia M/T cuando `weeklyShift` fue fijado por cobertura urgente — corregido con `dailyOrder` (empleados sin preferencia resuelven cobertura primero). BUG-31a: `_pickWeekendShift` no retornaba `"D"` para pref `"J"` — corregido. BUG-31b: `_pickWorkdayShift` asignaba M/T en lugar de `"J"` a empleados con pref `"J"` — corregido retornando `"J"` directamente. Validación `shiftPreference` movida a `business-logic.ts` (testeable). Tests unitarios de regresión BUG-30 y BUG-31 añadidos. |
 | 2.0 | 20 | **Refactor modular de generate.ts**: extracción de 1,190 líneas en 8 módulos independientes (date-utils, night-blocks, rest-rules, shift-transitions, coverage, weekend-packs, workday-shifts, cross-month). Reducción de 2350 → 1605 líneas (-32%). Tests unitarios 296 → 374 (78 nuevos), E2E baseline 142 tests ejecutados. Bugs BUG-38 (missing imports) y BUG-39 (circular deps) encontrados y cerrados. Arquitectura modular con raíz sin deps (date-utils.ts). Sprint Orchestrator formalizado con E2E como requerimiento obligatorio. |
+| 2.1 | 21 | **Refactor day-loop (Fase 2)**: extracción del loop diario a `day-loop.ts` y contrato explícito en `day-loop-context.ts`. `generate.ts` reducido a 10 líneas (objetivo ≤300 superado). Cobertura final: 404/404 unit tests y 142/142 E2E. Incluye endurecimiento de casos flakey (CP-15, CP-37, CP-38, CP-68, CP-77, CP-115, CP-116). |
 
 ---
 
 ## 11. Sprint 21 — Refactorización de day-loop (Fase 2)
 
-**Estado**: Pendiente | **Versión destino**: 2.1.0 | **Esfuerzo estimado**: 22 horas
+**Estado**: Completado | **Versión**: 2.1.0 | **Fecha cierre**: 27/05/2026
 
-Para detalles completos, ver: [docs/sprint-21-requirements.md](sprint-21-requirements.md)
+Referencias:
+- [docs/sprint-21-analysis.md](sprint-21-analysis.md)
+- [docs/sprint-21-architecture.md](sprint-21-architecture.md)
+- [docs/sprint-21-release-notes.md](sprint-21-release-notes.md)
 
-**Resumen**:
-- Extraer loop día-por-día de `generate.ts` a módulo `day-loop.ts`
-- Reducir `generate.ts` de 1605 a ≤300 líneas (-81%)
-- Refactorizar ~15 cierres internos en estructura `DayLoopContext`
-- Agregar mínimo 26 tests unitarios nuevos
-- Ejecutar E2E completo (142 tests, **obligatorio**)
+**Métricas de cierre**:
+- `generate.ts`: 1605 → 10 líneas (objetivo ≤300 cumplido)
+- `day-loop.ts`: 310 líneas
+- Tests unitarios: 404/404 ✅
+- Tests E2E: 142/142 ✅
 
-**Requisitos de cierre**:
-- 100% unit tests passing (≥400 tests)
-- 100% E2E tests passing (142 tests)
-- `generate.ts` ≤300 líneas
-- Release notes + documentación completa
-- Sin cambios de comportamiento
+**Resultado**:
+- Refactor de modularización completado sin regresiones detectadas en suites unitarias y E2E.
