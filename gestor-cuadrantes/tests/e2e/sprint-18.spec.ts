@@ -21,6 +21,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { ROUTES } from "./config";
 import { generateScheduleAndWait, loginAsAdmin, loginAsViewer } from "./helpers";
+import { loginAs as loginAsRole } from "./helpers/auth-utils";
 
 test.describe.configure({ mode: "serial" });
 
@@ -94,7 +95,7 @@ const CROSS_MONTH_SUN_MONTH = 11; // November — starts on Sunday (1 Nov)
 test("CP-115 — mes que termina en sábado con MF → el domingo del mes siguiente mismo empleado MF", async ({
   page,
 }) => {
-  await loginAsAdmin(page);
+  await loginAsRole(page, "super_admin");
   const project = await getDefaultProject(page);
 
   // Generate October 2026 (ends Saturday 31 Oct)
@@ -128,7 +129,7 @@ test("CP-115 — mes que termina en sábado con MF → el domingo del mes siguie
 test("CP-116 — generación cross-month: el domingo inicial hereda el turno del sábado previo (mismo empleado)", async ({
   page,
 }) => {
-  await loginAsAdmin(page);
+  await loginAsRole(page, "super_admin");
   const project = await getDefaultProject(page);
 
   // Generate October 2026

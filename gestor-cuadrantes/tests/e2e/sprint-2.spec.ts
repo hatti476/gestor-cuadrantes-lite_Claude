@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { USERS, ROUTES } from "./config";
 import { login, openShiftEditorFromEditableCell, screenshotOnFail } from "./helpers";
+import { loginAs as loginAsRole } from "./helpers/auth-utils";
+import { waitForModalClose, waitForScheduleGrid, waitForToast } from "./helpers/wait-utils";
 
 const { admin: ADMIN, tech: TECH } = USERS;
 
@@ -93,9 +95,8 @@ test("CP-14 — Admin puede asignar un turno", async ({ page }) => {
 test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
   test.setTimeout(60_000);
   try {
-    await loginAs(page, ADMIN.email, ADMIN.password);
-    await page.waitForLoadState("networkidle");
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await loginAsRole(page, "super_admin");
+    await waitForScheduleGrid(page);
 
     // Buscar una celda editable que no sea V/B (evita celdas bloqueadas de preparación).
     const editableCell = page
@@ -119,7 +120,7 @@ test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
     expect([200, 201]).toContain(seedResp.status());
 
     await page.reload();
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await waitForScheduleGrid(page);
 
     const targetCell = page.locator(`[data-testid="${targetCellTestId}"]`);
     await targetCell.scrollIntoViewIfNeeded();
@@ -152,9 +153,7 @@ test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
     if (await etWarningConfirm.isVisible({ timeout: 1_000 }).catch(() => false)) {
       await etWarningConfirm.click();
     }
-    await expect(page.locator('[data-testid="toast"]').first()).toBeVisible({
-      timeout: 8_000,
-    });
+    await waitForToast(page, "", { timeout: 8_000 });
 
     // Verificar persistencia por API (más robusto en paralelo que esperar cierre del modal).
     const [yearStr, monthStr] = date.split("-");
@@ -185,7 +184,7 @@ test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
     // Cerrar modal si permanece abierto para no contaminar casos siguientes
     if (await editor.isVisible().catch(() => false)) {
       await page.keyboard.press("Escape");
-      await expect(editor).not.toBeVisible({ timeout: 5_000 });
+      await waitForModalClose(page);
     }
   } catch (e) {
     await screenshotOnFail(page, "CP-15");

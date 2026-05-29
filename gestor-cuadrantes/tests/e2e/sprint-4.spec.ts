@@ -6,6 +6,8 @@ import {
   openShiftEditorFromEditableCell,
   screenshotOnFail,
 } from "./helpers";
+import { loginAs as loginAsRole } from "./helpers/auth-utils";
+import { waitForGenerationComplete, waitForScheduleGrid } from "./helpers/wait-utils";
 
 const { tech: TECH } = USERS;
 
@@ -215,8 +217,8 @@ test("CP-36 — Las notificaciones toast aparecen y desaparecen", async ({ page 
 test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", async ({ page }) => {
   test.setTimeout(60_000);
   try {
-    await loginAsAdmin(page);
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await loginAsRole(page, "super_admin");
+    await waitForScheduleGrid(page);
 
     // Ir a Febrero 2027 (9 nexts desde Mayo 2026) — mes limpio
     for (let i = 0; i < 9; i++) {
@@ -226,9 +228,7 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
 
     // Generar el cuadrante para que haya turnos
     await generateScheduleAndWait(page);
-    await expect(page.locator('[data-testid="toast"]').first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
-    await page.waitForTimeout(800);
+    await waitForGenerationComplete(page);
 
     // Obtener proyecto activo para consultar API del mismo contexto del grid
     const activeProject = await page.evaluate(() => {
@@ -259,8 +259,7 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
 
     // Recargar cuadrante y validar que el turno N de la víspera pasó a NF
     await page.reload();
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
-    await page.waitForTimeout(700);
+    await waitForScheduleGrid(page);
 
     const afterResponse = await page.request.get(
       `/api/schedules?year=2027&month=2${activeProject ? `&projectId=${activeProject}` : ""}`
@@ -286,7 +285,7 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
 // ─── CP-38 — Cabecera roja en días festivos con día de la semana visible ──────
 test("CP-38 — El grid muestra cabecera roja con letra del día en festivos", async ({ page }) => {
   try {
-    await loginAsAdmin(page);
+    await loginAsRole(page, "super_admin");
 
     // Asegurar festivo en noviembre para que exista al menos una cabecera en rojo.
     const holidayDate = "2026-11-03";
@@ -300,7 +299,7 @@ test("CP-38 — El grid muestra cabecera roja con letra del día en festivos", a
     expect(holidays.some((h) => h.date.slice(0, 10) === holidayDate)).toBe(true);
 
     // Ir a Noviembre 2026 de forma determinista.
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await waitForScheduleGrid(page);
     const monthTitle = page.locator("h2").first();
     for (let i = 0; i < 18; i++) {
       const title = (await monthTitle.innerText()).trim();
@@ -312,9 +311,7 @@ test("CP-38 — El grid muestra cabecera roja con letra del día en festivos", a
     }
     await expect(monthTitle).toHaveText("Noviembre 2026", { timeout: 8_000 });
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
-
-    await page.waitForTimeout(500); // dar tiempo a que carguen los festivos
+    await waitForScheduleGrid(page);
 
     // Debe existir al menos una cabecera marcada como festiva (fondo rojo).
     const headers = page.locator("table thead tr th");

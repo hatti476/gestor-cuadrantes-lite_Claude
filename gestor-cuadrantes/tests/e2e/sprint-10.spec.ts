@@ -15,6 +15,8 @@
 import { test, expect } from "@playwright/test";
 import { USERS, ROUTES } from "./config";
 import { generateScheduleAndWait, loginAsAdmin, loginAsPM, screenshotOnFail } from "./helpers";
+import { loginAs as loginAsRole } from "./helpers/auth-utils";
+import { waitForGenerationComplete, waitForScheduleGrid } from "./helpers/wait-utils";
 
 // ===========================================================================
 // CP-71 — shiftPreference se guarda y muestra badge
@@ -336,13 +338,14 @@ test("CP-76 — nightRotationOrder se puede reordenar y guardar en /projects", a
 test("CP-77 — Tabla de contadores debajo del grid muestra totales correctos", async ({ page }) => {
   test.setTimeout(90_000);
   try {
-    await loginAsAdmin(page);
+    await loginAsRole(page, "super_admin");
     await page.goto(ROUTES.home);
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await waitForScheduleGrid(page);
 
     // Generar cuadrante para que haya datos
     await generateScheduleAndWait(page);
+    await waitForGenerationComplete(page);
 
     // La tabla de contadores debe estar visible
     const countersTable = page.locator('[data-testid="counters-table"]');
