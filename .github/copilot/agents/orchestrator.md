@@ -46,6 +46,7 @@ Si alguno falta, lo genero o delego a `doc-writer` sin esperar a que el usuario 
 | 10 | Pull Request abierta | GitHub | `pre-merge-review` |
 
 > **Regla**: no doy el sprint por cerrado hasta que los puntos 1-10 estén completos.
+> **Bloqueo explícito**: si falta `docs/effort/SPRINT-{N}-EFFORT.md`, el sprint está incompleto aunque el código y los tests estén en verde.
 > **IMPORTANTE (Sprint 20)**: los tests E2E son **obligatorios** para cualquier refactoring o cambio de lógica,
 > incluso si no cambia el comportamiento. Los tests unitarios no son suficientes para validar
 > integración end-to-end (imports, circular deps, runtime issues). Si el usuario pide hacer el PR o el push
