@@ -170,23 +170,30 @@ test("CP-135 — SUPER_ADMIN puede desactivar un usuario USER desde /admin", asy
   await loginAsAdmin(page);
 
   // Crear un usuario USER para poder desactivarlo
+  const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const tempEmail = `cp135_temp_${uniqueSuffix}@cuadrantes.test`;
   const createRes = await page.request.post("/api/admin/users", {
     data: {
       name: "CP135 Temp",
-      email: "cp135_temp@cuadrantes.test",
+      email: tempEmail,
       password: "Test1234!",
       globalRole: "USER",
     },
   });
-  const userId: string | null = createRes.ok()
-    ? ((await createRes.json()) as { id: string }).id
-    : null;
+
+  expect(
+    createRes.ok(),
+    `CP-135 setup failed creating user: ${createRes.status()} ${createRes.statusText()}`
+  ).toBeTruthy();
+
+  const createPayload = (await createRes.json()) as { id: string };
+  const userId = createPayload.id;
   await page.goto("/admin");
   await expect(page.locator('[data-testid="admin-tab-users"]')).toBeVisible({
     timeout: 8_000,
   });
 
-  const row = page.locator("tr", { hasText: "cp135_temp@cuadrantes.test" });
+  const row = page.locator("tr", { hasText: tempEmail });
   await expect(row).toBeVisible({ timeout: 5_000 });
   await row.getByRole("button", { name: /Editar/i }).click();
 
@@ -200,11 +207,9 @@ test("CP-135 — SUPER_ADMIN puede desactivar un usuario USER desde /admin", asy
   });
 
   // Limpieza: eliminar el usuario si lo creamos aquí
-  if (userId) {
-    await page.request.patch(`/api/admin/users/${userId}`, {
-      data: { active: false },
-    });
-  }
+  await page.request.patch(`/api/admin/users/${userId}`, {
+    data: { active: false },
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

@@ -7,6 +7,8 @@ export default defineConfig({
   testDir: "./tests/e2e",
   outputDir: "./tests/screenshots",
   fullyParallel: false,
+  // Paralelismo moderado para evitar flakiness por saturación de next dev + SQLite.
+  workers: 2,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: [["list"], ["html", { outputFolder: "tests/report", open: "never" }]],

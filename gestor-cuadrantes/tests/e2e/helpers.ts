@@ -96,3 +96,28 @@ export async function generateScheduleAndWait(page: Page): Promise<void> {
     .catch(() => undefined);
   await page.waitForTimeout(500);
 }
+
+/**
+ * Open ShiftEditor by clicking an actually editable schedule cell.
+ * Retries across multiple cells to avoid flaky clicks on locked/non-interactive cells.
+ */
+export async function openShiftEditorFromEditableCell(page: Page): Promise<void> {
+  const editor = page.locator('[data-testid="shift-editor"]');
+  if (await editor.isVisible({ timeout: 500 }).catch(() => false)) return;
+
+  const cells = page.locator(
+    'td[data-testid^="cell-"]:not([data-locked="true"]):not(:has([data-testid="shift-cell-V"])):not(:has([data-testid="shift-cell-B"]))'
+  );
+  const total = await cells.count();
+  const limit = Math.min(total, 20);
+
+  for (let i = 0; i < limit; i++) {
+    const cell = cells.nth(i);
+    if (!(await cell.isVisible().catch(() => false))) continue;
+    await cell.scrollIntoViewIfNeeded().catch(() => undefined);
+    await cell.click({ timeout: 5_000 }).catch(() => undefined);
+    if (await editor.isVisible({ timeout: 1_500 }).catch(() => false)) return;
+  }
+
+  throw new Error("No se pudo abrir ShiftEditor desde celdas editables");
+}

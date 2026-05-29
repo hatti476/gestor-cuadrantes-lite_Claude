@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { generateScheduleAndWait, loginAsAdmin, screenshotOnFail } from "./helpers";
+import {
+  generateScheduleAndWait,
+  loginAsAdmin,
+  openShiftEditorFromEditableCell,
+  screenshotOnFail,
+} from "./helpers";
 
 // ─── CP-23 — Admin puede cambiar la contraseña de un empleado ─────────────────
 test("CP-23 — Admin puede cambiar la contraseña de un empleado", async ({ page }) => {
@@ -60,10 +65,16 @@ test("CP-24 — Cambio de contraseña valida requisitos", async ({ page }) => {
     // Introducir contraseña débil (< 8 chars)
     await newPwdInput.fill('abc');
     await confirmPwdInput.fill('abc');
+    const weakPwdRes = page.waitForResponse(
+      (r) => r.url().includes("/api/admin/users/") && r.request().method() === "PUT"
+    );
     await confirmPwdInput.press("Enter");
+    expect([400, 422]).toContain((await weakPwdRes).status());
 
-    // Debe aparecer mensaje de error
-    await expect(page.locator("text=inválida").or(page.locator("text=mínimo")).first()).toBeVisible({ timeout: 3_000 });
+    // Debe aparecer mensaje de error en el modal
+    await expect(
+      page.locator("p").filter({ hasText: /contraseña inválida|minimo|mínimo/i }).first()
+    ).toBeVisible({ timeout: 10_000 });
 
     // El modal permanece abierto
     await expect(newPwdInput).toBeVisible();
@@ -78,10 +89,10 @@ test("CP-25 — Turnos MF/TF/NF disponibles en el selector", async ({ page }) =>
   try {
     await loginAsAdmin(page);
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await page.waitForLoadState("networkidle");
 
-    // Abrir ShiftEditor haciendo clic en cualquier celda
-    const cell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
-    await cell.click();
+    // Abrir ShiftEditor desde una celda editable para evitar celdas bloqueadas.
+    await openShiftEditorFromEditableCell(page);
     await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
 
     // Verificar presencia de los 3 tipos especiales

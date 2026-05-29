@@ -143,8 +143,19 @@ test("CP-62 — PROJECT_ADMIN añade un miembro EMPLOYEE a su proyecto", async (
     await page.context().clearCookies();
 
     await loginAsPM(page);
-    await page.goto("/projects");
-    await expect(page).toHaveURL(/\/projects/, { timeout: 8_000 });
+    let openedProjects = false;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await page.goto("/projects", { waitUntil: "domcontentloaded", timeout: 45_000 });
+        await expect(page).toHaveURL(/\/projects/, { timeout: 12_000 });
+        openedProjects = true;
+        break;
+      } catch {
+        if (attempt === 1) throw new Error("No se pudo abrir /projects en CP-62");
+        await page.goto("/", { waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => undefined);
+      }
+    }
+    expect(openedProjects).toBe(true);
 
     const projectRow = page.locator('[data-testid="project-row"]').filter({ hasText: "Equipo Soporte 24h" });
     await expect(projectRow).toBeVisible({ timeout: 8_000 });

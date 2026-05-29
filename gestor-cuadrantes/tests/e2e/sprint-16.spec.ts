@@ -122,7 +122,25 @@ async function selectProjectOnHome(page: Page, project: Project, year?: number, 
     window.dispatchEvent(new Event("activeProjectChanged"));
   }, { id: project.id, name: project.name, region: project.region ?? null });
   await page.reload();
-  await page.waitForSelector('[data-testid="prep-panel"]', { timeout: 10_000 });
+  const prepVisible = await page
+    .waitForSelector('[data-testid="prep-panel"]', { timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!prepVisible) {
+    await page.goto(ROUTES.projects);
+    await page.waitForSelector("[data-testid='projects-table']", { timeout: 15_000 });
+    const targetRow = page.getByTestId("project-row").filter({ hasText: project.name }).first();
+    await expect(targetRow).toBeVisible({ timeout: 8_000 });
+    await targetRow.getByTestId("btn-select-project").click();
+    await page.waitForURL(ROUTES.home, { timeout: 10_000 });
+
+    if (typeof year === "number" && typeof month === "number") {
+      await page.goto(targetHome);
+    }
+  }
+
+  await page.waitForSelector('[data-testid="prep-panel"]', { timeout: 15_000 });
   await page.waitForLoadState("networkidle");
 }
 
