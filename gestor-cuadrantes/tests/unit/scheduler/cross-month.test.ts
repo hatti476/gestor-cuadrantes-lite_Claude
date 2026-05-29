@@ -103,12 +103,6 @@ describe("cross-month — applyCrossMonthNightBlocks", () => {
   });
 
   it("adds 3 post-rest D days for employee with 7 trailing nights", () => {
-    const tail = Array.from({ length: 7 }, (_, i) => ({
-      employeeId: "e2",
-      date: `2026-01-${25 + i}`.padStart(10, "0"),
-      shiftType: "N",
-    }));
-    // Fix dates manually for simplicity
     const tail7 = [
       { employeeId: "e2", date: "2026-01-25", shiftType: "N" },
       { employeeId: "e2", date: "2026-01-26", shiftType: "N" },
@@ -152,8 +146,11 @@ describe("cross-month — applyCrossMonthNightBlocks", () => {
 
 describe("cross-month — applyCrossMonthWeekendPack", () => {
   it("does nothing for empty prevMonthTail", () => {
-    const weekendPlan = new Map<string, any>();
-    const stateMap = new Map<string, any>();
+    const weekendPlan = new Map<string, { mfEmpId: string | null; tfEmpId: string | null }>();
+    const stateMap = new Map<
+      string,
+      { weekendShift: Map<string, "MF" | "TF">; weekShift: Map<string, string> }
+    >();
     applyCrossMonthWeekendPack([], 2026, 2, weekendPlan, stateMap);
     expect(weekendPlan.size).toBe(0);
   });
@@ -166,8 +163,11 @@ describe("cross-month — applyCrossMonthWeekendPack", () => {
     const tail = [
       { employeeId: "e1", date: "2026-03-31", shiftType: "MF" },
     ];
-    const weekendPlan = new Map<string, any>();
-    const stateMap = new Map<string, any>();
+    const weekendPlan = new Map<string, { mfEmpId: string | null; tfEmpId: string | null }>();
+    const stateMap = new Map<
+      string,
+      { weekendShift: Map<string, "MF" | "TF">; weekShift: Map<string, string> }
+    >();
     // April 2026 → last day of March is March 31 = Tuesday → NOT Saturday
     applyCrossMonthWeekendPack(tail, 2026, 4, weekendPlan, stateMap);
     expect(weekendPlan.size).toBe(0);
@@ -179,7 +179,7 @@ describe("cross-month — applyCrossMonthWeekendPack", () => {
       { employeeId: "e1", date: "2026-01-31", shiftType: "MF" },
       { employeeId: "e2", date: "2026-01-31", shiftType: "TF" },
     ];
-    const weekendPlan = new Map<string, any>();
+    const weekendPlan = new Map<string, { mfEmpId: string | null; tfEmpId: string | null }>();
     const e1State = { weekendShift: new Map<string, string>(), weekShift: new Map<string, string>() };
     const e2State = { weekendShift: new Map<string, string>(), weekShift: new Map<string, string>() };
     const stateMap = new Map([["e1", e1State], ["e2", e2State]]);
@@ -189,8 +189,8 @@ describe("cross-month — applyCrossMonthWeekendPack", () => {
     // weekendPlan should have Jan 31 pre-seeded
     const plan = weekendPlan.get("2026-01-31");
     expect(plan).toBeDefined();
-    expect(plan.mfEmpId).toBe("e1");
-    expect(plan.tfEmpId).toBe("e2");
+    expect(plan!.mfEmpId).toBe("e1");
+    expect(plan!.tfEmpId).toBe("e2");
 
     // e1's state should have MF/M for the first week of Feb
     expect(e1State.weekendShift.size).toBeGreaterThan(0);

@@ -91,19 +91,6 @@ async function deleteAssignmentIfExists(
   }
 }
 
-async function clearEmployeeMonth(
-  page: Page,
-  projectId: string,
-  employeeId: string,
-  year: number,
-  month: number
-): Promise<void> {
-  const assignments = await getAssignments(page, projectId, year, month);
-  for (const assignment of assignments.filter((a) => a.employeeId === employeeId)) {
-    const deleteResp = await page.request.delete(`/api/schedules?id=${assignment.id}`);
-    expect([200, 404]).toContain(deleteResp.status());
-  }
-}
 
 async function setShift(page: Page, employeeId: string, date: string, shiftType: string): Promise<void> {
   const response = await page.request.post("/api/schedules", {
@@ -175,12 +162,6 @@ function parseEuroToNumber(value: string): number {
   return Number.parseFloat(normalized);
 }
 
-function calculateExpectedExtraPay(assignments: Assignment[], employeeId: string): number {
-  return assignments
-    .filter((assignment) => assignment.employeeId === employeeId)
-    .reduce((total, assignment) => total + (EXTRA_PAY_RATES[assignment.shiftType] ?? 0), 0);
-}
-
 function isDayWork(shift: string): boolean {
   const normalized = normalizeShift(shift);
   return normalized === "M" || normalized === "T" || normalized === "J";
@@ -202,7 +183,7 @@ function byEmployee(assignments: Assignment[]): Map<string, Assignment[]> {
 // ===========================================================================
 // CP-99 — clic sobre celda V en PrepPanel la elimina
 // ===========================================================================
-test("CP-99 — PrepPanel elimina V al hacer toggle sobre la celda", async ({ page }) => {
+test("CP-99 — PrepPanel elimina V al hacer toggle sobre la celda @smoke", async ({ page }) => {
   try {
     await loginAsAdmin(page);
     const project = await getDefaultProject(page);

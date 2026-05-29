@@ -335,7 +335,7 @@ test("CP-76 — nightRotationOrder se puede reordenar y guardar en /projects", a
 // ===========================================================================
 // CP-77 — Tabla de contadores aparece debajo del grid con totales coherentes
 // ===========================================================================
-test("CP-77 — Tabla de contadores debajo del grid muestra totales correctos", async ({ page }) => {
+test("CP-77 — Tabla de contadores debajo del grid muestra totales correctos @smoke", async ({ page }) => {
   test.setTimeout(90_000);
   try {
     await loginAsRole(page, "super_admin");

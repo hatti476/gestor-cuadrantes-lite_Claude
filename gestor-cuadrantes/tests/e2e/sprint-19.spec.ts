@@ -17,7 +17,7 @@
  * CP-141 — /employees redirige a /admin (backward compatibility)
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import { ROUTES } from "./config";
 import { loginAsAdmin, loginAsPM, loginAsViewer, loginAsTech } from "./helpers";
 
@@ -26,7 +26,7 @@ test.describe.configure({ mode: "serial" });
 // ──────────────────────────────────────────────────────────────────────────────
 // CP-129 — SUPER_ADMIN ve "Administración" en la cabecera
 // ──────────────────────────────────────────────────────────────────────────────
-test("CP-129 — SUPER_ADMIN ve el enlace 'Administración' en la cabecera", async ({
+test("CP-129 — SUPER_ADMIN ve el enlace 'Administración' en la cabecera @smoke", async ({
   page,
 }) => {
   await loginAsAdmin(page);
@@ -74,7 +74,7 @@ test("CP-131 — USER solo ve 'Cuadrante' y 'Ayuda' en la cabecera", async ({
 // ──────────────────────────────────────────────────────────────────────────────
 // CP-132 — /admin redirige a "/" si el usuario no es SUPER_ADMIN
 // ──────────────────────────────────────────────────────────────────────────────
-test("CP-132 — /admin redirige a '/' para no-SUPER_ADMIN (PM)", async ({
+test("CP-132 — /admin redirige a '/' para no-SUPER_ADMIN (PM) @smoke", async ({
   page,
 }) => {
   await loginAsPM(page);
@@ -86,7 +86,7 @@ test("CP-132 — /admin redirige a '/' para no-SUPER_ADMIN (PM)", async ({
 // ──────────────────────────────────────────────────────────────────────────────
 // CP-133 — SUPER_ADMIN puede crear un usuario desde /admin (tab Usuarios)
 // ──────────────────────────────────────────────────────────────────────────────
-test("CP-133 — SUPER_ADMIN puede crear un SUPER_VIEWER desde /admin", async ({
+test("CP-133 — SUPER_ADMIN puede crear un SUPER_VIEWER desde /admin @smoke", async ({
   page,
 }) => {
   await loginAsAdmin(page);
@@ -163,7 +163,7 @@ test("CP-134 — SUPER_ADMIN puede editar el email del usuario creado en CP-133"
 // ──────────────────────────────────────────────────────────────────────────────
 // CP-135 — SUPER_ADMIN puede desactivar un usuario desde /admin
 // ──────────────────────────────────────────────────────────────────────────────
-test("CP-135 — SUPER_ADMIN puede desactivar un usuario USER desde /admin", async ({
+test("CP-135 — SUPER_ADMIN puede desactivar un usuario USER desde /admin @smoke", async ({
   page,
 }) => {
   // Login primero para que el API request tenga sesión
@@ -215,7 +215,7 @@ test("CP-135 — SUPER_ADMIN puede desactivar un usuario USER desde /admin", asy
 // ──────────────────────────────────────────────────────────────────────────────
 // CP-136 — El filtro por rol en la tab Usuarios funciona correctamente
 // ──────────────────────────────────────────────────────────────────────────────
-test("CP-136 — Filtro por rol SUPER_ADMIN muestra solo SUPER_ADMINs", async ({
+test("CP-136 — Filtro por rol SUPER_ADMIN muestra solo SUPER_ADMINs @smoke", async ({
   page,
 }) => {
   await loginAsAdmin(page);
@@ -305,7 +305,7 @@ test("CP-139 — SUPER_VIEWER ve el cuadrante pero no tiene PrepPanel", async ({
 // ──────────────────────────────────────────────────────────────────────────────
 // CP-140 — SUPER_VIEWER no puede editar celdas del cuadrante
 // ──────────────────────────────────────────────────────────────────────────────
-test("CP-140 — SUPER_VIEWER no puede editar celdas (no hay ShiftEditor al hacer clic)", async ({
+test("CP-140 — SUPER_VIEWER no puede editar celdas (no hay ShiftEditor al hacer clic) @smoke", async ({
   page,
 }) => {
   await loginAsViewer(page);

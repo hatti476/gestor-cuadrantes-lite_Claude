@@ -7,7 +7,7 @@ const { admin: ADMIN, tech: TECH } = USERS;
 // ===========================================================================
 // CP-01 — Acceso sin sesión
 // ===========================================================================
-test("CP-01 — Acceso sin sesión redirige a /login", async ({ page }) => {
+test("CP-01 — Acceso sin sesión redirige a /login @smoke", async ({ page }) => {
   try {
     await page.goto("/");
     await expect(page).toHaveURL(/\/login/);
@@ -21,7 +21,7 @@ test("CP-01 — Acceso sin sesión redirige a /login", async ({ page }) => {
 // ===========================================================================
 // CP-02 — Login con credenciales incorrectas
 // ===========================================================================
-test("CP-02 — Login con credenciales incorrectas muestra error", async ({ page }) => {
+test("CP-02 — Login con credenciales incorrectas muestra error @smoke", async ({ page }) => {
   try {
     await page.goto("/login");
     await page.getByLabel("Email").fill("noexiste@test.com");
@@ -40,7 +40,7 @@ test("CP-02 — Login con credenciales incorrectas muestra error", async ({ page
 // ===========================================================================
 // CP-03 — Login admin correcto
 // ===========================================================================
-test("CP-03 — Login admin correcto redirige a / con badge SUPER_ADMIN", async ({ page }) => {
+test("CP-03 — Login admin correcto redirige a / con badge SUPER_ADMIN @smoke", async ({ page }) => {
   try {
     await login(page, ADMIN.email, ADMIN.password);
 
@@ -72,7 +72,7 @@ test("CP-04 — Login técnico correcto muestra badge USER", async ({ page }) =>
 // ===========================================================================
 // CP-05 — Vista del cuadrante: grid con empleados y 31 columnas
 // ===========================================================================
-test("CP-05 — Vista del cuadrante muestra grid de 8 empleados y 31 días", async ({ page }) => {
+test("CP-05 — Vista del cuadrante muestra grid de 8 empleados y 31 días @smoke", async ({ page }) => {
   try {
     await login(page, ADMIN.email, ADMIN.password);
     await expect(page).toHaveURL("/");

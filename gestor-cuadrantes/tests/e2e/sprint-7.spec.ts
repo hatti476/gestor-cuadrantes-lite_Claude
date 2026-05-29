@@ -160,7 +160,7 @@ test("CP-51 — SUPER_ADMIN abre el panel de miembros", async ({ page }) => {
 // ===========================================================================
 // CP-52 — SUPER_ADMIN añade miembro al proyecto
 // ===========================================================================
-test("CP-52 — SUPER_ADMIN añade miembro al proyecto", async ({ page }) => {
+test("CP-52 — SUPER_ADMIN añade miembro al proyecto @smoke", async ({ page }) => {
   const ts = Date.now();
   const projectName = `MembersTest ${ts}`;
 

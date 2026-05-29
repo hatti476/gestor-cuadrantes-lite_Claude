@@ -64,7 +64,7 @@ test("CP-13 — Mes sin datos muestra grid vacío", async ({ page }) => {
 });
 
 // ─── CP-14 ───────────────────────────────────────────────────────────────────
-test("CP-14 — Admin puede asignar un turno", async ({ page }) => {
+test("CP-14 — Admin puede asignar un turno @smoke", async ({ page }) => {
   try {
     await loginAs(page, ADMIN.email, ADMIN.password);
     // Quedarse en Mayo 2026 (tiene empleados y celdas)

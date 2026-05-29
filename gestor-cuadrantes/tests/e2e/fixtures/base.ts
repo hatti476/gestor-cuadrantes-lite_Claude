@@ -8,28 +8,28 @@ export const test = base.extend<{
   viewerPage: Page;
   superViewerPage: Page;
 }>({
-  adminPage: async ({ browser }, use) => {
+  adminPage: async ({ browser }, run) => {
     const page = await browser.newPage();
     await loginAs(page, "super_admin");
-    await use(page);
+    await run(page);
     await page.close();
   },
-  projectAdminPage: async ({ browser }, use) => {
+  projectAdminPage: async ({ browser }, run) => {
     const page = await browser.newPage();
     await loginAs(page, "project_admin");
-    await use(page);
+    await run(page);
     await page.close();
   },
-  viewerPage: async ({ browser }, use) => {
+  viewerPage: async ({ browser }, run) => {
     const page = await browser.newPage();
     await loginAs(page, "viewer");
-    await use(page);
+    await run(page);
     await page.close();
   },
-  superViewerPage: async ({ browser }, use) => {
+  superViewerPage: async ({ browser }, run) => {
     const page = await browser.newPage();
     await loginAs(page, "super_viewer");
-    await use(page);
+    await run(page);
     await page.close();
   },
 });

@@ -11,7 +11,13 @@
  * REGLA: Máximo 2 fins de semana consecutivos por empleado (Sprint 19 BUG-39).
  */
 
-import { normalizeShift, toDateStr, addDays, fromDateStr } from "./date-utils";
+import { toDateStr, addDays, fromDateStr } from "./date-utils";
+
+interface ScheduleEmployee {
+  id: string;
+  rotationOrder: number;
+  shiftPreference?: string | null;
+}
 
 // ─── SECCIÓN: Selección de turno de fin de semana por empleado ─────────────
 

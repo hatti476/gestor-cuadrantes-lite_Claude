@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { isSuperAdmin, canViewProject, canManageProjectMembers } from "@/lib/auth/permissions";
+import { canViewProject, canManageProjectMembers } from "@/lib/auth/permissions";
 
 const VALID_PROJECT_ROLES = ["PROJECT_ADMIN", "EMPLOYEE"] as const;
 

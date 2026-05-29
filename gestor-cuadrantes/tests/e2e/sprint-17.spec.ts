@@ -11,7 +11,6 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
-import { ROUTES } from "./config";
 import { loginAsAdmin } from "./helpers";
 
 test.describe.configure({ mode: "serial" });

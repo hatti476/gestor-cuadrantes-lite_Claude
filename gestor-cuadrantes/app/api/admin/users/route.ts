@@ -9,7 +9,7 @@ import bcrypt from "bcryptjs";
 // GET /api/admin/users — lista todos los usuarios con sus empleados y miembros
 // Solo SUPER_ADMIN
 // ---------------------------------------------------------------------------
-export async function GET(_req: NextRequest) {
+export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   if (!isSuperAdmin(session)) return NextResponse.json({ error: "Prohibido" }, { status: 403 });
@@ -82,6 +82,7 @@ export async function POST(req: NextRequest) {
   if (globalRole === "USER" && (!name || typeof name !== "string" || name.trim().length < 2)) {
     return NextResponse.json({ error: "Nombre requerido (mínimo 2 caracteres)" }, { status: 400 });
   }
+  const safeName = typeof name === "string" ? name.trim() : "";
   if (!password || typeof password !== "string" || password.length < 8) {
     return NextResponse.json({ error: "Contraseña inválida: mínimo 8 caracteres" }, { status: 400 });
   }
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
         role: globalRole,
         employee: {
           create: {
-            name: name.trim(),
+            name: safeName,
             rotationOrder: nextOrder,
             shiftPreference: shiftPreference ?? null,
           },

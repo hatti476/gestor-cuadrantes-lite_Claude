@@ -7,11 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "db:push": "prisma db push",
     "db:seed": "tsx --env-file .env prisma/seed.ts",
-    "test:unit": "vitest run --reporter=verbose",
-    "test:unit:watch": "vitest --reporter=verbose",
-    "test:e2e": "playwright test --reporter=list",
-    "test:e2e:sprint": "playwright test --reporter=list"
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test --grep @smoke",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:sprint": "playwright test --reporter=list",
+    "test:all": "npm run test:unit && npm run test:e2e",
+    "ci:check": "tsc --noEmit && eslint . --max-warnings 0"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",

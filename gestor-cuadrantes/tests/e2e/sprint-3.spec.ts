@@ -109,7 +109,7 @@ test("CP-25 — Turnos MF/TF/NF disponibles en el selector", async ({ page }) =>
 });
 
 // ─── CP-26 — Generación automática del cuadrante ─────────────────────────────
-test("CP-26 — Admin puede generar el cuadrante automáticamente", async ({ page }) => {
+test("CP-26 — Admin puede generar el cuadrante automáticamente @smoke", async ({ page }) => {
   try {
     await loginAsAdmin(page);
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
