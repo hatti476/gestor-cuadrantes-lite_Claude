@@ -4,6 +4,22 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
+## [2.2.0] - 2026-05-29
+
+### Refactoring
+- Eliminado `generate-core.ts`: arquitectura modular cerrada.
+- `generate.ts` consolidado como orquestador puro (`<=300` líneas; actual 108).
+
+### Testing
+- Utilidades anti-flake E2E: `wait-utils`, `auth-utils`, `db-utils`, `retry-utils`, `fixtures/base`.
+- 7 tests flakey migrados a utilidades estables (CP-15, CP-37, CP-38, CP-68, CP-77, CP-115, CP-116).
+
+### CI/CD
+- GitHub Actions: `ci.yml` (quality gates en PR/push a `main`).
+- GitHub Actions: `e2e-smoke.yml` (smoke suite en PR).
+- GitHub Actions: `e2e-nightly.yml` (suite completa nightly).
+- 18 tests etiquetados como `@smoke`.
+
 ## [2.1.0] - 2026-05-27
 
 ### Refactoring
