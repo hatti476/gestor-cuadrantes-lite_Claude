@@ -1,5 +1,38 @@
 # Gestor de Cuadrantes — Contexto de Desarrollo
 
+## Actualizacion Sprint 22 (2026-05-29)
+
+| Campo | Valor |
+|-------|-------|
+| Version | 2.2.0 |
+| Rama activa | `feature/sprint-22-close-refactor-cicd` |
+| Tests unitarios | 404/404 ✅ |
+| Tests E2E | 142/142 ✅ |
+| Tests `@smoke` | 18 ✅ |
+| Estado refactor | `generate-core.ts` eliminado ✅ |
+| CI/CD | 3 workflows activos (`ci.yml`, `e2e-smoke.yml`, `e2e-nightly.yml`) |
+
+### Arquitectura actual de planificacion (`lib/schedules/`)
+```text
+generate.ts (orquestador puro, 108 lineas)
+└── monthly-schedule-engine.ts
+    └── day-loop.ts
+        ├── night-blocks.ts
+        ├── weekend-packs.ts
+        ├── workday-shifts.ts
+        ├── rest-rules.ts
+        ├── coverage.ts
+        ├── shift-transitions.ts
+        ├── cross-month.ts
+        ├── date-utils.ts
+        └── day-loop-context.ts
+```
+
+### Estrategia CI/CD adoptada
+- `ci.yml`: quality gates en PR/push a `main` (TypeScript + ESLint + unit + build), bloquea merge.
+- `e2e-smoke.yml`: smoke suite en PR (`@smoke`), bloquea merge.
+- `e2e-nightly.yml`: suite completa diaria (02:00 UTC) + artefacto HTML + issue automatica en fallo.
+
 ## Descripción
 Aplicación web para gestionar los cuadrantes de turnos de un equipo de soporte 
 técnico 24/7 compuesto por 8 personas (7 técnicos + 1 responsable). Sustituye 
