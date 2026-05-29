@@ -29,11 +29,12 @@ Para cada día del mes (día 1 → día N):
          - soft coverage (objetivo)
 ```
 
-## Arquitectura final de módulos en `lib/schedules/`
+## Arquitectura final de módulos en `lib/schedules/` (post Sprint 22)
 
 ```text
-generate.ts (orquestador, <=300 líneas)
-└── day-loop.ts (loop día-a-día, ~400 líneas)
+generate.ts (orquestador puro, <=300 líneas)
+└── monthly-schedule-engine.ts (engine mensual especializado)
+    ├── day-loop.ts (loop día-a-día modular)
     ├── night-blocks.ts
     ├── weekend-packs.ts
     ├── workday-shifts.ts
@@ -49,8 +50,13 @@ generate.ts (orquestador, <=300 líneas)
   - Validación de entrada.
   - Carga de datos y contexto.
   - Construcción de planes previos.
-  - Llamada única a `executeDayLoop(input)`.
+  - Delegación de la ejecución al engine mensual especializado.
   - Persistencia y respuesta.
+
+- `monthly-schedule-engine.ts`
+  - Implementa la lógica integral de generación mensual.
+  - Orquesta night blocks, continuidad cross-month, cobertura y reparaciones.
+  - Mantiene el contrato estable de `generateMonthSchedule`.
 
 - `day-loop.ts`
   - Iteración estrictamente cronológica del mes.
@@ -61,9 +67,7 @@ generate.ts (orquestador, <=300 líneas)
   - Contrato explícito de entrada/estado/salida del loop.
   - Eliminación de cierres acoplados al scope de `generate.ts`.
 
-## Frontera de modularización
-- Todo helper que hoy depende de variables capturadas del scope de `generateMonthSchedule` debe:
-  - moverse a `day-loop.ts` como función interna al módulo, o
-  - convertirse en función pura con parámetros explícitos (sin captura implícita).
-
-Esto reduce acoplamiento, facilita pruebas unitarias específicas del loop y prepara Sprint 22 para evolución del algoritmo sin degradar legibilidad.
+## Cierre de deuda Sprint 22
+- `generate-core.ts` ha sido eliminado.
+- El punto de entrada estable es `generate.ts`.
+- La lógica de negocio queda consolidada en módulos especializados, con `monthly-schedule-engine.ts` como engine mensual.

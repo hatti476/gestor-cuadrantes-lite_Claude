@@ -1,5 +1,5 @@
 /**
- * lib/schedules/generate.ts  —  Sprint 9
+ * lib/schedules/monthly-schedule-engine.ts  —  Sprint 9
  * Motor de generación de cuadrante según especificación de Fase 2.
  *
  * Reglas (por prioridad):
