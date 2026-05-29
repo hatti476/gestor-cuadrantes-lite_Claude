@@ -345,6 +345,7 @@ function UsersTab({ projects }: { projects: Project[] }) {
     } finally { setLoading(false); }
   }, [showToast]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadUsers(); }, [loadUsers]);
 
   const filtered = users.filter((u) => {
@@ -530,6 +531,7 @@ function ProjectsTab() {
     } catch { /* ignore */ }
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadProjects(); void loadAllUsers(); }, [loadProjects, loadAllUsers]);
 
   async function loadMembers(projectId: string) {

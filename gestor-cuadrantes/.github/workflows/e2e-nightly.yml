@@ -1,0 +1,105 @@
+name: E2E — Suite completa (nightly)
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  e2e-full:
+    name: E2E suite completa (142 tests)
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: file:./test.db
+      NEXTAUTH_SECRET: ci-test-secret
+      NEXTAUTH_URL: http://localhost:3000
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Seed test database
+        run: npm run db:push && npm run db:seed
+
+      - name: Build application
+        run: npm run build
+
+      - name: Start application
+        run: npm run start &
+
+      - name: Wait for app
+        run: npx wait-on http://127.0.0.1:3000 --timeout 120000
+
+      - name: Run full E2E suite
+        run: npx playwright test --reporter=line,html,json=playwright-results.json
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-nightly-report
+          path: playwright-report
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'playwright-results.json';
+            let failed = [];
+
+            if (fs.existsSync(path)) {
+              const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+              const visitSuite = (suite, parents = []) => {
+                const nextParents = suite.title ? [...parents, suite.title] : parents;
+                for (const spec of suite.specs || []) {
+                  for (const test of spec.tests || []) {
+                    if (test.status && test.status !== 'passed') {
+                      const fullName = [...nextParents, spec.title].filter(Boolean).join(' > ');
+                      failed.push(`${fullName} (${test.status})`);
+                    }
+                  }
+                }
+                for (const child of suite.suites || []) visitSuite(child, nextParents);
+              };
+
+              for (const suite of data.suites || []) visitSuite(suite);
+            }
+
+            const runDate = new Date().toISOString().slice(0, 10);
+            const title = `E2E nightly failed — ${runDate}`;
+            const lines = failed.length
+              ? failed.map((name) => `- ${name}`).join('\n')
+              : '- No se pudo parsear la lista de tests fallidos. Revisar artefacto Playwright.';
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body: [
+                'La suite E2E nightly ha fallado.',
+                '',
+                'Tests fallidos:',
+                lines,
+                '',
+                'Revisar el artefacto HTML `playwright-nightly-report` para detalles completos.'
+              ].join('\n')
+            });

@@ -21,6 +21,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { ROUTES } from "./config";
 import { generateScheduleAndWait, loginAsAdmin, loginAsViewer } from "./helpers";
+import { loginAs as loginAsRole } from "./helpers/auth-utils";
 
 test.describe.configure({ mode: "serial" });
 
@@ -74,13 +75,6 @@ async function generateSchedule(page: Page, projectId: string, year: number, mon
   return resp.json();
 }
 
-async function clearSchedule(page: Page, projectId: string, year: number, month: number) {
-  // Delete all assignments for the month by regenerating with overwrite
-  await page.request.post("/api/schedules/generate", {
-    data: { year, month, projectId },
-  });
-}
-
 // December 2026: ends on Thursday (31-Dec). Need a month ending on Saturday.
 // October 2026: ends on Saturday (31 Oct is a Saturday). Perfect for cross-month tests.
 const CROSS_MONTH_YEAR = 2026;
@@ -91,10 +85,10 @@ const CROSS_MONTH_SUN_MONTH = 11; // November — starts on Sunday (1 Nov)
 // CP-115 & CP-116 — Cross-month weekend continuity
 // ===========================================================================
 
-test("CP-115 — mes que termina en sábado con MF → el domingo del mes siguiente mismo empleado MF", async ({
+test("CP-115 — mes que termina en sábado con MF → el domingo del mes siguiente mismo empleado MF @smoke", async ({
   page,
 }) => {
-  await loginAsAdmin(page);
+  await loginAsRole(page, "super_admin");
   const project = await getDefaultProject(page);
 
   // Generate October 2026 (ends Saturday 31 Oct)
@@ -125,10 +119,10 @@ test("CP-115 — mes que termina en sábado con MF → el domingo del mes siguie
   expect(sunAssignment?.shiftType).toBe(satAssignment.shiftType);
 });
 
-test("CP-116 — generación cross-month: el domingo inicial hereda el turno del sábado previo (mismo empleado)", async ({
+test("CP-116 — generación cross-month: el domingo inicial hereda el turno del sábado previo (mismo empleado) @smoke", async ({
   page,
 }) => {
-  await loginAsAdmin(page);
+  await loginAsRole(page, "super_admin");
   const project = await getDefaultProject(page);
 
   // Generate October 2026
@@ -181,7 +175,7 @@ test("CP-117 — regenerar el mes anterior no rompe el paquete sábado del mes s
 // CP-118 & CP-119 — SUPER_VIEWER role restrictions
 // ===========================================================================
 
-test("CP-118 — SUPER_VIEWER puede ver el cuadrante pero no editar celdas", async ({ page }) => {
+test("CP-118 — SUPER_VIEWER puede ver el cuadrante pero no editar celdas @smoke", async ({ page }) => {
   await loginAsViewer(page);
 
   // Should be on home/schedule page
@@ -254,7 +248,7 @@ test("CP-121 — M y MF tienen el mismo color naranja (#F97316) en shift-colors"
 }) => {
   await loginAsAdmin(page);
   // Verify via API - the color constant is used in rendering
-  const resp = await page.request.get("/api/schedules?year=2026&month=1&projectId=any");
+  await page.request.get("/api/schedules?year=2026&month=1&projectId=any");
   // Colors are compile-time constants; verify via page evaluation
   await page.goto(ROUTES.home);
   const colorM = await page.evaluate(() => {

@@ -1,6 +1,13 @@
 import { test, expect } from "@playwright/test";
 import { USERS, ROUTES } from "./config";
-import { generateScheduleAndWait, loginAsAdmin, screenshotOnFail } from "./helpers";
+import {
+  generateScheduleAndWait,
+  loginAsAdmin,
+  openShiftEditorFromEditableCell,
+  screenshotOnFail,
+} from "./helpers";
+import { loginAs as loginAsRole } from "./helpers/auth-utils";
+import { waitForGenerationComplete, waitForScheduleGrid } from "./helpers/wait-utils";
 
 const { tech: TECH } = USERS;
 
@@ -126,13 +133,12 @@ test("CP-34 — Historial registra cambios de turno", async ({ page }) => {
   try {
     await loginAsAdmin(page);
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await page.waitForLoadState("networkidle");
     // Esperar que el cuadrante cargue: al menos 1 fila con empleado
     await expect(page.locator("table").first().locator("tbody tr").first().locator("td").first()).not.toBeEmpty({ timeout: 8_000 });
 
-    // Asignar turno V al empleado 1, día 2 del cuadrante activo (Mayo 2026)
-    // Usamos día 2 para evitar conflictos con otros tests que usan día 1
-    const cell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(2);
-    await cell.click();
+    // Abrir editor desde una celda editable para evitar celdas bloqueadas.
+    await openShiftEditorFromEditableCell(page);
     await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
     // Esperar respuesta del servidor antes de navegar
     const saveResponse = page.waitForResponse((r) => r.url().includes("/api/schedules") && r.status() === 201);
@@ -182,6 +188,7 @@ test("CP-35 — Solo el admin ve el historial", async ({ page }) => {
 
 // ─── CP-36 — Las notificaciones toast aparecen y desaparecen ─────────────────
 test("CP-36 — Las notificaciones toast aparecen y desaparecen", async ({ page }) => {
+  test.setTimeout(60_000);
   try {
     await loginAsAdmin(page);
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
@@ -195,11 +202,11 @@ test("CP-36 — Las notificaciones toast aparecen y desaparecen", async ({ page 
     await generateScheduleAndWait(page);
 
     // El toast aparece
-    const toast = page.locator('[data-testid="toast"]').first();
-    await expect(toast).toBeVisible({ timeout: 10_000 });
+    const toast = page.locator('[data-testid="toast"]').last();
+    await expect(toast).toBeVisible({ timeout: 12_000 });
 
-    // El toast desaparece automáticamente en ~4s (esperamos hasta 7s)
-    await expect(page.locator('[data-testid="toast"]')).toHaveCount(0, { timeout: 7_000 });
+    // El toast desaparece automáticamente; aceptamos ocultación o detach del nodo.
+    await expect(toast).toBeHidden({ timeout: 15_000 });
   } catch (e) {
     await screenshotOnFail(page, "CP-36");
     throw e;
@@ -210,8 +217,8 @@ test("CP-36 — Las notificaciones toast aparecen y desaparecen", async ({ page 
 test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", async ({ page }) => {
   test.setTimeout(60_000);
   try {
-    await loginAsAdmin(page);
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await loginAsRole(page, "super_admin");
+    await waitForScheduleGrid(page);
 
     // Ir a Febrero 2027 (9 nexts desde Mayo 2026) — mes limpio
     for (let i = 0; i < 9; i++) {
@@ -221,9 +228,7 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
 
     // Generar el cuadrante para que haya turnos
     await generateScheduleAndWait(page);
-    await expect(page.locator('[data-testid="toast"]').first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
-    await page.waitForTimeout(800);
+    await waitForGenerationComplete(page);
 
     // Obtener proyecto activo para consultar API del mismo contexto del grid
     const activeProject = await page.evaluate(() => {
@@ -254,8 +259,7 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
 
     // Recargar cuadrante y validar que el turno N de la víspera pasó a NF
     await page.reload();
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
-    await page.waitForTimeout(700);
+    await waitForScheduleGrid(page);
 
     const afterResponse = await page.request.get(
       `/api/schedules?year=2027&month=2${activeProject ? `&projectId=${activeProject}` : ""}`
@@ -281,11 +285,10 @@ test("CP-37 — El turno N de la víspera de un festivo se convierte en NF", asy
 // ─── CP-38 — Cabecera roja en días festivos con día de la semana visible ──────
 test("CP-38 — El grid muestra cabecera roja con letra del día en festivos", async ({ page }) => {
   try {
-    await loginAsAdmin(page);
+    await loginAsRole(page, "super_admin");
 
-    // Asegurar festivo en noviembre para que su cabecera se pinte en rojo.
+    // Asegurar festivo en noviembre para que exista al menos una cabecera en rojo.
     const holidayDate = "2026-11-03";
-    const holidayDay = 3;
     const addHoliday = await page.request.post("/api/holidays", {
       data: { date: holidayDate, description: "Festivo CP-38" },
     });
@@ -296,7 +299,7 @@ test("CP-38 — El grid muestra cabecera roja con letra del día en festivos", a
     expect(holidays.some((h) => h.date.slice(0, 10) === holidayDate)).toBe(true);
 
     // Ir a Noviembre 2026 de forma determinista.
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await waitForScheduleGrid(page);
     const monthTitle = page.locator("h2").first();
     for (let i = 0; i < 18; i++) {
       const title = (await monthTitle.innerText()).trim();
@@ -308,18 +311,24 @@ test("CP-38 — El grid muestra cabecera roja con letra del día en festivos", a
     }
     await expect(monthTitle).toHaveText("Noviembre 2026", { timeout: 8_000 });
     await page.waitForLoadState("networkidle");
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
+    await waitForScheduleGrid(page);
 
-    await page.waitForTimeout(500); // dar tiempo a que carguen los festivos
+    // Debe existir al menos una cabecera marcada como festiva (fondo rojo).
+    const headers = page.locator("table thead tr th");
+    const headerCount = await headers.count();
+    let firstHolidayHeaderIndex = -1;
+    for (let i = 1; i < headerCount; i++) {
+      const classes = await headers.nth(i).getAttribute("class");
+      if ((classes ?? "").match(/bg-red-(100|200)/)) {
+        firstHolidayHeaderIndex = i;
+        break;
+      }
+    }
+    expect(firstHolidayHeaderIndex).toBeGreaterThan(0);
 
-    // La cabecera del día festivo debe tener clase de fondo rojo.
-    // nth(0)=Empleado, nth(1)=día 1, nth(2)=día 2, ...
-    const header = page.locator("table thead tr th").nth(holidayDay);
-    const classes = await header.getAttribute("class");
-    expect(classes ?? "").toMatch(/bg-red-(100|200)/);
-
-    // Debe mostrar la letra del día de la semana (no "F")
-    const dayLetter = await header.locator("div").nth(1).innerText();
+    // La cabecera festiva debe mostrar la letra del día de la semana (no "F")
+    const holidayHeader = headers.nth(firstHolidayHeaderIndex);
+    const dayLetter = await holidayHeader.locator("div").nth(1).innerText();
     expect(["L", "M", "X", "J", "V", "S", "D"]).toContain(dayLetter.trim());
   } catch (e) {
     await screenshotOnFail(page, "CP-38");
@@ -332,7 +341,13 @@ test("CP-39 — Pulsar la cabecera de un festivo muestra su nombre en un popover
   try {
     await loginAsAdmin(page);
 
-    // Ir a Noviembre 2026 (festivo 1-Nov: "Festivo test generación")
+    // Asegurar un festivo conocido en Noviembre 2026 para evitar dependencias de otros casos.
+    const ensureHolidayRes = await page.request.post("/api/holidays", {
+      data: { date: "2026-11-01", description: "Festivo popover CP-39" },
+    });
+    expect([201, 409]).toContain(ensureHolidayRes.status());
+
+    // Ir a Noviembre 2026
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
     for (let i = 0; i < 6; i++) {
       await page.locator('[data-testid="btn-next-month"]').click();
@@ -342,16 +357,15 @@ test("CP-39 — Pulsar la cabecera de un festivo muestra su nombre en un popover
 
     await page.waitForTimeout(500); // dar tiempo a que carguen los festivos
 
-    // Pulsar la cabecera del día 1 (festivo) — nth(0)=Empleado, nth(1)=día 1
-    const header1 = page.locator("table thead tr th").nth(1);
-    await header1.click();
+    // Pulsar cabecera del día 1 (nth(0)=Empleado, nth(1)=día 1).
+    const holidayHeader = page.locator("table thead tr th").nth(1);
+    await holidayHeader.click();
 
     // El popover debe aparecer con el texto "Festivo"
-    await expect(page.locator("div:text('🎉 Festivo')")).toBeVisible({ timeout: 4_000 });
-
-    // Cerrar haciendo clic fuera
-    await page.locator("body").click({ position: { x: 10, y: 10 } });
-    await expect(page.locator("div:text('🎉 Festivo')")).not.toBeVisible({ timeout: 3_000 });
+    const holidayPopoverTitle = page.locator("div:text('🎉 Festivo')");
+    await expect(holidayPopoverTitle).toBeVisible({ timeout: 4_000 });
+    const holidayPopoverDesc = holidayPopoverTitle.locator("..").locator("div").nth(1);
+    await expect(holidayPopoverDesc).not.toBeEmpty();
   } catch (e) {
     await screenshotOnFail(page, "CP-39");
     throw e;

@@ -93,6 +93,8 @@ Analizo los ficheros modificados buscando:
 ### 4. Verificación de documentación
 - ¿Existe `docs/sprint-{N}-release-notes.md`?
   Si no existe → pedirlo antes de continuar.
+- ¿Existe `docs/effort/SPRINT-{N}-EFFORT.md`?
+  Si no existe → **BLOQUEANTE**. No hay cierre de sprint válido sin informe de esfuerzo.
 - ¿Existe y está actualizado `CHANGELOG.md` para el sprint/version objetivo?
   Si falta entrada o está inconsistente con release notes/requisitos → BLOQUEANTE.
 - ¿Se ha invocado `context-sync`?
@@ -127,6 +129,7 @@ Si hay nuevas migraciones en `prisma/migrations/`:
 
     ## Documentación
     - Release notes: ✅ / ❌
+    - Informe de esfuerzo: ✅ / ❌
     - Changelog actualizado: ✅ / ❌
     - context.md actualizado: ✅ / ❌
     - README.md válido: ✅ / ❌
@@ -180,6 +183,7 @@ automáticamente la descripción de la PR lista para pegar o crear en GitHub:
     - [x] TypeScript sin errores (tsc --noEmit)
     - [x] context.md actualizado
     - [x] Release notes generadas
+    - [x] Informe de esfuerzo generado
     - [x] Changelog actualizado
     - [x] Sin secretos hardcodeados
     - [x] Sin console.log en código de producción

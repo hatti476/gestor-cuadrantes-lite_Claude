@@ -1,0 +1,52 @@
+name: E2E — Smoke Tests
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e-smoke:
+    name: E2E smoke suite (tests críticos)
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: file:./test.db
+      NEXTAUTH_SECRET: ci-test-secret
+      NEXTAUTH_URL: http://localhost:3000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Seed test database
+        run: npm run db:push && npm run db:seed
+
+      - name: Build application
+        run: npm run build
+
+      - name: Start application
+        run: npm run start &
+
+      - name: Wait for app
+        run: npx wait-on http://127.0.0.1:3000 --timeout 120000
+
+      - name: Run smoke tests
+        run: npx playwright test --grep @smoke --reporter=line,html
+
+      - name: Upload Playwright HTML report (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-smoke-report
+          path: playwright-report
+          if-no-files-found: ignore

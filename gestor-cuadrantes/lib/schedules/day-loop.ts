@@ -19,11 +19,12 @@
  */
 
 import { evaluateDayCoverage } from "./coverage";
-import { addDays, applyChristmasSpecialRule, applySpecialDayRule, isWeekend, normalizeShift, toDateStr, weekKey } from "./date-utils";
+import { addDays, applyChristmasSpecialRule, isWeekend, normalizeShift, toDateStr, weekKey } from "./date-utils";
 import { isValidShiftType, validateShiftTransition } from "./shift-transitions";
 import { pickWeekendShift } from "./weekend-packs";
 import { pickWorkdayShift } from "./workday-shifts";
-import type { AssignmentEntry, AssignmentMap, CoverageStatus, DayLoopInput, DayLoopOutput, DayLoopState, Employee, ShiftType } from "./day-loop-context";
+import type { CoverageStatus } from "./coverage";
+import type { AssignmentEntry, AssignmentMap, DayLoopInput, DayLoopOutput, DayLoopState, Employee, ShiftType } from "./day-loop-context";
 
 interface EmployeeRuntimeState {
   mCount: number;

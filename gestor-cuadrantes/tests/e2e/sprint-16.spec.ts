@@ -91,19 +91,6 @@ async function deleteAssignmentIfExists(
   }
 }
 
-async function clearEmployeeMonth(
-  page: Page,
-  projectId: string,
-  employeeId: string,
-  year: number,
-  month: number
-): Promise<void> {
-  const assignments = await getAssignments(page, projectId, year, month);
-  for (const assignment of assignments.filter((a) => a.employeeId === employeeId)) {
-    const deleteResp = await page.request.delete(`/api/schedules?id=${assignment.id}`);
-    expect([200, 404]).toContain(deleteResp.status());
-  }
-}
 
 async function setShift(page: Page, employeeId: string, date: string, shiftType: string): Promise<void> {
   const response = await page.request.post("/api/schedules", {
@@ -122,7 +109,25 @@ async function selectProjectOnHome(page: Page, project: Project, year?: number, 
     window.dispatchEvent(new Event("activeProjectChanged"));
   }, { id: project.id, name: project.name, region: project.region ?? null });
   await page.reload();
-  await page.waitForSelector('[data-testid="prep-panel"]', { timeout: 10_000 });
+  const prepVisible = await page
+    .waitForSelector('[data-testid="prep-panel"]', { timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!prepVisible) {
+    await page.goto(ROUTES.projects);
+    await page.waitForSelector("[data-testid='projects-table']", { timeout: 15_000 });
+    const targetRow = page.getByTestId("project-row").filter({ hasText: project.name }).first();
+    await expect(targetRow).toBeVisible({ timeout: 8_000 });
+    await targetRow.getByTestId("btn-select-project").click();
+    await page.waitForURL(ROUTES.home, { timeout: 10_000 });
+
+    if (typeof year === "number" && typeof month === "number") {
+      await page.goto(targetHome);
+    }
+  }
+
+  await page.waitForSelector('[data-testid="prep-panel"]', { timeout: 15_000 });
   await page.waitForLoadState("networkidle");
 }
 
@@ -157,12 +162,6 @@ function parseEuroToNumber(value: string): number {
   return Number.parseFloat(normalized);
 }
 
-function calculateExpectedExtraPay(assignments: Assignment[], employeeId: string): number {
-  return assignments
-    .filter((assignment) => assignment.employeeId === employeeId)
-    .reduce((total, assignment) => total + (EXTRA_PAY_RATES[assignment.shiftType] ?? 0), 0);
-}
-
 function isDayWork(shift: string): boolean {
   const normalized = normalizeShift(shift);
   return normalized === "M" || normalized === "T" || normalized === "J";
@@ -184,7 +183,7 @@ function byEmployee(assignments: Assignment[]): Map<string, Assignment[]> {
 // ===========================================================================
 // CP-99 — clic sobre celda V en PrepPanel la elimina
 // ===========================================================================
-test("CP-99 — PrepPanel elimina V al hacer toggle sobre la celda", async ({ page }) => {
+test("CP-99 — PrepPanel elimina V al hacer toggle sobre la celda @smoke", async ({ page }) => {
   try {
     await loginAsAdmin(page);
     const project = await getDefaultProject(page);

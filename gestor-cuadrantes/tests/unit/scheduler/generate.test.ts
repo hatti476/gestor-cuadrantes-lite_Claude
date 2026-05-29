@@ -1901,7 +1901,6 @@ describe("Sprint 18 Tarea 2: alta concentración de vacaciones", () => {
     expect(day15Warning!.message).toContain("1");
 
     // Emp-7 debe tener algún turno el día 15 (si no está en bloque nocturno/descanso)
-    const day15assignments = result.filter((a) => toDateStr(a.date) === "2026-08-15");
     // Al menos emp-7 no tiene V ese día
     const emp7Day15 = result.find((a) => a.employeeId === "emp-7" && toDateStr(a.date) === "2026-08-15");
     expect(emp7Day15).toBeDefined();
@@ -2324,4 +2323,3 @@ describe("Sprint 19 — Sin huecos: todos los días tienen asignación", () => {
     }
   });
 });
-

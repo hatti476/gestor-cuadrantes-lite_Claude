@@ -32,6 +32,7 @@ el estado REAL del proyecto, especialmente tras completar cada sprint.
 - Si una feature del sprint actual está completa, la marco con ✅ en la lista de Must Have
 - Actualizo el sprint actual en la tabla de sprints
 - Si el sprint cerró, confirmo que existe entrada correspondiente en `CHANGELOG.md`
+- Si el sprint cerró, confirmo que existe `docs/effort/SPRINT-{N}-EFFORT.md` (obligatorio de cierre)
 
 ## Base de conocimiento
 Trabajo siempre sobre `context.md` (raíz), `.github/copilot/context.md`, `CHANGELOG.md`, `README.md` y `docs/REQUIREMENTS.md`.

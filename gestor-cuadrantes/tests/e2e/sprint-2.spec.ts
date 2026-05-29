@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { USERS, ROUTES } from "./config";
-import { login, screenshotOnFail } from "./helpers";
+import { login, openShiftEditorFromEditableCell, screenshotOnFail } from "./helpers";
+import { loginAs as loginAsRole } from "./helpers/auth-utils";
+import { waitForModalClose, waitForScheduleGrid, waitForToast } from "./helpers/wait-utils";
 
 const { admin: ADMIN, tech: TECH } = USERS;
 
@@ -62,21 +64,24 @@ test("CP-13 — Mes sin datos muestra grid vacío", async ({ page }) => {
 });
 
 // ─── CP-14 ───────────────────────────────────────────────────────────────────
-test("CP-14 — Admin puede asignar un turno", async ({ page }) => {
+test("CP-14 — Admin puede asignar un turno @smoke", async ({ page }) => {
   try {
     await loginAs(page, ADMIN.email, ADMIN.password);
     // Quedarse en Mayo 2026 (tiene empleados y celdas)
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await page.waitForLoadState("networkidle");
 
-    // Hacer clic en la primera celda de día (columna 1 = día 1) del primer empleado
-    const firstDayCell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
-    await firstDayCell.click();
-
-    // Debe aparecer el modal ShiftEditor
+    // Abrir ShiftEditor desde una celda realmente editable.
+    await openShiftEditorFromEditableCell(page);
     await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
 
-    // Seleccionar turno M
-    await page.locator('[data-testid="shift-btn-M"]').click();
+    // Seleccionar un turno válido.
+    const shiftBtnJ = page.locator('[data-testid="shift-btn-J"]');
+    if (await shiftBtnJ.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await shiftBtnJ.click();
+    } else {
+      await page.locator('[data-testid="shift-btn-M"]').click();
+    }
 
     // El modal debe cerrarse
     await expect(page.locator('[data-testid="shift-editor"]')).not.toBeVisible({ timeout: 5_000 });
@@ -90,12 +95,15 @@ test("CP-14 — Admin puede asignar un turno", async ({ page }) => {
 test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
   test.setTimeout(60_000);
   try {
-    await loginAs(page, ADMIN.email, ADMIN.password);
-    await page.waitForLoadState("networkidle");
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await loginAsRole(page, "super_admin");
+    await waitForScheduleGrid(page);
 
-    // Buscar una celda editable para evitar fragilidad por celdas bloqueadas
-    const editableCell = page.locator('td[data-testid^="cell-"]:not([data-locked="true"])').first();
+    // Buscar una celda editable que no sea V/B (evita celdas bloqueadas de preparación).
+    const editableCell = page
+      .locator(
+        `td[data-testid^="cell-"]:not([data-locked="true"]):not(:has([data-testid="shift-cell-V"])):not(:has([data-testid="shift-cell-B"]))`
+      )
+      .first();
     await expect(editableCell).toBeVisible({ timeout: 8_000 });
     const targetCellTestId = await editableCell.getAttribute("data-testid");
     expect(targetCellTestId).toBeTruthy();
@@ -112,7 +120,7 @@ test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
     expect([200, 201]).toContain(seedResp.status());
 
     await page.reload();
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await waitForScheduleGrid(page);
 
     const targetCell = page.locator(`[data-testid="${targetCellTestId}"]`);
     await targetCell.scrollIntoViewIfNeeded();
@@ -125,19 +133,27 @@ test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
     // Debe aparecer el modal
     await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
 
-    // Seleccionar turno T (diferente)
+    // Seleccionar un turno diferente al actual para forzar cambio real.
     const editor = page.locator('[data-testid="shift-editor"]');
-    const shiftBtnT = page.locator('[data-testid="shift-btn-T"]');
-    await expect(shiftBtnT).toBeVisible({ timeout: 5_000 });
-    await expect(shiftBtnT).toBeEnabled({ timeout: 5_000 });
-    await shiftBtnT.click();
+    const useMorningTarget = shiftBefore === "shift-cell-T" || shiftBefore === "shift-cell-TF";
+    const targetShiftButton = useMorningTarget
+      ? page.locator('[data-testid="shift-btn-M"]')
+      : page.locator('[data-testid="shift-btn-T"]');
+    const expectedPersistedShiftTypes = useMorningTarget ? ["M", "MF"] : ["T", "TF"];
+    const expectedShiftCellTestIds = useMorningTarget
+      ? ["shift-cell-M", "shift-cell-MF"]
+      : ["shift-cell-T", "shift-cell-TF"];
+
+    await expect(targetShiftButton).toBeVisible({ timeout: 5_000 });
+    await expect(targetShiftButton).toBeEnabled({ timeout: 5_000 });
+    await targetShiftButton.click();
 
     // Si aparece advertencia ET, confirmar para completar el cambio de turno.
     const etWarningConfirm = page.locator('[data-testid="btn-confirm-et-warning"]');
     if (await etWarningConfirm.isVisible({ timeout: 1_000 }).catch(() => false)) {
       await etWarningConfirm.click();
     }
-    await page.waitForTimeout(400);
+    await waitForToast(page, "", { timeout: 8_000 });
 
     // Verificar persistencia por API (más robusto en paralelo que esperar cierre del modal).
     const [yearStr, monthStr] = date.split("-");
@@ -152,7 +168,7 @@ test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
       (a) => a.employeeId === employeeId && a.date.slice(0, 10) === date
     );
     expect(persisted).toBeTruthy();
-    expect(["T", "TF", "MF"]).toContain(persisted?.shiftType);
+    expect(expectedPersistedShiftTypes).toContain(persisted?.shiftType);
 
     // Validar que la celda refleja un turno válido tras guardar
     const shiftAfter = await targetCell
@@ -160,7 +176,7 @@ test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
       .getAttribute("data-testid")
       .catch(() => null);
     expect(shiftAfter).not.toBeNull();
-    expect(["shift-cell-T", "shift-cell-TF", "shift-cell-MF"]).toContain(shiftAfter);
+    expect(expectedShiftCellTestIds).toContain(shiftAfter);
     if (shiftBefore) {
       expect(shiftAfter).not.toBe(shiftBefore);
     }
@@ -168,7 +184,7 @@ test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
     // Cerrar modal si permanece abierto para no contaminar casos siguientes
     if (await editor.isVisible().catch(() => false)) {
       await page.keyboard.press("Escape");
-      await expect(editor).not.toBeVisible({ timeout: 5_000 });
+      await waitForModalClose(page);
     }
   } catch (e) {
     await screenshotOnFail(page, "CP-15");

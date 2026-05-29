@@ -10,6 +10,8 @@
 
 import { test, expect } from "@playwright/test";
 import { loginAsAdmin, screenshotOnFail } from "./helpers";
+import { loginAs as loginAsRole } from "./helpers/auth-utils";
+import { waitForGenerationComplete, waitForScheduleGrid } from "./helpers/wait-utils";
 
 /** Navigate n months forward and wait for the grid to load (with or without data) */
 async function navigateMonths(page: Parameters<typeof loginAsAdmin>[0], n: number) {
@@ -42,9 +44,7 @@ async function generateAndWait(page: Parameters<typeof loginAsAdmin>[0]) {
     (r) => r.url().includes("/api/schedules") && !r.url().includes("/generate"),
     { timeout: 10_000 }
   );
-  // Wait for grid to update with new data
-  await page.waitForTimeout(800);
-  await expect(page.locator('[data-testid^="shift-cell-"]').first()).toBeVisible({ timeout: 8_000 });
+  await waitForGenerationComplete(page);
 }
 
 // ─── CP-67 — La generación respeta turnos manuales previos ───────────────────
@@ -88,15 +88,15 @@ test("CP-67 — Generar cuadrante respeta turnos manuales previos", async ({ pag
 test("CP-68 — Generar cuadrante respeta vacaciones introducidas", async ({ page }) => {
   test.setTimeout(90_000);
   try {
-    await loginAsAdmin(page);
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    await loginAsRole(page, "super_admin");
+    await waitForScheduleGrid(page);
 
     // Navegar a Septiembre 2026 (4 nexts desde Mayo)
     await navigateMonths(page, 4);
 
     // Generar primero para que aparezcan empleados
     await generateAndWait(page);
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 5_000 });
+    await waitForScheduleGrid(page);
 
     // Asignar turno "B" (baja) al primer empleado en el día 3 (dinámico al mes actual mostrado)
     const firstRowDayCells = page.locator("table").first().locator("tbody tr").first().locator('td[data-testid^="cell-"]');

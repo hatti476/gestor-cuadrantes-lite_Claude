@@ -1,5 +1,5 @@
 /**
- * lib/schedules/generate.ts  —  Sprint 9
+ * lib/schedules/monthly-schedule-engine.ts  —  Sprint 9
  * Motor de generación de cuadrante según especificación de Fase 2.
  *
  * Reglas (por prioridad):
@@ -60,7 +60,7 @@ export interface GeneratedAssignment {
 
 // GenerationWarning, CoverageWarning, GenerateMonthScheduleOptions → see coverage.ts
 export type { GenerationWarning, CoverageWarning, GenerateMonthScheduleOptions } from "./coverage";
-import type { GenerationWarning, CoverageWarning, GenerateMonthScheduleOptions } from "./coverage";
+import type { GenerateMonthScheduleOptions } from "./coverage";
 
 /**
  * Previous-month tail data for continuity check.
@@ -1174,7 +1174,6 @@ export function generateMonthSchedule(
     const key = `${employeeId}|${toDateStr(date)}`;
     const assignment = resultByKey.get(key);
     if (!assignment) return;
-    const prevShift = assignment.shiftType;
     assignment.shiftType = shiftType;
     generatedShiftByKey.set(key, shiftType);
 

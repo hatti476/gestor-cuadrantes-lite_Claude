@@ -183,16 +183,6 @@ test("CP-93 — carga automática pre-rellena festivos del mes con mock", async 
   try {
     await loginAsAdmin(page);
 
-    // Asegurarse de que el proyecto activo tiene región (de CP-90)
-    await page.goto(ROUTES.projects);
-    await page.waitForSelector("[data-testid='projects-table']");
-
-    // Obtener el id del primer proyecto (que tiene Madrid de CP-90)
-    const projectsRes = await page.request.get("/api/projects");
-    const projects: { id: string; region: string | null }[] = await projectsRes.json();
-    const projectWithRegion = projects.find((p) => p.region === "Madrid");
-    expect(projectWithRegion, "Debe existir un proyecto con región Madrid (de CP-90)").toBeTruthy();
-
     // Mock de /api/holidays/public para devolver un festivo del mes actual
     await page.route("/api/holidays/public*", async (route) => {
       await route.fulfill({
@@ -205,16 +195,41 @@ test("CP-93 — carga automática pre-rellena festivos del mes con mock", async 
       });
     });
 
-    // Activar el proyecto con Madrid
-    await page.evaluate((id: string) => {
-      localStorage.setItem(
-        "activeProject",
-        JSON.stringify({ id, name: "Proyecto Test", region: "Madrid" })
-      );
-    }, projectWithRegion!.id);
+    // Preparar un proyecto con región Madrid desde la UI para que el caso sea autosuficiente.
+    await page.goto(ROUTES.projects);
+    await page.waitForSelector("[data-testid='projects-table']");
+
+    await page.getByTestId("btn-edit-project").first().click();
+    const regionSelect = page.getByTestId("select-region");
+    await expect(regionSelect).toBeVisible();
+    await regionSelect.selectOption("Madrid");
+
+    const updateProjectPromise = page.waitForResponse(
+      (r) => r.url().includes("/api/projects/") && r.request().method() === "PUT" && r.status() === 200,
+      { timeout: 15_000 }
+    );
+    await page.getByRole("button", { name: "Guardar" }).click();
+    await updateProjectPromise;
+    await expect(page.getByRole("button", { name: "Guardar" })).toHaveCount(0);
+    await page.waitForSelector("[data-testid='projects-table']");
+
+    const rows = await page.getByTestId("project-row").all();
+    let selected = false;
+    for (const row of rows) {
+      const badge = row.getByTestId("region-badge");
+      if (await badge.isVisible().catch(() => false)) {
+        const text = (await badge.textContent())?.trim();
+        if (text === "Madrid") {
+          await row.getByTestId("btn-select-project").click();
+          selected = true;
+          break;
+        }
+      }
+    }
+    expect(selected, "Se debe seleccionar un proyecto con región Madrid").toBe(true);
+    await page.waitForURL(ROUTES.home, { timeout: 10_000 });
 
     const responsePromise = page.waitForResponse(/\/api\/holidays\/public/, { timeout: 10_000 }).catch(() => null);
-    await page.goto(ROUTES.home);
     await page.waitForSelector("[data-testid='prep-panel']");
     const response = await responsePromise;
     if (response) {

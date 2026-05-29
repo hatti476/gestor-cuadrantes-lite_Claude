@@ -1,5 +1,33 @@
 # Copilot Workspace Instructions — Gestor de Cuadrantes
 
+## Estado actual (Sprint 22 cerrado, 2026-05-29)
+- Version: **2.2.0**
+- Rama de trabajo: `feature/sprint-22-close-refactor-cicd`
+- Baseline validado: **404/404 unit** y **142/142 E2E**
+- Refactor cerrado: `generate-core.ts` eliminado
+- `generate.ts` consolidado como orquestador puro (108 lineas)
+- Suite E2E endurecida con helpers anti-flake y 18 tests `@smoke`
+- CI/CD activo con tres workflows:
+  - `ci.yml` (quality gates PR/push)
+  - `e2e-smoke.yml` (PR smoke, bloquea merge)
+  - `e2e-nightly.yml` (suite completa nocturna + issue automatica)
+
+## Arquitectura vigente de scheduler
+```text
+generate.ts
+└── monthly-schedule-engine.ts
+    └── day-loop.ts
+        ├── night-blocks.ts
+        ├── weekend-packs.ts
+        ├── workday-shifts.ts
+        ├── rest-rules.ts
+        ├── coverage.ts
+        ├── shift-transitions.ts
+        ├── cross-month.ts
+        ├── date-utils.ts
+        └── day-loop-context.ts
+```
+
 ## Contexto del Proyecto
 Aplicación web para gestionar cuadrantes de turnos de un equipo de soporte 24/7.
 Sustituye un Excel manual. Genera cuadrantes mensuales automáticamente según 
