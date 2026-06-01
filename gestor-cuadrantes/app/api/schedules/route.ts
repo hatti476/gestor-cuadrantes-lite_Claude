@@ -44,6 +44,22 @@ export async function GET(req: NextRequest) {
     effectiveProjectId = memberProjectIds[0] ?? null;
   }
 
+  const canEditSchedule = effectiveProjectId
+    ? isSuperAdmin(session) || isProjectAdmin(session, effectiveProjectId)
+    : isSuperAdmin(session);
+
+  const scheduleRecord = effectiveProjectId
+    ? await prisma.schedule.findFirst({
+        where: { year, month, projectId: effectiveProjectId },
+        select: { published: true },
+      })
+    : null;
+  const published = scheduleRecord?.published ?? false;
+
+  if (!canEditSchedule && !published) {
+    return NextResponse.json({ assignments: [], monthStatus: "unpublished", published: false });
+  }
+
   const assignments = await prisma.shiftAssignment.findMany({
     where: {
       date: { gte: start, lt: end },
@@ -58,7 +74,7 @@ export async function GET(req: NextRequest) {
   });
 
   const monthStatus = computeMonthStatus(assignments);
-  return NextResponse.json({ assignments, monthStatus });
+  return NextResponse.json({ assignments, monthStatus, published });
 }
 
 // ---------------------------------------------------------------------------

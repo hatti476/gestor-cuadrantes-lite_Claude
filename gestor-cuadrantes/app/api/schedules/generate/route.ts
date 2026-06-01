@@ -143,5 +143,14 @@ export async function POST(req: NextRequest) {
     })
   );
 
+  const scheduleProjectId = projectId ?? employees[0]?.projectId ?? null;
+  if (scheduleProjectId) {
+    await prisma.schedule.upsert({
+      where: { year_month_projectId: { year, month, projectId: scheduleProjectId } },
+      create: { year, month, projectId: scheduleProjectId },
+      update: { generatedAt: new Date() },
+    });
+  }
+
   return NextResponse.json({ created: toCreate.length, warnings, coverageWarnings });
 }
