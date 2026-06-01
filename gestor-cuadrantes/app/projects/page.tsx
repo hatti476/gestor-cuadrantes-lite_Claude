@@ -129,16 +129,27 @@ function MembersPanel({
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRole, setSelectedRole] = useState<"PROJECT_ADMIN" | "EMPLOYEE">("EMPLOYEE");
   const [adding, setAdding] = useState(false);
+  const [removingUserIds, setRemovingUserIds] = useState<string[]>([]);
   const { showToast } = useToast();
 
+  const refreshMembers = useCallback(async () => {
+    const res = await fetch(`/api/projects/${project.id}/members`);
+    if (!res.ok) return;
+    const updated: ProjectMember[] = await res.json();
+    setMembers(updated);
+  }, [project.id]);
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshMembers();
+
     fetch("/api/employees")
       .then((r) => (r.ok ? r.json() : []))
       .then((emps: { userId: string; user: { id: string; email: string } }[]) => {
         setAllUsers(emps.map((e) => ({ id: e.user.id, email: e.user.email })));
       })
       .catch(() => {});
-  }, []);
+  }, [refreshMembers]);
 
   async function handleAdd() {
     if (!selectedUserId) return;
@@ -161,6 +172,7 @@ function MembersPanel({
       });
       setSelectedUserId("");
       showToast("Miembro añadido", "success");
+      await refreshMembers();
     } else {
       const err = await res.json().catch(() => ({}));
       showToast(err.error ?? "Error al añadir miembro", "error");
@@ -169,15 +181,28 @@ function MembersPanel({
   }
 
   async function handleRemove(userId: string) {
+    if (removingUserIds.includes(userId)) return;
+
+    setRemovingUserIds((prev) => [...prev, userId]);
+    setMembers((prev) => prev.filter((m) => m.userId !== userId));
+
     const res = await fetch(`/api/projects/${project.id}/members/${userId}`, {
       method: "DELETE",
     });
-    if (res.ok) {
-      setMembers((prev) => prev.filter((m) => m.userId !== userId));
-      showToast("Miembro eliminado", "success");
+
+    if (res.ok || res.status === 404) {
+      await refreshMembers();
+      if (res.ok) {
+        showToast("Miembro eliminado", "success");
+      } else {
+        showToast("El miembro ya no existe. Lista actualizada", "warning");
+      }
     } else {
+      await refreshMembers();
       showToast("Error al eliminar miembro", "error");
     }
+
+    setRemovingUserIds((prev) => prev.filter((id) => id !== userId));
   }
 
   const nonMembers = allUsers.filter((u) => !members.some((m) => m.userId === u.id));
@@ -226,10 +251,11 @@ function MembersPanel({
                 </div>
                 <button
                   onClick={() => handleRemove(m.userId)}
+                  disabled={removingUserIds.includes(m.userId)}
                   className="text-xs text-red-500 hover:text-red-700"
                   data-testid="btn-remove-member"
                 >
-                  Eliminar
+                  {removingUserIds.includes(m.userId) ? "Eliminando..." : "Eliminar"}
                 </button>
               </div>
             ))
