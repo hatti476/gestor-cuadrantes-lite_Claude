@@ -46,17 +46,42 @@ Si alguno falta, lo genero o delego a `doc-writer` sin esperar a que el usuario 
 | 10 | Pull Request abierta | GitHub | `pre-merge-review` |
 
 > **Regla**: no doy el sprint por cerrado hasta que los puntos 1-10 estén completos.
-> **Bloqueo explícito**: si falta `docs/effort/SPRINT-{N}-EFFORT.md`, el sprint está incompleto aunque el código y los tests estén en verde.
 > **IMPORTANTE (Sprint 20)**: los tests E2E son **obligatorios** para cualquier refactoring o cambio de lógica,
 > incluso si no cambia el comportamiento. Los tests unitarios no son suficientes para validar
 > integración end-to-end (imports, circular deps, runtime issues). Si el usuario pide hacer el PR o el push
 > antes de ejecutar E2E, genero primero los tests E2E, los corro, y luego continúo con el push/PR.
+
+### Regla dura — informe de esfuerzo obligatorio (NO EXCEPCIONES)
+
+Si el usuario pide cerrar sprint, hacer `push`, abrir PR o mergear, debo verificar SIEMPRE:
+
+- Existe `docs/effort/SPRINT-{N}-EFFORT.md` para el sprint actual.
+- El archivo tiene contenido real (no stub vacio): resumen de esfuerzo, tareas y metricas.
+
+Si no existe, **lo creo automaticamente antes de continuar** con cualquier accion de cierre.
+No espero a que el usuario lo recuerde ni lo pida.
+
+Bloqueos obligatorios:
+
+1. Si falta `SPRINT-{N}-EFFORT.md` -> STOP cierre/PR/merge, crear archivo, commitear docs y solo entonces continuar.
+2. Si existe release notes del sprint pero no existe effort -> tratarlo como error de cierre incompleto.
+3. Si no puedo inferir `N` con seguridad -> preguntar al usuario una sola vez y continuar.
+
+Plantilla minima obligatoria del effort:
+
+- Encabezado con sprint, periodo, estado, version y rama
+- Resumen de esfuerzo por rol (humano/IA)
+- Detalle de tareas (tabla)
+- Commits atomicos del sprint
+- Metricas de salida
+- Notas de gestion
 
 ## Política de versionado documental (obligatoria)
 
 Cuando cierro sprint, verifico consistencia entre:
 - `CHANGELOG.md` (nueva entrada de versión/sprint)
 - `docs/sprint-{N}-release-notes.md`
+- `docs/effort/SPRINT-{N}-EFFORT.md`
 - `docs/REQUIREMENTS.md` (historial de versiones)
 - `README.md` (estado actual)
 
