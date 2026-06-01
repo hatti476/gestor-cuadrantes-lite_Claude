@@ -11,12 +11,56 @@
 Sprint 23 focused on **publication control** for scheduled months and critical **bug fixes** affecting grid layout and night block rotation. The feature allows SUPER_ADMIN and PROJECT_ADMIN to control which months are visible to read-only users, implementing RF-20 requirements fully.
 
 **Key Metrics:**
-- **Commits**: 8 granular commits (feature + test + docs)
+- **Commits**: 8 commits base + addendum de estabilizacion
 - **Unit Tests**: 419/419 passing (12 suites)
 - **E2E Smoke**: 22/22 passing
 - **New Requirements**: RF-20 (Schedule publication) fully documented
 - **Build**: ✅ Production build OK
 - **CI Checks**: ✅ TypeScript + ESLint OK
+
+---
+
+## Addendum — Critical Stabilization (2026-06-01)
+
+Sprint 23 continued in stabilization mode to address three critical QA findings.
+
+### HOTFIX-23-A: Cross-project holes during generation ✅
+- Root cause: generation pre-read considered assignments from other projects for the same employee, which could lock days incorrectly.
+- Fix: project scoping enforced for month assignments and previous-month tail before calling the scheduler.
+- Files:
+  - `app/api/schedules/generate/route.ts`
+  - `lib/schedules/generation-scoping.ts`
+- Regression coverage:
+  - Unit: `tests/unit/schedules/generation-scoping.test.ts`
+  - E2E: `tests/e2e/sprint-23.spec.ts` (CP-147)
+
+### HOTFIX-23-B: Logout stuck on loading ✅
+- Root cause: direct signOut redirect path could leave UI in an uncertain transition in some states.
+- Fix: explicit async logout flow with `redirect: false`, client navigation, and disabled state while completing sign-out.
+- File:
+  - `components/layout/header.tsx`
+- Regression coverage:
+  - E2E: `tests/e2e/sprint-23.spec.ts` (CP-148)
+
+### HOTFIX-23-C: Password-change accessibility for SUPER_ADMIN ✅
+- Root cause: password change existed only inside edit modal flow and was not obvious in table operations.
+- Fix: added direct "Contraseña" action button per user row in admin table.
+- Files:
+  - `app/admin/page.tsx`
+  - `tests/e2e/sprint-19.spec.ts` (CP-142)
+
+### HOTFIX-23-D: Empty trailing area after day 31 in grid ✅
+- Root cause: grid container used full width (`w-full`) even when table content ended at the last day column.
+- Fix: container now uses intrinsic width (`inline-block max-w-full`) so it ends exactly with the month columns.
+- Files:
+  - `components/schedule/schedule-grid.tsx`
+
+### Validation snapshot (hotfixes)
+- `npm run ci:check` ✅
+- `npm run test:unit -- tests/unit/schedules/generation-scoping.test.ts` ✅
+- `npm run test:e2e -- tests/e2e/sprint-23.spec.ts --grep "CP-147|CP-148"` ✅
+- `npm run test:e2e -- tests/e2e/sprint-19.spec.ts --grep "CP-142"` ✅
+- Manual UI verification: grid ends at day 31 without trailing empty block ✅
 
 ---
 

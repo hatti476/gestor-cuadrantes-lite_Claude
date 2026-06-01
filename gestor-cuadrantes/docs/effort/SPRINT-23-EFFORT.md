@@ -80,3 +80,32 @@
 - El principal sobrecoste se concentro en la estabilizacion de CP-146 por dependencia de estado entre tests smoke.
 - La funcionalidad de publicacion queda cerrada de extremo a extremo (schema, permisos, API, UI, tests y docs).
 - Sprint 23 termina con validacion completa en local y merge en main sin regresiones abiertas.
+
+---
+
+## Addendum de esfuerzo — Estabilizacion critica (01/06/2026)
+
+| Rol | Tipo | Tiempo estimado | Tareas |
+|-----|------|-----------------|--------|
+| Product Owner / PM (usuario) | Humano | ~0,5 h | Reporte y priorizacion de bugs criticos |
+| Dev Agent | IA | ~4,0 h equiv. | Fix de generacion por proyecto, fix logout robusto, mejora UX cambio de contrasena, ajuste de ancho final del grid |
+| QA/Testing Agent | IA | ~2,0 h equiv. | Nuevos tests CP-142/147/148 + revalidacion focalizada |
+| Doc Agent | IA | ~1,0 h equiv. | Actualizacion de release notes, analysis y este informe |
+
+**Total adicional IA estimado**: ~7,0 h equiv.
+
+### Entregables del addendum
+- `app/api/schedules/generate/route.ts`: scoping por proyecto en prelecturas de generacion.
+- `lib/schedules/generation-scoping.ts`: helper reusable de aislamiento por proyecto.
+- `components/layout/header.tsx`: flujo de logout robusto con estado de carga y navegacion explicita.
+- `components/schedule/schedule-grid.tsx`: eliminacion del bloque visual vacio tras el ultimo dia del mes.
+- `app/admin/page.tsx`: accion directa "Contrasena" en tabla de usuarios.
+- `tests/unit/schedules/generation-scoping.test.ts`: cobertura unitaria nueva.
+- `tests/e2e/sprint-23.spec.ts`: CP-147 y CP-148.
+- `tests/e2e/sprint-19.spec.ts`: CP-142.
+
+### Validacion del addendum
+- `npm run ci:check` ✅
+- `npm run test:unit -- tests/unit/schedules/generation-scoping.test.ts` ✅
+- `npm run test:e2e -- tests/e2e/sprint-23.spec.ts --grep "CP-147|CP-148"` ✅
+- `npm run test:e2e -- tests/e2e/sprint-19.spec.ts --grep "CP-142"` ✅
