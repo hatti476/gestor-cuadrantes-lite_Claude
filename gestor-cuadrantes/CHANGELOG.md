@@ -4,6 +4,23 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
+## [2.3.0] - 2026-06-01
+
+### Added
+- Publicación de cuadrantes por mes/proyecto con persistencia en `Schedule` (`published`, `publishedAt`, `publishedBy`).
+- Endpoint `PATCH /api/schedules/publish` con validación, autorización e idempotencia.
+- Pruebas E2E Sprint 23 (`CP-143` a `CP-146`) y tests unitarios de permisos para publicación.
+
+### Changed
+- `GET /api/schedules` ahora aplica gating de publicación para usuarios de solo lectura y devuelve `monthStatus: "unpublished"` cuando corresponde.
+- `POST /api/schedules/generate` crea/actualiza el registro `Schedule` para el mes/proyecto generado.
+- UI del cuadrante: badge de publicación, acción publicar/despublicar y mensaje "Cuadrante no disponible aún" en meses no publicados para perfiles read-only.
+
+### Fixed
+- Estabilidad de smoke E2E en flujo de visibilidad read-only (CP-146) evitando dependencias de estado compartido entre pruebas.
+- Integridad del bloque nocturno de 7 días en generación mensual (TASK-01).
+- Layout del grid en pantallas ultrawide con ancho intrínseco y celdas cuadradas (TASK-02).
+
 ## [2.2.0] - 2026-05-29
 
 ### Refactoring

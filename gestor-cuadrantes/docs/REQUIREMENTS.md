@@ -1,7 +1,7 @@
 # Documento de Requisitos — Gestor de Cuadrantes
 
-**Versión**: 2.2.0 (Sprint 22 — cierre de sprint)  
-**Última actualización**: 29/05/2026  
+**Versión**: 2.3.0 (Sprint 23 — cierre de sprint)  
+**Última actualización**: 01/06/2026  
 **Estado**: Vivo — se actualiza al cierre de cada sprint
 
 ---
@@ -297,6 +297,21 @@ El **Gestor de Cuadrantes** es una aplicación web para la planificación y gest
 
 ---
 
+### RF-20 — Publicación de cuadrantes por mes/proyecto
+
+| ID | Descripción | Sprint | Estado |
+|----|-------------|--------|--------|
+| RF-20.1 | El sistema persiste el estado de publicación del mes por proyecto (`Schedule.published`, `publishedAt`, `publishedBy`) | 23 | ✅ |
+| RF-20.2 | La entidad `Schedule` es única por `(year, month, projectId)` y usa `id` autoincremental | 23 | ✅ |
+| RF-20.3 | Solo `SUPER_ADMIN` y `PROJECT_ADMIN` del proyecto activo pueden publicar/despublicar un mes | 23 | ✅ |
+| RF-20.4 | Existe endpoint `PATCH /api/schedules/publish` idempotente para alternar publicación/despublicación | 23 | ✅ |
+| RF-20.5 | `GET /api/schedules` devuelve `published` y, para usuarios de solo lectura en mes no publicado, responde `monthStatus = "unpublished"` y `assignments = []` | 23 | ✅ |
+| RF-20.6 | El botón de publicar/despublicar y el badge de estado son visibles solo para perfiles con permisos de edición | 23 | ✅ |
+| RF-20.7 | Un usuario de solo lectura (`USER`/`SUPER_VIEWER`) ve el mensaje "Cuadrante no disponible aún" cuando el mes no está publicado | 23 | ✅ |
+| RF-20.8 | Al generar un mes se crea/actualiza su registro `Schedule` en estado no publicado por defecto | 23 | ✅ |
+
+---
+
 ### RF-16 — Cobertura mínima garantizada por turno
 
 | ID | Descripción | Sprint | Estado |
@@ -368,7 +383,7 @@ ProjectMember   — id, projectId (→Project), userId (→User), role (PROJECT_
 ShiftAssignment — id, employeeId (→Employee), date (UTC midnight), shiftType, manual (Boolean, default false)
 ShiftChangeLog  — id, employeeId, date, oldShift?, newShift, changedBy, changedAt
 Holiday         — id, date (UTC midnight), description, year
-Schedule        — id, month, year (registro de última generación)
+Schedule        — id, year, month, projectId, published, publishedAt?, publishedBy? (estado de publicación por mes/proyecto)
 ```
 
 ### Restricciones de integridad
@@ -376,6 +391,7 @@ Schedule        — id, month, year (registro de última generación)
 - `ShiftAssignment`: único por `(employeeId, date)`
 - `Holiday`: único por `date`
 - `ProjectMember`: único por `(projectId, userId)`
+- `Schedule`: único por `(year, month, projectId)`
 - `Employee.userId`: único (relación 1:1 con User)
 - Cascada: al borrar `Employee` se borran sus `ShiftAssignment` y `ShiftChangeLog`
 - Cascada: al borrar `Project` se borran sus `ProjectMember`
@@ -390,6 +406,7 @@ Schedule        — id, month, year (registro de última generación)
 | POST | `/api/schedules` | SUPER_ADMIN / PROJECT_ADMIN | Crear/actualizar turno individual |
 | DELETE | `/api/schedules` | SUPER_ADMIN / PROJECT_ADMIN | Eliminar turno |
 | POST | `/api/schedules/generate` | SUPER_ADMIN / PROJECT_ADMIN | Generar cuadrante automático (scope por proyecto) |
+| PATCH | `/api/schedules/publish` | SUPER_ADMIN / PROJECT_ADMIN | Publicar o despublicar el mes activo del proyecto |
 | GET | `/api/employees[?projectId]` | Autenticado | Lista de empleados (filtrable por proyecto) |
 | POST | `/api/employees` | SUPER_ADMIN | Crear empleado |
 | PUT | `/api/employees/[id]` | SUPER_ADMIN | Editar empleado |
@@ -411,27 +428,6 @@ Schedule        — id, month, year (registro de última generación)
 
 ---
 
-## 6.1 Arquitectura actual del motor de planificación (`lib/schedules/`)
-
-```text
-generate.ts (orquestador puro, 108 líneas)
-└── monthly-schedule-engine.ts
-    └── day-loop.ts (loop día-a-día)
-        ├── night-blocks.ts
-        ├── weekend-packs.ts
-        ├── workday-shifts.ts
-        ├── rest-rules.ts
-        ├── coverage.ts
-        ├── shift-transitions.ts
-        ├── cross-month.ts
-        ├── date-utils.ts
-        └── day-loop-context.ts
-```
-
-> `generate-core.ts` ha sido eliminado en Sprint 22. `date-utils.ts` se mantiene como módulo raíz sin dependencias de negocio.
-
----
-
 ## 7. Reglas de autorización (resumen)
 
 ```
@@ -439,6 +435,7 @@ isSuperAdmin(session)              → role === "SUPER_ADMIN"
 isProjectAdmin(session, projectId) → isSuperAdmin OR memberships.some(m => m.projectId === id && m.role === "PROJECT_ADMIN")
 canViewProject(session, projectId) → isSuperAdmin OR memberships.some(m => m.projectId === id)
 hasAdminAccess(session)            → isSuperAdmin OR memberships.some(m => m.role === "PROJECT_ADMIN")
+canPublishSchedule(session, id)    → isProjectAdmin(session, id)
 ```
 
 Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secundarios.
@@ -449,18 +446,9 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 
 | Suite | Cobertura | Estado |
 |-------|-----------|--------|
-| Unit | 404 tests (incluye DL-01..DL-20 del Sprint 21) | ✅ |
+| Unit | 374 tests (296 base + 78 nuevos de Sprint 20) | ✅ |
 | E2E | 142 tests definidos en `tests/e2e/` | ✅ |
-| E2E smoke (`@smoke`) | 18 tests críticos (PR gate) | ✅ |
-| Alcance Sprint 22 | Cierre refactor + utilidades anti-flake + CI/CD | ✅ |
-
-## 8.1 Estrategia CI/CD adoptada (Sprint 22)
-
-| Workflow | Trigger | Objetivo | Bloquea merge |
-|----------|---------|----------|---------------|
-| `ci.yml` | PR/push a `main` | TypeScript + ESLint + Unit + Build | ✅ |
-| `e2e-smoke.yml` | PR a `main` | E2E críticos `@smoke` | ✅ |
-| `e2e-nightly.yml` | Diario 02:00 UTC + manual | E2E completa + artefacto + issue en fallo | ❌ |
+| Alcance Sprint 20 | Nuevas suites para `date-utils`, `rest-rules`, `coverage`, `cross-month` | ✅ |
 
 ---
 
@@ -473,10 +461,7 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | Solicitud / aprobación de vacaciones (flujo V con aprobación por PROJECT_ADMIN) | Nuevos RF | Alta |
 | Notificaciones email al técnico cuando se asigna/modifica su turno | Nuevos RF | Alta |
 | Dashboard de proyecto: cobertura diaria, ausencias, horas totales | Nuevos RF | Alta |
-| Endurecimiento incremental de smoke suite (cobertura por riesgo, no por volumen) | QA | Media |
-| Alertado enriquecido de nightly (issue con contexto de fallo + trazas clave) | Observabilidad | Media |
-
-> Las tareas de refactor de Sprints 20 y 21 se han completado y retirado del backlog activo.
+| Pipeline CI/CD + deploy automático en producción | Operativo | Media |
 
 ---
 
@@ -498,45 +483,25 @@ Implementadas en `lib/auth/permissions.ts` como funciones puras sin efectos secu
 | 1.2 | 12 | Aislamiento de asignaciones por proyecto (BUG-29 + `ShiftAssignment.projectId`), `resolveNightBlocks` (transferencia de bloque en vacaciones), preferencia Jornada (J), fila propia resaltada en el grid (RF-19) |
 | 1.3 | 12 | BUG-30: `_pickWorkdayShift` ignoraba preferencia M/T cuando `weeklyShift` fue fijado por cobertura urgente — corregido con `dailyOrder` (empleados sin preferencia resuelven cobertura primero). BUG-31a: `_pickWeekendShift` no retornaba `"D"` para pref `"J"` — corregido. BUG-31b: `_pickWorkdayShift` asignaba M/T en lugar de `"J"` a empleados con pref `"J"` — corregido retornando `"J"` directamente. Validación `shiftPreference` movida a `business-logic.ts` (testeable). Tests unitarios de regresión BUG-30 y BUG-31 añadidos. |
 | 2.0 | 20 | **Refactor modular de generate.ts**: extracción de 1,190 líneas en 8 módulos independientes (date-utils, night-blocks, rest-rules, shift-transitions, coverage, weekend-packs, workday-shifts, cross-month). Reducción de 2350 → 1605 líneas (-32%). Tests unitarios 296 → 374 (78 nuevos), E2E baseline 142 tests ejecutados. Bugs BUG-38 (missing imports) y BUG-39 (circular deps) encontrados y cerrados. Arquitectura modular con raíz sin deps (date-utils.ts). Sprint Orchestrator formalizado con E2E como requerimiento obligatorio. |
-| 2.1 | 21 | **Refactor day-loop (Fase 2)**: extracción del loop diario a `day-loop.ts` y contrato explícito en `day-loop-context.ts`. `generate.ts` reducido a 10 líneas (objetivo ≤300 superado). Cobertura final: 404/404 unit tests y 142/142 E2E. Incluye endurecimiento de casos flakey (CP-15, CP-37, CP-38, CP-68, CP-77, CP-115, CP-116). |
-| 2.2 | 22 | **Cierre del refactor + CI/CD**: eliminación de `generate-core.ts` y consolidación en `monthly-schedule-engine.ts`; `generate.ts` como orquestador puro (108 líneas). Utilidades anti-flake E2E (`wait-utils`, `auth-utils`, `db-utils`, `retry-utils`, `fixtures/base`) y migración de 7 casos flakey. Activación de workflows `ci.yml`, `e2e-smoke.yml`, `e2e-nightly.yml` y etiquetado de 18 tests `@smoke`. |
 
 ---
 
 ## 11. Sprint 21 — Refactorización de day-loop (Fase 2)
 
-**Estado**: Completado | **Versión**: 2.1.0 | **Fecha cierre**: 27/05/2026
+**Estado**: Pendiente | **Versión destino**: 2.1.0 | **Esfuerzo estimado**: 22 horas
 
-Referencias:
-- [docs/sprint-21-analysis.md](sprint-21-analysis.md)
-- [docs/sprint-21-architecture.md](sprint-21-architecture.md)
-- [docs/sprint-21-release-notes.md](sprint-21-release-notes.md)
+Para detalles completos, ver: [docs/sprint-21-requirements.md](sprint-21-requirements.md)
 
-**Métricas de cierre**:
-- `generate.ts`: 1605 → 10 líneas (objetivo ≤300 cumplido)
-- `day-loop.ts`: 310 líneas
-- Tests unitarios: 404/404 ✅
-- Tests E2E: 142/142 ✅
+**Resumen**:
+- Extraer loop día-por-día de `generate.ts` a módulo `day-loop.ts`
+- Reducir `generate.ts` de 1605 a ≤300 líneas (-81%)
+- Refactorizar ~15 cierres internos en estructura `DayLoopContext`
+- Agregar mínimo 26 tests unitarios nuevos
+- Ejecutar E2E completo (142 tests, **obligatorio**)
 
-**Resultado**:
-- Refactor de modularización completado sin regresiones detectadas en suites unitarias y E2E.
-
----
-
-## 12. Sprint 22 — Cierre de arquitectura + anti-flake + CI/CD
-
-**Estado**: Completado | **Versión**: 2.2.0 | **Fecha cierre**: 29/05/2026
-
-Referencias:
-- [docs/sprint-22-generate-core-map.md](sprint-22-generate-core-map.md)
-- [docs/sprint-21-architecture.md](sprint-21-architecture.md)
-- [docs/sprint-22-release-notes.md](sprint-22-release-notes.md)
-- [`.github/workflows/README.md`](../.github/workflows/README.md)
-
-**Métricas de cierre**:
-- `generate-core.ts`: eliminado
-- `generate.ts`: 108 líneas (objetivo ≤300 cumplido)
-- Tests unitarios: 404/404 ✅
-- Tests E2E: 142/142 ✅
-- Tests `@smoke`: 18 ✅
-- Workflows GitHub Actions: 3 ✅
+**Requisitos de cierre**:
+- 100% unit tests passing (≥400 tests)
+- 100% E2E tests passing (142 tests)
+- `generate.ts` ≤300 líneas
+- Release notes + documentación completa
+- Sin cambios de comportamiento
