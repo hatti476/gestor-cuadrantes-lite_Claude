@@ -192,6 +192,7 @@ export function generateMonthSchedule(
   const nightOrder: string[] = configuredNightOrder.length > 0
     ? [...configuredNightOrder, ...missingNightIds]
     : eligibleForNights.map((e) => e.id);
+  const preserveNightBlockRest = nightOrder.length >= 7;
 
   // ── Night blocks ─────────────────────────────────────────────────────────
   // Compute the mathematical rotation, then resolve conflicts: if an employee
@@ -972,14 +973,14 @@ export function generateMonthSchedule(
     employeeId: string,
     date: Date,
     targetShift: string,
-    options: { relaxed?: boolean; allowNightPlanRest?: boolean } = {}
+    options: { relaxed?: boolean } = {}
   ): boolean => {
     const dateKey = toDateStr(date);
     const key = `${employeeId}|${dateKey}`;
     const assignment = resultByKey.get(key);
     if (!assignment || assignment.shiftType !== "D") return false;
     if (existingDates.has(key)) return false;
-    if (nightPlan.has(key) && !options.allowNightPlanRest) return false;
+    if (nightPlan.has(key) && preserveNightBlockRest) return false;
     // HARD constraint: forced rest days must never be converted to work shifts
     if (forcedRestDates.has(key)) return false;
 
@@ -1065,7 +1066,6 @@ export function generateMonthSchedule(
         .filter((employee) =>
           canRepairCoverageWithShift(employee.id, date, targetShift, {
             relaxed,
-            allowNightPlanRest: relaxed,
           })
         )
         .map((employee) => {
@@ -1214,7 +1214,6 @@ export function generateMonthSchedule(
             if (shift !== null && normalizeShift(shift) === targetBase) return true;
             return canRepairCoverageWithShift(employee.id, packageDate, targetShiftForDate(packageDate), {
               relaxed: true,
-              allowNightPlanRest: true,
             });
           });
           if (!canOwnFullPackage) return null;
@@ -1260,7 +1259,6 @@ export function generateMonthSchedule(
           normalizeShift(ownerAssignment.shiftType) !== targetBase &&
           canRepairCoverageWithShift(ownerId, packageDate, targetShift, {
             relaxed: true,
-            allowNightPlanRest: true,
           })
         ) {
           setGeneratedShift(ownerId, packageDate, targetShift);
