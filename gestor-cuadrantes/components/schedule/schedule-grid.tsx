@@ -65,7 +65,7 @@ export function ScheduleGrid({
 
   return (
     <>
-      <div data-testid="schedule-grid" className="w-full overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+      <div data-testid="schedule-grid" className="inline-block max-w-full overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
       <table
         className="w-max border-collapse text-xs"
         style={{ tableLayout: "fixed", minWidth: `${150 + daysInMonth * 32}px` }}

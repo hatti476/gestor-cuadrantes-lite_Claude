@@ -15,6 +15,7 @@
  * CP-139 — SUPER_VIEWER puede ver el cuadrante pero no tiene PrepPanel
  * CP-140 — SUPER_VIEWER no puede editar celdas del cuadrante
  * CP-141 — /employees redirige a /admin (backward compatibility)
+ * CP-142 — SUPER_ADMIN puede cambiar la contraseña desde la tabla de usuarios
  */
 
 import { test, expect } from "@playwright/test";
@@ -358,4 +359,42 @@ test("CP-141 — /employees redirige a /admin para SUPER_ADMIN", async ({
   await page.goto("/employees");
   // El middleware debe redirigir /employees → /admin
   await expect(page).toHaveURL(/\/admin/, { timeout: 10_000 });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CP-142 — SUPER_ADMIN puede cambiar contraseña desde la tabla
+// ──────────────────────────────────────────────────────────────────────────────
+test("CP-142 — SUPER_ADMIN cambia contraseña desde acción directa de tabla", async ({
+  page,
+}) => {
+  const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const tempEmail = `cp142_temp_${uniqueSuffix}@cuadrantes.test`;
+  const oldPassword = "Test1234!";
+  const newPassword = "NuevoPass123!";
+
+  await loginAsAdmin(page);
+
+  const createRes = await page.request.post("/api/admin/users", {
+    data: {
+      name: "CP142 Temp",
+      email: tempEmail,
+      password: oldPassword,
+      globalRole: "USER",
+    },
+  });
+  expect(createRes.ok()).toBeTruthy();
+
+  await page.goto("/admin");
+  const row = page.locator("tr", { hasText: tempEmail });
+  await expect(row).toBeVisible({ timeout: 8_000 });
+
+  await row.getByRole("button", { name: /Contraseña/i }).click();
+  await expect(page.locator('h3:has-text("Cambiar contraseña")')).toBeVisible({ timeout: 5_000 });
+
+  const passwordInputs = page.locator('input[type="password"]');
+  await passwordInputs.first().fill(newPassword);
+  await passwordInputs.nth(1).fill(newPassword);
+  await page.getByRole("button", { name: /^Guardar$/ }).click();
+
+  await expect(page.locator("text=Contraseña actualizada")).toBeVisible({ timeout: 8_000 });
 });

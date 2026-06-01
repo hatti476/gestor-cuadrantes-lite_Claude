@@ -8,6 +8,18 @@
 
 ## Execution Summary
 
+### Post-close Stabilization (Critical Bugs)
+
+After the initial closure, Sprint 23 was re-opened in stabilization mode for three critical issues reported in QA:
+
+1. Schedule generation could produce holes when employees had history in another project.
+2. Logout could remain in loading state in some navigation contexts.
+3. Password change was technically available but not discoverable enough for SUPER_ADMIN workflows.
+4. Grid showed a trailing empty area after the last day column (e.g. day 31).
+
+All three issues were fixed with code + regression tests (unit + focused E2E), then revalidated with `ci:check`.
+The final UI-width issue was also fixed and manually validated in browser.
+
 ### Planned vs. Actual
 
 | Item | Planned | Actual | Status |
@@ -56,6 +68,42 @@
 ---
 
 ## Issues Encountered & Solutions
+
+### Issue #4: Cross-project contamination in generation pre-read
+**Symptom**: New project generations could inherit locks from previous project assignments of the same employee, creating empty cells.
+
+**Root Cause**: Existing/month-tail data was not hard-scoped to active project before scheduler consumption.
+
+**Solution**: Introduced explicit project scoping helper and applied it to month existing assignments and previous-month tail in generate route.
+
+**Prevention**: Added dedicated unit test (`generation-scoping.test.ts`) and E2E CP-147 to guard the scenario.
+
+### Issue #5: Logout transition could hang
+**Symptom**: User remained in loading state after pressing "Cerrar sesión".
+
+**Root Cause**: Pure callback redirect path in signOut had brittle UX in some route/session transitions.
+
+**Solution**: Moved to explicit async signOut (`redirect: false`) + client push/refresh + in-flight button guard.
+
+**Prevention**: Added E2E CP-148 for deterministic redirect to `/login`.
+
+### Issue #6: Password change discoverability regression
+**Symptom**: SUPER_ADMIN reported inability to change passwords.
+
+**Root Cause**: Action was nested inside edit modal and not visible as direct table operation.
+
+**Solution**: Added direct per-user table action "Contraseña" opening password modal.
+
+**Prevention**: Added E2E CP-142 to ensure direct path remains available.
+
+### Issue #7: Grid trailing blank zone after last day column
+**Symptom**: A visual empty block appeared on the right of the schedule after day 31.
+
+**Root Cause**: Grid wrapper occupied full available width while the table used intrinsic day-column width.
+
+**Solution**: Changed grid wrapper to intrinsic width (`inline-block max-w-full`) so the border closes at the final day column.
+
+**Prevention**: Keep container width semantics aligned with fixed-column table layouts and verify with month-end screenshots.
 
 ### Issue #1: E2E Flake (CP-146)
 **Symptom**: CP-146 (read-only user unpublished message) passed standalone but failed in full smoke suite.

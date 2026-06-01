@@ -163,9 +163,21 @@ test("CP-51 — SUPER_ADMIN abre el panel de miembros", async ({ page }) => {
 test("CP-52 — SUPER_ADMIN añade miembro al proyecto @smoke", async ({ page }) => {
   const ts = Date.now();
   const projectName = `MembersTest ${ts}`;
+  const tempEmail = `cp52_${ts}@cuadrantes.test`;
 
   try {
     await login(page, ADMIN.email, ADMIN.password);
+
+    // Crear usuario temporal para garantizar que existe al menos una opción seleccionable
+    const createUserRes = await page.request.post("/api/admin/users", {
+      data: {
+        name: "CP52 Temp",
+        email: tempEmail,
+        password: "Test1234!",
+        globalRole: "USER",
+      },
+    });
+    expect(createUserRes.ok()).toBeTruthy();
 
     // Crear proyecto nuevo sin miembros (excepto admin via seed que ya está)
     await page.request.post("/api/projects", {
@@ -183,19 +195,10 @@ test("CP-52 — SUPER_ADMIN añade miembro al proyecto @smoke", async ({ page })
     // Seleccionar un usuario disponible
     const userSelect = page.locator('[data-testid="member-user-select"]');
     await expect(userSelect).toBeVisible({ timeout: 5_000 });
-    const options = await userSelect.locator("option").all();
-    // La primera opción es "Seleccionar usuario...", la segunda es un usuario real
-    if (options.length < 2) {
-      // No hay usuarios disponibles que no sean miembros — test pasa por defecto
-      return;
-    }
-    const secondOption = await options[1].getAttribute("value");
-    if (!secondOption) return;
-
-    await userSelect.selectOption(secondOption);
+    await userSelect.selectOption({ label: tempEmail });
     await page.click('[data-testid="btn-add-member"]');
 
-    await expect(page.locator('[data-testid="member-row"]').first()).toBeVisible({
+    await expect(page.locator('[data-testid="member-row"]').filter({ hasText: tempEmail })).toBeVisible({
       timeout: 8_000,
     });
   } catch (e) {
@@ -210,15 +213,36 @@ test("CP-52 — SUPER_ADMIN añade miembro al proyecto @smoke", async ({ page })
 test("CP-53 — SUPER_ADMIN elimina miembro del proyecto", async ({ page }) => {
   const ts = Date.now();
   const projectName = `RemoveTest ${ts}`;
+  const tempEmail = `cp53_${ts}@cuadrantes.test`;
 
   try {
     await login(page, ADMIN.email, ADMIN.password);
 
-    // Crear proyecto de prueba y añadir un miembro via API
+    // Crear proyecto de prueba
     const createRes = await page.request.post("/api/projects", {
       data: { name: projectName },
     });
     expect(createRes.ok()).toBeTruthy();
+    const projectPayload = (await createRes.json()) as { id: string };
+    const projectId = projectPayload.id;
+
+    // Crear usuario temporal para asegurar un miembro eliminable
+    const createUserRes = await page.request.post("/api/admin/users", {
+      data: {
+        name: "CP53 Temp",
+        email: tempEmail,
+        password: "Test1234!",
+        globalRole: "USER",
+      },
+    });
+    expect(createUserRes.ok()).toBeTruthy();
+    const userPayload = (await createUserRes.json()) as { id: string };
+    const tempUserId = userPayload.id;
+
+    const addMemberRes = await page.request.post(`/api/projects/${projectId}/members`, {
+      data: { userId: tempUserId, role: "EMPLOYEE" },
+    });
+    expect(addMemberRes.ok()).toBeTruthy();
 
     // Navegar al proyecto recién creado
     await page.goto("/projects");
@@ -229,27 +253,22 @@ test("CP-53 — SUPER_ADMIN elimina miembro del proyecto", async ({ page }) => {
     await row.locator('[data-testid="btn-manage-members"]').click();
     await expect(page.locator('[data-testid="members-panel"]')).toBeVisible({ timeout: 5_000 });
 
-    // Añadir un miembro (pm) via el select
-    const userSelect = page.locator('[data-testid="member-user-select"]');
-    await expect(userSelect).toBeVisible({ timeout: 5_000 });
-    const options = await userSelect.locator("option").all();
-    if (options.length < 2) return; // No hay usuarios disponibles
-    const secondOption = await options[1].getAttribute("value");
-    if (!secondOption) return;
-    await userSelect.selectOption(secondOption);
-    await page.click('[data-testid="btn-add-member"]');
-    await expect(page.locator('[data-testid="member-row"]').first()).toBeVisible({ timeout: 8_000 });
+    // Verificar y eliminar el miembro temporal
+    const targetRow = page.locator('[data-testid="member-row"]').filter({ hasText: tempEmail });
+    await expect(targetRow).toBeVisible({ timeout: 8_000 });
 
-    // Ahora hay al menos 2 miembros (admin + pm). Eliminar el último (no admin)
-    const memberRows = page.locator('[data-testid="member-row"]');
-    const memberCount = await memberRows.count();
+    const removeResponse = page.waitForResponse((r) =>
+      r.url().includes(`/api/projects/${projectId}/members/${tempUserId}`) &&
+      r.request().method() === "DELETE"
+    );
+    await targetRow.locator('[data-testid="btn-remove-member"]').click();
+    const deleteRes = await removeResponse;
+    expect(deleteRes.ok()).toBeTruthy();
 
-    const removeResponse = page.waitForResponse((r) => r.url().includes("/api/projects") && r.url().includes("/members/") && r.request().method() === "DELETE");
-    await page.locator('[data-testid="btn-remove-member"]').last().click();
-    await removeResponse;
-
-    // Confirmar eliminación vía conteo
-    await expect(page.locator('[data-testid="member-row"]')).toHaveCount(memberCount - 1, { timeout: 10_000 });
+    // Confirmar que desaparece del listado (regresión: antes podía quedarse visible)
+    await expect(
+      page.locator('[data-testid="member-row"]').filter({ hasText: tempEmail })
+    ).toHaveCount(0, { timeout: 10_000 });
   } catch (e) {
     await screenshotOnFail(page, "CP-53");
     throw e;

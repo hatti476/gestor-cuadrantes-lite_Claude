@@ -218,10 +218,7 @@ test("CP-16 — Admin puede eliminar un turno", async ({ page }) => {
     await targetCell.click();
     const editor = page.locator('[data-testid="shift-editor"]');
     const editorVisible = await editor.isVisible({ timeout: 5_000 }).catch(() => false);
-    if (!editorVisible) {
-      test.skip();
-      return;
-    }
+    expect(editorVisible).toBe(true);
     await expect(editor).toBeVisible({ timeout: 5_000 });
     await editor.getByText(/Limpiar celda/i).click();
     await expect(editor).not.toBeVisible({ timeout: 5_000 });
