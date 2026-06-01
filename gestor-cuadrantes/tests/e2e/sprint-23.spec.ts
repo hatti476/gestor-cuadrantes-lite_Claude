@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { loginAsAdmin, generateScheduleAndWait, screenshotOnFail } from "./helpers";
+import { loginAsAdmin, loginAsTech, generateScheduleAndWait, screenshotOnFail } from "./helpers";
 
 test("CP-143 — Generación mensual no deja celdas vacías en el grid @smoke", async ({ page }) => {
   try {
@@ -48,3 +48,58 @@ test("CP-144 — Grid mantiene celdas cuadradas en ultrawide @smoke", async ({ p
     throw error;
   }
 });
+
+test("CP-145 — SUPER_ADMIN publica un mes generado @smoke", async ({ page }) => {
+  try {
+    await loginAsAdmin(page);
+    await expect(page).toHaveURL("/");
+
+    await generateScheduleAndWait(page);
+
+    const badge = page.locator('[data-testid="publication-status-badge"]');
+    await expect(badge).toHaveText("No publicado");
+
+    const publishResponse = page.waitForResponse((response) => response.url().includes("/api/schedules/publish") && response.status() === 200);
+    await page.getByTestId("btn-toggle-publication").click();
+    await publishResponse;
+
+    await expect(badge).toHaveText("Publicado");
+    await expect(page.getByTestId("btn-toggle-publication")).toHaveText("Despublicar");
+  } catch (error) {
+    await screenshotOnFail(page, "CP-145");
+    throw error;
+  }
+});
+
+test("CP-146 — USER ve Cuadrante no disponible aún cuando no está publicado @smoke", async ({ page }) => {
+  try {
+    // Usar contexto de página fresh para evitar estado compartido
+    // Navegar a login (esto limpia sesión anterior)
+    await page.goto("/login");
+    
+    // Login como técnico
+    await loginAsTech(page);
+    await expect(page).toHaveURL("/");
+
+    // Buscar un mes no publicado navegando desde mayo
+    // Si mayo está publicado (por CP-145), vamos a junio que no estará publicado
+    const unpublishedMsg = page.getByTestId("unpublished-message");
+    let found = await unpublishedMsg.isVisible({ timeout: 2_000 }).catch(() => false);
+
+    if (!found) {
+      // Navegar a junio
+      await page.getByTestId("btn-next-month").click();
+      await page.waitForTimeout(500);
+      found = await unpublishedMsg.isVisible({ timeout: 5_000 }).catch(() => false);
+    }
+
+    // Debe encontrarse un mes no publicado
+    expect(found).toBe(true);
+    await expect(unpublishedMsg).toBeVisible();
+    await expect(page.getByTestId("schedule-grid")).not.toBeVisible();
+  } catch (error) {
+    await screenshotOnFail(page, "CP-146");
+    throw error;
+  }
+});
+

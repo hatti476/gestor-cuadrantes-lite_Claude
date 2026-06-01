@@ -11,6 +11,7 @@ import {
   canViewHolidays,
   canManageHolidays,
   canManageProjectMembers,
+  canPublishSchedule,
   GLOBAL_ROLES,
   PROJECT_ROLES,
 } from "@/lib/auth/permissions";
@@ -376,5 +377,30 @@ describe("canManageProjectMembers", () => {
 
   it("false para sesión null", () => {
     expect(canManageProjectMembers(null)).toBe(false);
+  });
+});
+
+// ─── canPublishSchedule ─────────────────────────────────────────────────────
+
+describe("canPublishSchedule", () => {
+  it("SUPER_ADMIN devuelve true para cualquier projectId", () => {
+    expect(canPublishSchedule(SUPER_ADMIN_SESSION, PROJECT_A)).toBe(true);
+    expect(canPublishSchedule(SUPER_ADMIN_SESSION, PROJECT_B)).toBe(true);
+  });
+
+  it("PROJECT_ADMIN del proyecto devuelve true", () => {
+    expect(canPublishSchedule(SESSION_PROJECT_ADMIN_A, PROJECT_A)).toBe(true);
+  });
+
+  it("PROJECT_ADMIN de un proyecto distinto devuelve false", () => {
+    expect(canPublishSchedule(SESSION_PROJECT_ADMIN_A, PROJECT_B)).toBe(false);
+  });
+
+  it("USER devuelve false", () => {
+    expect(canPublishSchedule(USER_SESSION, PROJECT_A)).toBe(false);
+  });
+
+  it("SUPER_VIEWER devuelve false", () => {
+    expect(canPublishSchedule(SUPER_VIEWER_SESSION, PROJECT_A)).toBe(false);
   });
 });

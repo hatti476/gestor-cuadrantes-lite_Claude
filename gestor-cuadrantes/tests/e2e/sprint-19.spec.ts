@@ -290,9 +290,15 @@ test("CP-139 — SUPER_VIEWER ve el cuadrante pero no tiene PrepPanel", async ({
   await loginAsViewer(page);
   await page.goto(ROUTES.home);
 
-  // El grid debe ser visible
-  const grid = page.locator('[data-testid="schedule-grid"]');
-  await expect(grid).toBeVisible({ timeout: 15_000 });
+  // Puede ver el grid (mes publicado) o el aviso de no publicado.
+  const unpublishedMessage = page.locator('[data-testid="unpublished-message"]');
+  const isUnpublished = await unpublishedMessage.isVisible({ timeout: 2_000 }).catch(() => false);
+  if (!isUnpublished) {
+    const grid = page.locator('[data-testid="schedule-grid"]');
+    await expect(grid).toBeVisible({ timeout: 15_000 });
+  } else {
+    await expect(unpublishedMessage).toBeVisible();
+  }
 
   // No debe haber PrepPanel
   const prepPanel = page.locator('[data-testid="prep-step-generar"]');
@@ -311,7 +317,20 @@ test("CP-140 — SUPER_VIEWER no puede editar celdas (no hay ShiftEditor al hace
   await loginAsViewer(page);
   await page.goto(ROUTES.home);
 
+  const unpublishedMessage = page.locator('[data-testid="unpublished-message"]');
   const grid = page.locator('[data-testid="schedule-grid"]');
+
+  await Promise.race([
+    expect(unpublishedMessage).toBeVisible({ timeout: 15_000 }),
+    expect(grid).toBeVisible({ timeout: 15_000 }),
+  ]);
+
+  const isUnpublished = await unpublishedMessage.isVisible();
+  if (isUnpublished) {
+    await expect(unpublishedMessage).toBeVisible();
+    await expect(page.locator('[data-testid="shift-editor"]')).not.toBeVisible();
+    return;
+  }
   await expect(grid).toBeVisible({ timeout: 15_000 });
 
   // Intentar hacer clic en una celda — el ShiftEditor no debe aparecer
