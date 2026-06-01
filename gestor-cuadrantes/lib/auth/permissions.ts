@@ -148,3 +148,16 @@ export function canManageHolidays(session: Session | null): boolean {
 export function canManageProjectMembers(session: Session | null): boolean {
   return isSuperAdmin(session);
 }
+
+/**
+ * El usuario puede publicar o despublicar un cuadrante de un proyecto.
+ * SUPER_ADMIN siempre puede; PROJECT_ADMIN solo en su proyecto.
+ */
+export function canPublishSchedule(
+  session: Session | null,
+  projectId: string
+): boolean {
+  if (!session) return false;
+  if (isSuperAdmin(session)) return true;
+  return isProjectAdmin(session, projectId);
+}
