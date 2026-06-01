@@ -2,7 +2,7 @@
 
 import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 function getActiveProjectName(): string | null {
@@ -17,6 +17,7 @@ function getActiveProjectName(): string | null {
 export function Header() {
   const { data: session } = useSession();
   const pathname = usePathname();
+  const router = useRouter();
   const role = session?.user?.role;
   const isSuperAdmin = role === "SUPER_ADMIN";
   const isSuperViewer = role === "SUPER_VIEWER";
@@ -26,6 +27,7 @@ export function Header() {
   const canAccessProjects = isSuperAdmin || isSuperViewer || isProjectAdmin;
 
   const [activeProjectName, setActiveProjectName] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   function readActiveProject() {
     setActiveProjectName(getActiveProjectName());
@@ -45,6 +47,18 @@ export function Header() {
     return isActive
       ? "text-indigo-600 font-semibold border-b-2 border-indigo-500 pb-0.5 transition-colors"
       : "text-gray-500 hover:text-gray-900 transition-colors";
+  }
+
+  async function handleSignOut() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      const data = await signOut({ redirect: false, callbackUrl: "/login" });
+      router.push(data?.url ?? "/login");
+      router.refresh();
+    } finally {
+      setLoggingOut(false);
+    }
   }
 
   return (
@@ -101,10 +115,11 @@ export function Header() {
               </span>
             </span>
             <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
-              className="text-sm text-gray-500 hover:text-red-600 transition-colors"
+              onClick={() => void handleSignOut()}
+              disabled={loggingOut}
+              className="text-sm text-gray-500 hover:text-red-600 transition-colors disabled:opacity-60"
             >
-              Cerrar sesión
+              {loggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
             </button>
           </>
         )}

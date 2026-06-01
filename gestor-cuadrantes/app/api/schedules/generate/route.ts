@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { generateMonthSchedule, type GenerationWarning, type CoverageWarning, type PrevMonthTail } from "@/lib/schedules/generate";
 import { getMonthRange } from "@/lib/schedules/business-logic";
+import { scopeRowsToProject } from "@/lib/schedules/generation-scoping";
 import { isSuperAdmin, isProjectAdmin } from "@/lib/auth/permissions";
 
 // POST /api/schedules/generate
@@ -57,8 +58,9 @@ export async function POST(req: NextRequest) {
   const { start, end } = getMonthRange(year, month);
   const existing = await prisma.shiftAssignment.findMany({
     where: { employeeId: { in: employeeIds }, date: { gte: start, lt: end } },
-    select: { employeeId: true, date: true, shiftType: true, manual: true },
+    select: { employeeId: true, date: true, shiftType: true, manual: true, projectId: true },
   });
+  const scopedExisting = scopeRowsToProject(existing, projectId);
 
   // Obtener festivos del mes
   const holidays = await prisma.holiday.findMany({
@@ -75,12 +77,12 @@ export async function POST(req: NextRequest) {
   //   - J generado (manual=false) NO se bloquea: puede ser residual de otro proyecto
   const ALWAYS_LOCKED = new Set(["V", "B"]);
   const existingSet = new Set<string>(
-    existing
+    scopedExisting
       .filter((a) => a.manual || ALWAYS_LOCKED.has(a.shiftType))
       .map((a) => `${a.employeeId}|${a.date.toISOString().slice(0, 10)}`)
   );
   const existingAssignments = new Map<string, string>(
-    existing.map((a) => [`${a.employeeId}|${a.date.toISOString().slice(0, 10)}`, a.shiftType])
+    scopedExisting.map((a) => [`${a.employeeId}|${a.date.toISOString().slice(0, 10)}`, a.shiftType])
   );
 
   // Obtener los últimos 7 días del mes anterior para continuidad — solo empleados del proyecto
@@ -88,9 +90,10 @@ export async function POST(req: NextRequest) {
   const prevMonthStart = new Date(Date.UTC(prevMonthEnd.getUTCFullYear(), prevMonthEnd.getUTCMonth(), prevMonthEnd.getUTCDate() - 6));
   const prevTailRaw = await prisma.shiftAssignment.findMany({
     where: { employeeId: { in: employeeIds }, date: { gte: prevMonthStart, lte: prevMonthEnd } },
-    select: { employeeId: true, date: true, shiftType: true },
+    select: { employeeId: true, date: true, shiftType: true, projectId: true },
   });
-  const prevMonthTail: PrevMonthTail[] = prevTailRaw.map((a) => ({
+  const prevTailScoped = scopeRowsToProject(prevTailRaw, projectId);
+  const prevMonthTail: PrevMonthTail[] = prevTailScoped.map((a) => ({
     employeeId: a.employeeId,
     date: a.date.toISOString().slice(0, 10),
     shiftType: a.shiftType,
@@ -132,7 +135,7 @@ export async function POST(req: NextRequest) {
   // y no contamine a otros proyectos que reutilicen los mismos empleados
   await prisma.$transaction(
     toCreate.map((a) => {
-      const empProjectId = employees.find((e) => e.id === a.employeeId)?.projectId ?? projectId ?? null;
+      const empProjectId = projectId ?? employees.find((e) => e.id === a.employeeId)?.projectId ?? null;
       return prisma.shiftAssignment.upsert({
         where: {
           employeeId_date_projectId: { employeeId: a.employeeId, date: a.date, projectId: empProjectId! },

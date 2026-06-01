@@ -333,6 +333,7 @@ function UsersTab({ projects }: { projects: Project[] }) {
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [editingUser, setEditingUser] = useState<AdminUser | null | "new">(null);
+  const [passwordUser, setPasswordUser] = useState<AdminUser | null>(null);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -428,7 +429,16 @@ function UsersTab({ projects }: { projects: Project[] }) {
                       ) : <span className="text-xs text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => setEditingUser(u)} className="text-xs px-3 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">Editar</button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          data-testid={`btn-password-user-${u.id}`}
+                          onClick={() => setPasswordUser(u)}
+                          className="text-xs px-3 py-1.5 border border-blue-200 rounded text-blue-700 hover:bg-blue-50"
+                        >
+                          Contraseña
+                        </button>
+                        <button onClick={() => setEditingUser(u)} className="text-xs px-3 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">Editar</button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -441,6 +451,7 @@ function UsersTab({ projects }: { projects: Project[] }) {
         <UserModal user={editingUser === "new" ? null : editingUser} projects={projects}
           onClose={() => setEditingUser(null)} onSaved={() => { void loadUsers(); }} />
       )}
+      {passwordUser && <PasswordModal user={passwordUser} onClose={() => setPasswordUser(null)} />}
     </div>
   );
 }
