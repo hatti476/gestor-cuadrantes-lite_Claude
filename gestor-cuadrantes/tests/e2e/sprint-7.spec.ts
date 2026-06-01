@@ -163,9 +163,21 @@ test("CP-51 — SUPER_ADMIN abre el panel de miembros", async ({ page }) => {
 test("CP-52 — SUPER_ADMIN añade miembro al proyecto @smoke", async ({ page }) => {
   const ts = Date.now();
   const projectName = `MembersTest ${ts}`;
+  const tempEmail = `cp52_${ts}@cuadrantes.test`;
 
   try {
     await login(page, ADMIN.email, ADMIN.password);
+
+    // Crear usuario temporal para garantizar que existe al menos una opción seleccionable
+    const createUserRes = await page.request.post("/api/admin/users", {
+      data: {
+        name: "CP52 Temp",
+        email: tempEmail,
+        password: "Test1234!",
+        globalRole: "USER",
+      },
+    });
+    expect(createUserRes.ok()).toBeTruthy();
 
     // Crear proyecto nuevo sin miembros (excepto admin via seed que ya está)
     await page.request.post("/api/projects", {
@@ -183,19 +195,10 @@ test("CP-52 — SUPER_ADMIN añade miembro al proyecto @smoke", async ({ page })
     // Seleccionar un usuario disponible
     const userSelect = page.locator('[data-testid="member-user-select"]');
     await expect(userSelect).toBeVisible({ timeout: 5_000 });
-    const options = await userSelect.locator("option").all();
-    // La primera opción es "Seleccionar usuario...", la segunda es un usuario real
-    if (options.length < 2) {
-      // No hay usuarios disponibles que no sean miembros — test pasa por defecto
-      return;
-    }
-    const secondOption = await options[1].getAttribute("value");
-    if (!secondOption) return;
-
-    await userSelect.selectOption(secondOption);
+    await userSelect.selectOption({ label: tempEmail });
     await page.click('[data-testid="btn-add-member"]');
 
-    await expect(page.locator('[data-testid="member-row"]').first()).toBeVisible({
+    await expect(page.locator('[data-testid="member-row"]').filter({ hasText: tempEmail })).toBeVisible({
       timeout: 8_000,
     });
   } catch (e) {

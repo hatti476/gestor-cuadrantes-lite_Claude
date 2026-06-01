@@ -167,17 +167,14 @@ test("CP-62 — PROJECT_ADMIN añade un miembro EMPLOYEE a su proyecto", async (
     await expect(userSelect).toBeVisible({ timeout: 5_000 });
 
     const options = await userSelect.locator("option").all();
-    if (options.length < 2) {
-      // No hay usuarios disponibles para añadir — el test pasa por diseño
-      return;
-    }
+    test.skip(options.length < 2, "No hay usuarios disponibles para añadir como PROJECT_ADMIN");
 
     // Seleccionar el primer usuario disponible con rol EMPLOYEE (el default)
     const secondOption = await options[1].getAttribute("value");
-    if (!secondOption) return;
+    test.skip(!secondOption, "No hay option válida en el selector de miembros");
 
     const memberCountBefore = await page.locator('[data-testid="member-row"]').count();
-    await userSelect.selectOption(secondOption);
+    await userSelect.selectOption(secondOption as string);
 
     // Confirmar que el rol seleccionado es EMPLOYEE (no PROJECT_ADMIN)
     const roleSelect = page.locator('[data-testid="member-role-select"]');
@@ -250,15 +247,12 @@ test("CP-64 — PROJECT_ADMIN elimina un miembro de su proyecto", async ({ page 
     await expect(userSelect).toBeVisible({ timeout: 5_000 });
     const options = await userSelect.locator("option").all();
 
-    if (options.length < 2) {
-      // No hay usuarios disponibles — el test pasa por diseño
-      return;
-    }
+    test.skip(options.length < 2, "No hay usuarios disponibles para preparar eliminación");
 
     const secondOption = await options[1].getAttribute("value");
-    if (!secondOption) return;
+    test.skip(!secondOption, "No hay option válida para alta previa a eliminación");
 
-    await userSelect.selectOption(secondOption);
+    await userSelect.selectOption(secondOption as string);
     const addRes = page.waitForResponse(
       (r) => r.url().includes("/api/projects") && r.url().includes("/members") && r.request().method() === "POST"
     );
