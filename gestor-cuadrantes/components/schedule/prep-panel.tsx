@@ -24,12 +24,15 @@ interface PrepPanelProps {
   projectId?: string | null;
   /** true mientras se cargan festivos automáticamente */
   loadingHolidays?: boolean;
+  /** Carga festivos públicos automáticamente desde la API externa */
+  onAutoLoadHolidays?: () => void;
 }
 
 const STATUS_BADGE: Record<MonthStatus, { label: string; className: string }> = {
   ungenerated: { label: "Sin generar", className: "bg-gray-100 text-gray-600 border-gray-300" },
   preparation: { label: "En preparación", className: "bg-yellow-100 text-yellow-700 border-yellow-300" },
   generated: { label: "Generado", className: "bg-green-100 text-green-700 border-green-300" },
+  unpublished: { label: "No publicado", className: "bg-gray-100 text-gray-600 border-gray-300" },
 };
 
 const STEPS: { id: PrepStep; label: string; icon: string; description: string }[] = [
@@ -68,6 +71,7 @@ export function PrepPanel({
   projectRegion,
   projectId,
   loadingHolidays = false,
+  onAutoLoadHolidays,
 }: PrepPanelProps) {
   // La visibilidad la controla el padre — aquí siempre se renderiza si se llama.
   // isAdmin se usa para mostrar el botón "Gestionar Festivos" (solo SUPER_ADMIN).
@@ -159,6 +163,15 @@ export function PrepPanel({
           >
             Gestionar festivos del mes →
           </button>
+          {onAutoLoadHolidays && projectRegion && (
+            <button
+              onClick={onAutoLoadHolidays}
+              className="w-full text-xs px-3 py-2 rounded border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors"
+              data-testid="btn-auto-load-holidays"
+            >
+              Cargar festivos públicos →
+            </button>
+          )}
         </div>
       )}
 

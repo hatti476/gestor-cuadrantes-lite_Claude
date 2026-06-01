@@ -1,7 +1,7 @@
 "use client";
 import React, { createContext, useContext, useState, useCallback, useRef } from "react";
 
-type ToastVariant = "success" | "error" | "info";
+type ToastVariant = "success" | "error" | "info" | "warning";
 
 interface Toast {
   id: number;
@@ -23,6 +23,7 @@ const COLORS: Record<ToastVariant, string> = {
   success: "bg-green-600",
   error: "bg-red-600",
   info: "bg-blue-600",
+  warning: "bg-yellow-500",
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {

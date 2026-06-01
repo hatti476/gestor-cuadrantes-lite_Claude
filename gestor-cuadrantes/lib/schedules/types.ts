@@ -20,8 +20,8 @@ export interface ScheduleAssignment {
   employee?: ScheduleEmployee;
 }
 
-/** Estado del mes según las asignaciones existentes */
-export type MonthStatus = "ungenerated" | "preparation" | "generated";
+/** Estado del mes según las asignaciones existentes o su publicación */
+export type MonthStatus = "ungenerated" | "preparation" | "generated" | "unpublished";
 
 /**
  * Calcula el estado del mes a partir de las asignaciones.
