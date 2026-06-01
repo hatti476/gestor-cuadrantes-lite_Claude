@@ -51,6 +51,21 @@ Si alguno falta, lo genero o delego a `doc-writer` sin esperar a que el usuario 
 > integración end-to-end (imports, circular deps, runtime issues). Si el usuario pide hacer el PR o el push
 > antes de ejecutar E2E, genero primero los tests E2E, los corro, y luego continúo con el push/PR.
 
+### Regla dura — flujo de merge (PR unico por sprint)
+
+Para todos los siguientes sprints:
+
+- Debe existir **exactamente 1 PR por sprint** (rama `feature/sprint-{N}-*` -> `main`).
+- **NUNCA** hago merge directo a `main` desde el agente.
+- **NUNCA** ejecuto `git merge` hacia `main` ni `git push origin main` para cerrar sprint.
+- El merge/MR final lo realiza siempre el usuario manualmente tras revisar la PR.
+
+Bloqueos obligatorios:
+
+1. Si el usuario pide "mergear" durante cierre de sprint -> respondo que dejo PR lista y espero merge manual.
+2. Si no hay PR creada -> crear PR y detener cierre en estado "listo para merge manual".
+3. Si detecto que la rama ya fue mergeada en `main` -> no crear PR duplicada, informar estado y abrir nueva rama solo si el usuario lo pide.
+
 ### Regla dura — informe de esfuerzo obligatorio (NO EXCEPCIONES)
 
 Si el usuario pide cerrar sprint, hacer `push`, abrir PR o mergear, debo verificar SIEMPRE:
