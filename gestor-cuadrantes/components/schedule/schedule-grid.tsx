@@ -67,17 +67,17 @@ export function ScheduleGrid({
     <>
       <div data-testid="schedule-grid" className="w-full overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
       <table
-        className="border-collapse text-xs w-full"
-        style={{ tableLayout: "fixed", minWidth: `${150 + daysInMonth * 26}px` }}
+        className="w-max border-collapse text-xs"
+        style={{ tableLayout: "fixed", minWidth: `${150 + daysInMonth * 32}px` }}
       >
         <colgroup>
           <col style={{ width: "150px" }} />
-          {days.map((day) => <col key={day} />)}
+          {days.map((day) => <col key={day} style={{ width: "32px" }} />)}
         </colgroup>
         <thead>
           {/* Fila de números de día */}
           <tr className="bg-gray-50">
-            <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-b border-r border-gray-200">
+            <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-b border-r border-gray-200 w-[150px] min-w-[150px] max-w-[150px]">
               Empleado
             </th>
             {days.map((day) => {
@@ -98,7 +98,7 @@ export function ScheduleGrid({
                       y: rect.bottom + window.scrollY,
                     });
                   } : undefined}
-                  className={`py-1 text-center border-b border-r border-gray-200 font-medium ${
+                  className={`w-8 min-w-8 max-w-8 py-1 text-center border-b border-r border-gray-200 font-medium ${
                     isHoliday
                       ? "bg-red-200 text-red-800 cursor-pointer select-none"
                       : isWeekend
@@ -159,7 +159,7 @@ export function ScheduleGrid({
                       data-testid={`cell-${emp.id}-${dateStr}`}
                       onClick={clickable ? () => onCellClick(emp.id, dateStr, cell?.shiftType) : undefined}
                       data-locked={isLocked ? "true" : undefined}
-                      className={`h-8 p-0.5 border-r border-b border-gray-200 relative ${
+                      className={`w-8 min-w-8 max-w-8 h-8 p-0.5 border-r border-b border-gray-200 relative ${
                         isHolidayCell ? "bg-red-50" : isWeekend ? "bg-blue-50" : ""
                       } ${clickable ? "cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset" : ""} ${
                         isLocked ? "ring-2 ring-inset ring-dashed ring-amber-400" : ""
