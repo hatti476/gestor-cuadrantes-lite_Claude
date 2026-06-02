@@ -13,6 +13,7 @@
  * CP-107 — tabla de complementos visible con columnas MF, TF, N, NF, P. Extra y leyenda
  * CP-108 — total € de empleado calculado según tarifas definidas
  * CP-109 — PrepPanel permite marcar y eliminar bajas B
+ * CP-110 — resumen de complementos queda alineado bajo el cuadrante sin fila redundante
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -508,7 +509,6 @@ test("CP-107 — tabla de complementos visible con columnas esperadas", async ({
     for (const header of ["MF", "TF", "N", "NF", "P. Extra"]) {
       await expect(table).toContainText(header);
     }
-    await expect(page.getByTestId("extra-pay-legend")).toContainText("Paga/turno");
   } catch (err) {
     await screenshotOnFail(page, "CP-107");
     throw err;
@@ -549,6 +549,57 @@ test("CP-108 — total de complementos por empleado se calcula correctamente", a
     expect(uiAmount).toBeCloseTo(expectedAmount, 2);
   } catch (err) {
     await screenshotOnFail(page, "CP-108");
+    throw err;
+  }
+});
+
+// ===========================================================================
+// CP-110 — resumen de complementos con layout real
+// ===========================================================================
+test("CP-110 — el resumen de complementos se renderiza bajo el cuadrante con tamaño real", async ({ page }) => {
+  try {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await loginAsAdmin(page);
+    const project = await getDefaultProject(page);
+
+    await selectProjectOnHome(page, project);
+
+    const grid = page.getByTestId("schedule-grid");
+    const counters = page.getByTestId("counters-table");
+    const extraPayLegend = page.getByTestId("extra-pay-legend");
+    const extraPayTable = page.getByTestId("extra-pay-table");
+
+    await expect(grid).toBeVisible({ timeout: 10_000 });
+    await expect(counters).toBeVisible({ timeout: 10_000 });
+    await expect(extraPayLegend).toBeVisible({ timeout: 10_000 });
+    await expect(extraPayTable).toBeVisible({ timeout: 10_000 });
+
+    await expect(extraPayLegend).not.toContainText("Paga/turno");
+    await expect(extraPayTable).toContainText("P. Extra");
+    await expect(extraPayTable).toContainText("MF");
+    await expect(extraPayTable).toContainText("TF");
+    await expect(extraPayTable).toContainText("N");
+    await expect(extraPayTable).toContainText("NF");
+
+    const gridBox = await grid.boundingBox();
+    const countersBox = await counters.boundingBox();
+    const extraPayBox = await extraPayLegend.boundingBox();
+
+    expect(gridBox).not.toBeNull();
+    expect(countersBox).not.toBeNull();
+    expect(extraPayBox).not.toBeNull();
+
+    const safeGridBox = gridBox!;
+    const safeCountersBox = countersBox!;
+    const safeExtraPayBox = extraPayBox!;
+
+    expect(safeCountersBox.width).toBeGreaterThan(200);
+    expect(safeExtraPayBox.width).toBeGreaterThan(200);
+    expect(safeCountersBox.y).toBeGreaterThanOrEqual(safeGridBox.y + safeGridBox.height - 8);
+    expect(safeExtraPayBox.y).toBeGreaterThanOrEqual(safeGridBox.y + safeGridBox.height - 8);
+    expect(Math.abs(safeCountersBox.y - safeExtraPayBox.y)).toBeLessThanOrEqual(4);
+  } catch (err) {
+    await screenshotOnFail(page, "CP-110");
     throw err;
   }
 });

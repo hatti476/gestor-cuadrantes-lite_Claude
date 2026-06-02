@@ -165,8 +165,11 @@ Se añade una nueva tabla junto a los contadores:
 La fila total suma todos los importes del mes visible y los valores cero se
 muestran en gris.
 
-Se elimina el título redundante de la tabla para alinearla con los contadores y
-se añade una leyenda compacta a la derecha con el importe por turno.
+Se elimina la fila/cabecera redundante "Paga/turno" y el bloque de
+complementos queda alineado directamente con la tabla de contadores.
+
+La cobertura E2E CP-110 comprueba además que el bloque conserva tamaño real y
+que no reaparece una cabecera aislada que desalinearía ambas tablas.
 
 En enero y diciembre, la tabla añade los turnos especiales:
 
@@ -202,6 +205,7 @@ Se crean los casos CP-99..CP-108:
 | CP-106 | Advertencia ET en edición manual |
 | CP-107 | Tabla de complementos visible |
 | CP-108 | Total económico calculado correctamente |
+| CP-110 | Resumen de complementos alineado y sin fila redundante |
 
 Además, el `global-setup` de Playwright limpia realmente `prisma/test.db` y
 resemilla datos conocidos, evitando contaminación entre ejecuciones.
