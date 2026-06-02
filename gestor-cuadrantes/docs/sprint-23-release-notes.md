@@ -55,11 +55,20 @@ Sprint 23 continued in stabilization mode to address three critical QA findings.
 - Files:
   - `components/schedule/schedule-grid.tsx`
 
+### HOTFIX-23-E: Extra-pay summary layout cleanup ✅
+- Root cause: the complementos block still rendered a redundant "Paga/turno" header row that made the counters and the summary table feel visually split.
+- Fix: the extra-pay wrapper now renders only the table, so both blocks share the same top alignment and the layout stays compact.
+- Files:
+  - `app/page.tsx`
+- Regression coverage:
+  - E2E: `tests/e2e/sprint-16.spec.ts` (CP-107, CP-108, CP-110)
+
 ### Validation snapshot (hotfixes)
 - `npm run ci:check` ✅
 - `npm run test:unit -- tests/unit/schedules/generation-scoping.test.ts` ✅
 - `npm run test:e2e -- tests/e2e/sprint-23.spec.ts --grep "CP-147|CP-148"` ✅
 - `npm run test:e2e -- tests/e2e/sprint-19.spec.ts --grep "CP-142"` ✅
+- `npx playwright test tests/e2e/sprint-16.spec.ts -g "CP-107|CP-108|CP-110" --workers=1` ✅
 - Manual UI verification: grid ends at day 31 without trailing empty block ✅
 
 ---

@@ -4,6 +4,12 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
+## [2.3.1] - 2026-06-02
+
+### Fixed
+- Eliminada la fila redundante "Paga/turno" del bloque de complementos para alinear la tabla con el cuadrante y la tabla de contadores.
+- Endurecida la cobertura E2E del resumen de complementos con verificación de layout real y ausencia de cabecera redundante (CP-110).
+
 ## [2.3.0] - 2026-06-01
 
 ### Added
