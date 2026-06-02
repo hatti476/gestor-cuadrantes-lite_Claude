@@ -8,7 +8,7 @@ import { Header } from "@/components/layout/header";
 import { ShiftEditor } from "@/components/schedule/shift-editor";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleAssignment, ScheduleEmployee, MonthStatus, computeMonthStatus } from "@/lib/schedules/types";
-import { countShifts } from "@/lib/schedules/business-logic";
+import { calculateExtraPay, countShifts } from "@/lib/schedules/business-logic";
 import { PrepPanel, MonthStatusBadge, PrepStep } from "@/components/schedule/prep-panel";
 import { useToast } from "@/components/ui/toast-provider";
 
@@ -18,6 +18,22 @@ const MONTH_NAMES = [
 ];
 
 const COUNTER_SHIFTS: ShiftType[] = ["M", "T", "N", "MF", "TF", "NF", "J", "D", "V", "B"];
+const EXTRA_PAY_SHIFTS: Array<"MF" | "TF" | "N" | "NF" | "MN" | "TN" | "NN"> = [
+  "MF",
+  "TF",
+  "N",
+  "NF",
+  "MN",
+  "TN",
+  "NN",
+];
+
+const euroFormatter = new Intl.NumberFormat("es-ES", {
+  style: "currency",
+  currency: "EUR",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 function CountersTable({
   employees,
@@ -74,6 +90,89 @@ function CountersTable({
                     </td>
                   );
                 })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ExtraPayTable({
+  employees,
+  assignments,
+  month,
+}: {
+  employees: ScheduleEmployee[];
+  assignments: ScheduleAssignment[];
+  month: number;
+}) {
+  const columns = month === 12 || month === 1
+    ? EXTRA_PAY_SHIFTS
+    : (EXTRA_PAY_SHIFTS.filter((shift) => shift !== "MN" && shift !== "TN" && shift !== "NN") as Array<"MF" | "TF" | "N" | "NF">);
+
+  return (
+    <div className="mt-2 w-fit overflow-x-auto rounded-lg border border-gray-200 shadow-sm" data-testid="extra-pay-legend">
+      <table className="border-collapse text-xs min-w-max" data-testid="extra-pay-table">
+        <thead>
+          <tr className="bg-gray-50">
+            <th className="sticky left-0 z-10 bg-gray-50 px-3 py-2 text-left font-semibold text-gray-600 border-b border-r border-gray-200 min-w-[140px]">
+              Empleado
+            </th>
+            {columns.map((shift) => (
+              <th key={shift} className="w-9 py-1 text-center border-b border-r border-gray-200">
+                <div
+                  className="flex items-center justify-center w-7 h-7 mx-auto rounded-sm text-xs font-bold select-none"
+                  style={{
+                    backgroundColor: SHIFT_COLORS[shift].color,
+                    color: SHIFT_COLORS[shift].textColor,
+                  }}
+                >
+                  {shift}
+                </div>
+              </th>
+            ))}
+            <th className="px-3 py-2 text-center font-semibold text-gray-600 border-b border-r border-gray-200 min-w-[96px]">
+              P. Extra
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {employees.map((emp, rowIndex) => {
+            const empShifts = assignments
+              .filter((a) => a.employeeId === emp.id)
+              .map((a) => a.shiftType);
+            const counters = countShifts(empShifts);
+            const rowBg = rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/50";
+            const extraPay = calculateExtraPay(
+              Object.fromEntries(columns.map((shift) => [shift, counters[shift] ?? 0]))
+            );
+
+            return (
+              <tr key={emp.id} className={`${rowBg} hover:bg-yellow-50/40 transition-colors`}>
+                <td className={`sticky left-0 z-10 ${rowBg} px-3 py-1 font-medium text-gray-700 border-r border-b border-gray-200 whitespace-nowrap`}>
+                  {emp.name}
+                </td>
+                {columns.map((shift) => {
+                  const count = counters[shift] ?? 0;
+                  return (
+                    <td
+                      key={shift}
+                      className="w-9 h-8 py-1 text-center border-r border-b border-gray-200 font-mono tabular-nums"
+                      style={{ color: count === 0 ? "#9E9E9E" : undefined }}
+                      data-testid={`extra-pay-${emp.id}-${shift}`}
+                    >
+                      {count}
+                    </td>
+                  );
+                })}
+                <td
+                  className="px-3 py-1 text-right border-r border-b border-gray-200 font-semibold text-gray-700 font-mono tabular-nums"
+                  data-testid={`extra-pay-${emp.id}-total`}
+                >
+                  {euroFormatter.format(extraPay)}
+                </td>
               </tr>
             );
           })}
@@ -607,7 +706,10 @@ export default function HomePage() {
                   currentUserId={session?.user?.id ?? null}
                 />
                 {employees.length > 0 && (
-                  <CountersTable employees={employees} assignments={assignments} />
+                  <div className="mt-2 flex flex-wrap gap-4 items-start">
+                    <CountersTable employees={employees} assignments={assignments} />
+                    <ExtraPayTable employees={employees} assignments={assignments} month={month} />
+                  </div>
                 )}
                 {employees.length === 0 && monthStatus === "ungenerated" && (
                   <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2 mt-4">
