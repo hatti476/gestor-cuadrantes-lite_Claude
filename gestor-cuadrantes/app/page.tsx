@@ -755,14 +755,10 @@ export default function HomePage() {
                   currentUserId={session?.user?.id ?? null}
                 />
                 {employees.length > 0 && (
-                  <div className="mt-2 flex gap-4 items-start justify-between">
-                    <div className="flex flex-wrap gap-4 items-start min-w-0">
-                      <CountersTable employees={employees} assignments={assignments} />
-                      <ExtraPayTable employees={employees} assignments={assignments} month={month} />
-                    </div>
-                    <div className="flex-shrink-0">
-                      <RatesLegend month={month} />
-                    </div>
+                  <div className="mt-2 flex flex-wrap gap-4 items-start">
+                    <CountersTable employees={employees} assignments={assignments} />
+                    <ExtraPayTable employees={employees} assignments={assignments} month={month} />
+                    <RatesLegend month={month} />
                   </div>
                 )}
                 {employees.length === 0 && monthStatus === "ungenerated" && (

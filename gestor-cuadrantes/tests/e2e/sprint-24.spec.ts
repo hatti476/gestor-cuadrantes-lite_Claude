@@ -165,3 +165,43 @@ test("CP-152 — Celdas de vista multi-mes usan ShiftCell con esquinas redondead
     throw error;
   }
 });
+
+test("CP-154 — CountersTable, ExtraPayTable y RatesLegend se alinean en fila izquierda @smoke", async ({ page }) => {
+  try {
+    await loginAsAdmin(page);
+    await generateScheduleAndWait(page);
+
+    // The three tables must share the same horizontal row (similar Y position)
+    // and all be positioned left of the viewport midpoint.
+    const counters = page.locator('[data-testid="counters-table"]');
+    const extraPay = page.locator('[data-testid="extra-pay-legend"]');
+    const rates = page.locator('[data-testid="extra-pay-rates-legend"]');
+
+    await expect(counters).toBeVisible({ timeout: 10_000 });
+    await expect(extraPay).toBeVisible({ timeout: 10_000 });
+    await expect(rates).toBeVisible({ timeout: 10_000 });
+
+    const countersBox = await counters.boundingBox();
+    const extraPayBox = await extraPay.boundingBox();
+    const ratesBox = await rates.boundingBox();
+
+    expect(countersBox).not.toBeNull();
+    expect(extraPayBox).not.toBeNull();
+    expect(ratesBox).not.toBeNull();
+
+    // All three should start at roughly the same vertical band (within 50 px).
+    const topValues = [countersBox!.y, extraPayBox!.y, ratesBox!.y];
+    const minTop = Math.min(...topValues);
+    const maxTop = Math.max(...topValues);
+    expect(maxTop - minTop).toBeLessThan(50);
+
+    // RatesLegend must appear to the RIGHT of ExtraPayTable (x > extraPay.x).
+    expect(ratesBox!.x).toBeGreaterThan(extraPayBox!.x);
+
+    // ExtraPayTable must appear to the RIGHT of CountersTable.
+    expect(extraPayBox!.x).toBeGreaterThan(countersBox!.x);
+  } catch (error) {
+    await screenshotOnFail(page, "CP-154");
+    throw error;
+  }
+});

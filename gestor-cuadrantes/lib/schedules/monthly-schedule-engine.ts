@@ -1582,6 +1582,69 @@ export function generateMonthSchedule(
     }
   };
 
+  /**
+   * Swap repair: when M coverage is ≥2 and T=0 (or vice-versa), convert one
+   * surplus day-shift employee to the missing type.  This handles the common
+   * case where all D-cells are locked by the night plan and the normal D→T
+   * (or D→M) repair cannot find a candidate.
+   *
+   * Constraints preserved:
+   *   • Only generated (non-existing) assignments are touched
+   *   • Night-plan slots are never modified
+   *   • Forced-rest dates are respected
+   *   • Shift-transition rules are validated for prev/next days
+   */
+  const repairCoverageByDayShiftSwap = (): void => {
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(Date.UTC(year, month - 1, day));
+      const dateStr = toDateStr(date);
+      const dayAvailable = availablePerDay.get(dateStr) ?? sortedEmps.length;
+      if (dayAvailable < 2) continue;
+
+      const isSpecialDay = isWeekend(date) || holidayDates.has(dateStr);
+      const targetM = applyChristmasSpecialRule(isSpecialDay ? "MF" : "M", date);
+      const targetT = applyChristmasSpecialRule(isSpecialDay ? "TF" : "T", date);
+
+      const mCount = sortedEmps.filter((e) => {
+        const s = getGeneratedOrExistingShift(e.id, date);
+        return s !== null && normalizeShift(s) === "M";
+      }).length;
+      const tCount = sortedEmps.filter((e) => {
+        const s = getGeneratedOrExistingShift(e.id, date);
+        return s !== null && normalizeShift(s) === "T";
+      }).length;
+
+      const trySwap = (fromBase: "M" | "T", toShift: string): void => {
+        for (const emp of sortedEmps) {
+          const key = `${emp.id}|${dateStr}`;
+          const assignment = resultByKey.get(key);
+          if (!assignment || normalizeShift(assignment.shiftType) !== fromBase) continue;
+          if (existingDates.has(key)) continue;
+          if (nightPlan.has(key)) continue;
+          if (forcedRestDates.has(key)) continue;
+          if (emp.shiftPreference === "J") continue;
+
+          const prevShift = getGeneratedOrExistingShift(emp.id, addDays(date, -1));
+          if (prevShift && isValidShiftType(prevShift) && isValidShiftType(toShift)) {
+            if (!validateShiftTransition(prevShift, toShift).valid) continue;
+          }
+          const nextShift = getGeneratedOrExistingShift(emp.id, addDays(date, 1));
+          if (nextShift && isValidShiftType(nextShift) && isValidShiftType(toShift)) {
+            if (!validateShiftTransition(toShift, nextShift).valid) continue;
+          }
+
+          setGeneratedShift(emp.id, date, toShift);
+          return;
+        }
+      };
+
+      // Surplus M (≥2), no T → move one M employee to T
+      if (mCount >= 2 && tCount === 0) trySwap("M", targetT);
+      // Surplus T (≥2), no M → move one T employee to M
+      if (tCount >= 2 && mCount === 0) trySwap("T", targetM);
+    }
+  };
+
   repairAllDailyCoverage();
   repairAllWeekendPackageConsistency();
   repairAdjacentDayShiftFlips();
@@ -1589,6 +1652,7 @@ export function generateMonthSchedule(
   repairAllDailyCoverage();
   repairAllWeekendPackageConsistency();
   repairAdjacentDayShiftFlips();
+  repairCoverageByDayShiftSwap();
 
   return result;
 }
