@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { Header } from "@/components/layout/header";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import type { ScheduleAssignment, ScheduleEmployee } from "@/lib/schedules/types";
 
@@ -45,6 +47,7 @@ interface MonthData {
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function MultiMonthPage() {
+  const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -56,15 +59,18 @@ export default function MultiMonthPage() {
   const [monthsData, setMonthsData] = useState<MonthData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Number of months to display (3 by default — center month ± 1)
   const [span, setSpan] = useState(3);
 
+  // Auth guard
+  useEffect(() => {
+    if (status === "unauthenticated") router.replace("/login");
+  }, [status, router]);
+
   const load = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId || status !== "authenticated") return;
     setLoading(true);
     setError(null);
     try {
-      // Build the list of {year, month} to fetch
       const offset = Math.floor(span / 2);
       const periods: Array<{ year: number; month: number }> = [];
       for (let d = -offset; d < span - offset; d++) {
@@ -100,11 +106,13 @@ export default function MultiMonthPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, yearParam, monthParam, span]);
+  }, [projectId, yearParam, monthParam, span, status]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
-  // Build a lookup: empId|YYYY-MM-DD → shift
+  if (status === "loading" || status === "unauthenticated") return null;
+
+  // Build shift lookup: empId|YYYY-MM-DD → shiftType
   const shiftLookup = new Map<string, string>();
   for (const md of monthsData) {
     for (const a of md.assignments) {
@@ -112,7 +120,7 @@ export default function MultiMonthPage() {
     }
   }
 
-  // All columns: an ordered list of {year, month, day}
+  // Ordered column list: {year, month, day, dow}
   const columns: Array<{ year: number; month: number; day: number; dow: number }> = [];
   for (const md of monthsData) {
     const days = daysInMonth(md.year, md.month);
@@ -122,104 +130,116 @@ export default function MultiMonthPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-4 print:hidden">
-        <button
-          onClick={() => router.back()}
-          className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors"
-        >
-          ← Volver
-        </button>
-        <h1 className="text-base font-semibold text-gray-800">
-          Vista ampliada —{" "}
-          {MONTH_NAMES_ES[(monthParam - 1 + 12) % 12]} {yearParam}
-        </h1>
-        <div className="ml-auto flex items-center gap-2 text-xs text-gray-600">
-          <label htmlFor="span-select" className="font-medium">Meses:</label>
-          <select
-            id="span-select"
-            value={span}
-            onChange={(e) => setSpan(Number(e.target.value))}
-            className="border border-gray-200 rounded px-2 py-1 bg-white"
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <Header />
+      <main className="flex-1 p-6">
+        {/* Page header */}
+        <div className="flex items-center gap-4 mb-4 flex-wrap">
+          <button
+            onClick={() => router.back()}
+            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 text-sm transition-colors print:hidden"
           >
-            {[2, 3, 4, 6].map((n) => (
-              <option key={n} value={n}>{n}</option>
-            ))}
-          </select>
-        </div>
-        <button
-          onClick={() => window.print()}
-          className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors"
-        >
-          Imprimir
-        </button>
-      </div>
-
-      {/* Body */}
-      <div className="p-4">
-        {loading && (
-          <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
-            Cargando cuadrante…
+            ‹ Volver
+          </button>
+          <h2 className="text-xl font-semibold text-gray-800">
+            Vista ampliada — {MONTH_NAMES_ES[monthParam - 1]} {yearParam}
+          </h2>
+          <div className="ml-auto flex items-center gap-3 print:hidden">
+            <label htmlFor="span-select" className="text-sm text-gray-600 font-medium">
+              Meses:
+            </label>
+            <select
+              id="span-select"
+              value={span}
+              onChange={(e) => setSpan(Number(e.target.value))}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+              {[2, 3, 4, 6].map((n) => (
+                <option key={n} value={n}>{n} meses</option>
+              ))}
+            </select>
+            <button
+              onClick={() => window.print()}
+              className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 text-sm transition-colors"
+            >
+              Imprimir
+            </button>
           </div>
-        )}
+        </div>
+
+        {/* Error */}
         {error && (
-          <div className="text-red-600 text-sm p-4 bg-red-50 rounded-lg border border-red-200">
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
             {error}
           </div>
         )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
+            Cargando cuadrante…
+          </div>
+        )}
+
+        {/* Grid */}
         {!loading && !error && (
-          <div className="overflow-x-auto">
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-x-auto">
             <table className="border-collapse text-xs" style={{ tableLayout: "fixed" }}>
               <thead>
-                {/* Month headers */}
+                {/* Month header row */}
                 <tr>
-                  {/* Employee name column */}
                   <th
-                    className="sticky left-0 z-20 bg-white border border-gray-200 px-3 py-2 text-left font-semibold text-gray-700 whitespace-nowrap"
+                    className="sticky left-0 z-20 bg-white border-b border-r border-gray-200 px-3 py-2"
                     style={{ minWidth: 140, width: 140 }}
                   />
                   {monthsData.map((md) => (
                     <th
                       key={`${md.year}-${md.month}`}
                       colSpan={daysInMonth(md.year, md.month)}
-                      className="border border-gray-200 bg-indigo-50 text-indigo-800 font-semibold text-center py-1"
+                      className="border-b border-r border-gray-200 bg-indigo-50 text-indigo-700 font-semibold text-center py-1.5 px-2 text-xs"
                     >
                       {MONTH_NAMES_ES[md.month - 1]} {md.year}
                     </th>
                   ))}
                 </tr>
-                {/* Day-of-week + day-number row */}
+                {/* Day header row */}
                 <tr>
                   <th
-                    className="sticky left-0 z-20 bg-white border border-gray-200 px-3 py-1 text-left text-gray-500 font-medium"
+                    className="sticky left-0 z-20 bg-white border-b border-r border-gray-200 px-3 py-1.5 text-left text-xs font-medium text-gray-500"
                     style={{ minWidth: 140, width: 140 }}
                   >
                     Empleado
                   </th>
                   {columns.map((col) => {
                     const isWeekend = col.dow === 0 || col.dow === 6;
+                    const isLastOfMonth =
+                      col.day === daysInMonth(col.year, col.month);
                     return (
                       <th
-                        key={`${col.year}-${col.month}-${col.day}`}
-                        className={`border border-gray-200 text-center font-medium py-0.5 ${
-                          isWeekend ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-600"
-                        }`}
-                        style={{ minWidth: 28, width: 28 }}
+                        key={`h-${col.year}-${col.month}-${col.day}`}
+                        className={`border-b border-gray-200 text-center py-0.5 ${
+                          isLastOfMonth ? "border-r border-r-gray-300" : ""
+                        } ${isWeekend ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-500"}`}
+                        style={{ minWidth: 26, width: 26 }}
                       >
-                        <div className="leading-tight">{DAY_SHORT_ES[col.dow]}</div>
-                        <div className="leading-tight text-gray-400">{col.day}</div>
+                        <div className="text-[10px] font-medium leading-tight">{DAY_SHORT_ES[col.dow]}</div>
+                        <div className="text-[10px] text-gray-400 leading-tight">{col.day}</div>
                       </th>
                     );
                   })}
                 </tr>
               </thead>
               <tbody>
-                {employees.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-indigo-50/30">
+                {employees.map((emp, empIdx) => (
+                  <tr
+                    key={emp.id}
+                    className={empIdx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}
+                  >
                     {/* Employee name */}
                     <td
-                      className="sticky left-0 z-10 bg-white border border-gray-200 px-3 py-1 font-medium text-gray-800 whitespace-nowrap"
+                      className={`sticky left-0 z-10 border-r border-gray-200 px-3 py-1 text-xs font-medium text-gray-800 whitespace-nowrap ${
+                        empIdx % 2 === 0 ? "bg-white" : "bg-gray-50"
+                      }`}
                       style={{ minWidth: 140, width: 140 }}
                     >
                       {emp.name}
@@ -229,41 +249,40 @@ export default function MultiMonthPage() {
                       const ds = dateStr(col.year, col.month, col.day);
                       const shift = shiftLookup.get(`${emp.id}|${ds}`) ?? "";
                       const isWeekend = col.dow === 0 || col.dow === 6;
-                      const colors = SHIFT_COLORS[shift as ShiftType] ?? SHIFT_COLORS["D"];
-                      const isEmpty = !shift || shift === "D";
+                      const isLastOfMonth = col.day === daysInMonth(col.year, col.month);
+                      const shiftConfig = SHIFT_COLORS[shift as ShiftType];
+
                       return (
                         <td
                           key={ds}
-                          className={`border border-gray-100 text-center p-0 ${
-                            isWeekend && isEmpty ? "bg-amber-50/40" : ""
-                          }`}
-                          style={{ minWidth: 28, width: 28 }}
+                          className={`p-0 text-center border-b border-gray-100 ${
+                            isLastOfMonth ? "border-r border-r-gray-300" : ""
+                          } ${isWeekend && !shiftConfig ? "bg-amber-50/30" : ""}`}
+                          style={{ minWidth: 26, width: 26 }}
                         >
-                          {shift && shift !== "D" ? (
+                          {shiftConfig ? (
                             <span
-                              className="block w-full h-full py-0.5 font-bold leading-5"
+                              className="block w-full h-full py-0.5 text-[10px] font-bold leading-5 text-center"
                               style={{
-                                backgroundColor: colors.color,
-                                color: colors.textColor,
+                                backgroundColor: shiftConfig.color,
+                                color: shiftConfig.textColor,
                               }}
                             >
                               {shift}
                             </span>
                           ) : (
-                            <span className="block w-full h-full py-0.5 text-gray-300 leading-5">
-                              {shift === "D" ? "D" : ""}
-                            </span>
+                            <span className="block w-full h-full py-0.5 leading-5" />
                           )}
                         </td>
                       );
                     })}
                   </tr>
                 ))}
-                {employees.length === 0 && (
+                {employees.length === 0 && !loading && (
                   <tr>
                     <td
                       colSpan={columns.length + 1}
-                      className="text-center py-8 text-gray-400"
+                      className="text-center py-10 text-gray-400 text-sm"
                     >
                       Sin empleados en este proyecto.
                     </td>
@@ -273,7 +292,7 @@ export default function MultiMonthPage() {
             </table>
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
