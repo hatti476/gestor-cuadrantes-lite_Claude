@@ -2,7 +2,7 @@
 
 **Proyecto:** Gestor de Cuadrantes  
 **Mantenido por:** Agente `doc-writer`  
-**Última actualización:** 2026-05-26  
+**Última actualización:** 2026-06-04  
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Total bugs | Críticos | Altos | Medios | Bajos | Abiertos | Resueltos |
 |-----------|----------|-------|--------|-------|----------|-----------|
-| 40 | 0 | 23 | 11 | 6 | 0 | 40 |
+| 52 | 5 | 24 | 16 | 7 | 0 | 52 |
 
 ---
 
@@ -58,6 +58,18 @@
 | [BUG-38](#bug-38) | Sprint 19 | 🟠 High | ✅ Fixed | Transición N→turno de día sin descanso mínimo en path de reparación de última instancia |
 | [BUG-39](#bug-39) | Sprint 19 | 🟠 High | ✅ Fixed | Empleados acumulan 3+ fines de semana consecutivos en planificación inicial |
 | [BUG-40](#bug-40) | Sprint 19 | 🟠 High | ✅ Fixed | `repairSingleRestDays` puede crear 3er fin de semana consecutivo al mover paquetes |
+| [BUG-41](#bug-41) | Sprint 24 | 🟡 Medium | ✅ Fixed | Leyenda de tarifas de complementos desaparecida de la UI |
+| [BUG-42](#bug-42) | Sprint 24 | 🔴 High | ✅ Fixed | Empleados con preferencia T nunca reciben turnos de fin de semana |
+| [BUG-43](#bug-43) | Sprint 24 | 🔴 High | ✅ Fixed | Empleado recibe >2 fines de semana entre bloques de noche |
+| [BUG-44](#bug-44) | Sprint 24 | 🔴 High | ✅ Fixed | Más de 5 turnos de día consecutivos por reparación de cobertura en fin de semana |
+| [BUG-45](#bug-45) | Sprint 24 | 🟡 Medium | ✅ Fixed | RatesLegend se muestra debajo de la tabla en lugar de a la derecha |
+| [BUG-46](#bug-46) | Sprint 24 | 🔴 High | ✅ Fixed | Se muestran empleados de otros proyectos al volver de la vista multi-mes |
+| [BUG-47](#bug-47) | Sprint 24 | 🟡 Medium | ✅ Fixed | Estilo del toolbar de vista multi-mes inconsistente con la app principal |
+| [BUG-48](#bug-48) | Sprint 24 | 🔴 High | ✅ Fixed | 11+ noches consecutivas al cambiar el orden de rotación entre meses |
+| [BUG-49](#bug-49) | Sprint 24 | 🟡 Medium | ✅ Fixed | Celdas de vista multi-mes no siguen el estilo visual de la app principal |
+| [BUG-50](#bug-50) | Sprint 24 | 🟡 Medium | ✅ Fixed | RatesLegend se apila verticalmente debajo de ExtraPayTable |
+| [BUG-51](#bug-51) | Sprint 24 | 🟢 Low | ✅ Fixed | Tres tablas de resumen no alineadas en fila (justify-between separaba RatesLegend) |
+| [BUG-52](#bug-52) | Sprint 24 | 🟠 High | ✅ Fixed | Turno Tarde sin cobertura cuando surplus de Mañana y sin candidatos D |
 
 ---
 
@@ -1779,3 +1791,85 @@ Las celdas de turno en la vista multi-mes se renderizaban como rectángulos plan
 
 **Tests añadidos**  
 - `tests/e2e/sprint-24.spec.ts` — CP-149..152 (BUG-45, 46, 47, 49)
+
+
+---
+
+## BUG-50 — RatesLegend se apila verticalmente debajo de ExtraPayTable
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-50 |
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario |
+| **Fecha detección** | 2026-06-04 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 925ede7 |
+
+**Descripción**  
+Tras el fix de BUG-45, `RatesLegend` fue añadido al layout de `app/page.tsx` pero aparecía apilado verticalmente debajo de `ExtraPayTable` en lugar de alinearse en la misma fila horizontal. El componente se encontraba fuera del contenedor `flex-row` compartido con `CountersTable` y `ExtraPayTable`.
+
+**Fix aplicado**  
+Reubicado `RatesLegend` dentro del contenedor flex correcto para que se muestre en línea horizontal con las otras dos tablas.
+
+**Ficheros afectados**  
+- `app/page.tsx`
+
+**Tests añadidos**  
+- `tests/e2e/sprint-24.spec.ts` — CP-153
+
+---
+
+## BUG-51 — Las tres tablas de resumen no se alinean en fila (justify-between separaba RatesLegend)
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-51 |
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Revisión de layout usuario |
+| **Fecha detección** | 2026-06-04 |
+| **Severidad** | 🟢 Low |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 3886758 |
+
+**Descripción**  
+El contenedor de las tres tablas (`CountersTable`, `ExtraPayTable`, `RatesLegend`) usaba `justify-between`, lo que empujaba `RatesLegend` al extremo derecho del viewport en lugar de alinearlas secuencialmente a la izquierda. En pantallas anchas el efecto era especialmente visible: las dos primeras tablas aparecían juntas a la izquierda y la tercera sola a la derecha.
+
+**Fix aplicado**  
+Eliminado `justify-between` y la anidación de dos divs. Reemplazado por un único contenedor `flex flex-wrap gap-4 items-start` que agrupa las tres tablas de izquierda a derecha sin separación forzada.
+
+**Ficheros afectados**  
+- `app/page.tsx`
+
+**Tests añadidos**  
+- `tests/e2e/sprint-24.spec.ts` — CP-154
+
+---
+
+## BUG-52 — Turno Tarde sin cobertura cuando todos los empleados disponibles tienen turno Mañana
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-52 |
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario (captura pantalla marzo 2026) |
+| **Fecha detección** | 2026-06-04 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed (parcial) |
+| **Commit fix** | 3886758 |
+
+**Descripción**  
+En algunos días del cuadrante generado, el turno Tarde (T/TF) aparecía sin ningún empleado asignado mientras Mañana (M/MF) tenía ≥2 empleados. La causa: `repairAllDailyCoverage` solo convierte días de descanso (`D`) al turno deficitario. Cuando todos los empleados disponibles ya tenían un turno de trabajo asignado (M o T) y ningún candidato `D` existía, la reparación no actuaba.
+
+**Fix aplicado**  
+Nueva función `repairCoverageByDayShiftSwap()` ejecutada como último paso del pipeline de reparación. Cuando detecta M con ≥2 empleados y T=0 (o T≥2 y M=0), convierte uno de los empleados surplus —que no esté en `nightPlan`, `forcedRestDates`, ni tenga preferencia `J`, y cuya transición sea válida— de M→T (o T→M).
+
+**Limitación conocida**  
+Los huecos de cobertura TF en fines de semana donde los empleados tienen MF en días adyacentes no se reparan: la transición T→M (bloqueada por la regla de 8h de descanso mínimo) impide el swap. Requiere rediseño del paquete de fin de semana.
+
+**Ficheros afectados**  
+- `lib/schedules/monthly-schedule-engine.ts`
+
+**Tests añadidos**  
+- `tests/unit/schedules/coverage-swap-repair.test.ts` — CP-155, CP-156, CP-157

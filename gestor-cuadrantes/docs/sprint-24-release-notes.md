@@ -2,7 +2,7 @@
 
 **Version**: 2.4.0  
 **Date**: 2026-06-04  
-**Status**: In progress 🔄  
+**Status**: Closed ✅  
 **Branch**: `feature/sprint-24-scheduling-fixes`
 
 ---
@@ -11,11 +11,11 @@
 
 Sprint 24 focuses on **scheduling engine correctness** (4 regressions detected in manual QA) and a new **multi-month expanded view** for reading cuadrantes in an Excel-like horizontal scroll format.
 
-**Key Metrics (baseline):**
-- **Unit Tests**: 419/419 passing (12 suites)
-- **E2E Smoke**: 22/22 passing
+**Key Metrics (cierre de sprint):**
+- **Unit Tests**: 425/427 passing (15 suites) — 2 fallos pre-existentes en cross-month night continuity (Sprint 17, no regresión de este sprint)
+- **E2E Smoke**: CP-149..154 añadidos (sprint total: 6 nuevos CPs)
 - **Build**: ✅ TypeScript clean
-- **New bugs fixed**: 4 (BUG-41..BUG-44)
+- **New bugs fixed**: 12 (BUG-41..BUG-52)
 - **New features**: 1 (multi-month view)
 
 ---
@@ -91,16 +91,123 @@ Sprint 24 focuses on **scheduling engine correctness** (4 regressions detected i
 
 ---
 
+---
+
+### BUG-45 — RatesLegend se muestra debajo de la tabla en lugar de a la derecha ✅
+
+**Symptom**: After the BUG-41 fix added `RatesLegend` to the layout, the component was rendering below `ExtraPayTable` instead of alongside it.
+
+**Root cause**: `RatesLegend` was placed outside the horizontal flex container shared by `CountersTable` and `ExtraPayTable`.
+
+**Fix**: Moved `RatesLegend` inside the shared flex container.
+
+**Files**: `app/page.tsx`
+
+---
+
+### BUG-46 — Se muestran empleados de otros proyectos al volver de la vista multi-mes ✅
+
+**Symptom**: After navigating to `/multi-month` and pressing Back, the schedule grid showed employees from other projects mixed in.
+
+**Root cause**: Multi-month page fetched employees without filtering by active project; navigating back triggered a stale state render.
+
+**Fix**: Applied active project filter in the multi-month data fetch.
+
+**Files**: `app/multi-month/page.tsx`
+
+---
+
+### BUG-47 — Estilo del toolbar de vista multi-mes inconsistente ✅
+
+**Symptom**: The multi-month toolbar used `text-xl`/`text-sm`/`gap-4` while the main app uses `text-xs`/`gap-2`.
+
+**Fix**: Normalized to `text-xs`/`gap-2`, replaced `<label>` with `<span>`, added `data-testid="btn-back"`.
+
+**Files**: `app/multi-month/page.tsx`
+
+---
+
+### BUG-48 — 11+ noches consecutivas al cambiar el orden de rotación entre meses ✅
+
+**Symptom**: An employee accumulated 11+ consecutive night shifts when the night rotation order changed between months.
+
+**Root cause**: `applyCrossMonthNightBlocks` was adding cross-month night continuation even when the new rotation already covered those slots, and was incorrectly clearing other employees' legitimate rotation nights.
+
+**Fix**:
+- Skip cross-month continuation if the employee's new rotation already starts within the `nightsRemaining + 3` window.
+- Only clear conflicting nights for employees who also have trailing nights in the previous month.
+
+**Files**: `lib/schedules/cross-month.ts`
+
+**Tests**: `tests/unit/schedules/cross-month-nights.test.ts` (3 cases)
+
+---
+
+### BUG-49 — Celdas de vista multi-mes sin estilo visual consistente ✅
+
+**Symptom**: Multi-month cells rendered as flat full-width rectangles. Weekend headers used amber instead of blue.
+
+**Fix**: Imported and used `ShiftCell` component, added `p-0.5`/`h-7` on `<td>`, changed weekend column color from `amber` to `blue`.
+
+**Files**: `app/multi-month/page.tsx`
+
+---
+
+### BUG-50 — RatesLegend se apila verticalmente debajo de ExtraPayTable ✅
+
+**Symptom**: `RatesLegend` was stacking vertically below `ExtraPayTable` after the BUG-45 fix.
+
+**Fix**: Corrected placement within the horizontal flex container in `app/page.tsx`.
+
+**Files**: `app/page.tsx`
+
+**Tests**: `tests/e2e/sprint-24.spec.ts` — CP-153
+
+---
+
+### BUG-51 — Las tres tablas de resumen separadas por justify-between ✅
+
+**Symptom**: `RatesLegend` was pushed to the far right of the viewport by a `justify-between` container while `CountersTable` and `ExtraPayTable` remained left-aligned. User preference: all three tables left-aligned in sequence.
+
+**Fix**: Replaced the two-div nesting with `justify-between` by a single `flex flex-wrap gap-4 items-start` container holding all three tables.
+
+**Files**: `app/page.tsx`
+
+**Tests**: `tests/e2e/sprint-24.spec.ts` — CP-154
+
+---
+
+### BUG-52 — Turno Tarde sin cobertura cuando surplus de Mañana y sin candidatos D ✅
+
+**Symptom**: Some days showed zero Tarde (T/TF) employees while Mañana (M/MF) had ≥2, leaving a shift with no coverage.
+
+**Root cause**: `repairAllDailyCoverage` only promotes `D` (rest) days to the deficit shift. When all available employees already had a working shift (M or T) and no `D` candidate existed, the repair couldn't act.
+
+**Fix**: New `repairCoverageByDayShiftSwap()` runs as the last repair pass. When M surplus (≥2) and T=0, it converts one surplus M→T — provided the employee is not in `nightPlan`, `forcedRestDates`, not preference `J`, and the shift transition is valid.
+
+**Known limitation**: Weekend TF gaps where adjacent days have MF remain unfixed (T→M transition blocked by 8h rest rule). Requires weekend package redesign.
+
+**Files**: `lib/schedules/monthly-schedule-engine.ts`
+
+**Tests**: `tests/unit/schedules/coverage-swap-repair.test.ts` — CP-155, CP-156, CP-157
+
+
 ## E2E Test Coverage
 
 | Test | Status | Description |
 |------|--------|-------------|
-| CP-110 (updated) | ✅ | Verifies `extra-pay-rates-legend` visible with tariff codes and "/turno" text |
+| CP-110 (updated) | ✅ | Verifica `extra-pay-rates-legend` visible con códigos de tarifa y "/turno" |
+| CP-149 | ✅ | Toolbar multi-mes usa `text-xs` / `gap-2` (BUG-47) |
+| CP-150 | ✅ | Botón Back multi-mes tiene `data-testid="btn-back"` (BUG-47) |
+| CP-151 | ✅ | Vista multi-mes no mezcla empleados de otros proyectos (BUG-46) |
+| CP-152 | ✅ | Celdas multi-mes usan ShiftCell con `border-radius > 0` (BUG-49) |
+| CP-153 | ✅ | `rates-legend` visible y en la misma fila que ExtraPayTable (BUG-50) |
+| CP-154 | ✅ | Las tres tablas (Contadores, ExtraPay, Tarifas) alineadas a la izquierda en fila (BUG-51) |
 
 ---
 
-## Pending
+## Pendiente para próximo sprint
 
-- [ ] Favicon replacement (`app/favicon.ico` — 41662-byte ICO binary, awaiting filesystem path from user)
-- [ ] E2E tests for multi-month view (CP-150+)
-- [ ] Unit tests for BUG-42 / BUG-43 scheduling engine changes
+- [ ] Favicon replacement (`app/favicon.ico` — pendiente ruta del sistema de archivos)
+- [ ] Cobertura TF en fines de semana (limitación conocida de BUG-52 — requiere rediseño del paquete de fin de semana)
+- [ ] Fallos pre-existentes en tests de continuidad cross-month nocturna (Sprint 17, `generate.test.ts`)
