@@ -1755,3 +1755,27 @@ En `applyCrossMonthNightBlocks`:
 
 **Tests añadidos**  
 - `tests/unit/schedules/cross-month-nights.test.ts` (3 casos)
+
+---
+
+## BUG-49 — Celdas de vista multi-mes no siguen el estilo visual de la app principal
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario |
+| **Fecha detección** | 2026-06-04 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+
+**Descripción**  
+Las celdas de turno en la vista multi-mes se renderizaban como rectángulos planos de anchura completa sin relleno (`p-0`, sin `rounded-sm`). En cambio, el grid principal usa el componente `ShiftCell` con `p-0.5` en `<td>` y `rounded-sm` en el badge, dando un aspecto de píldora con pequeño margen. Además los encabezados de columna de fin de semana usaban `amber` en multi-mes y `blue` en el grid principal.
+
+**Fix aplicado**  
+- Importado y usado `ShiftCell` en vez de `<span>` inline con estilos crudos.
+- Añadido `p-0.5` + `h-7` en `<td>` para margen interior y altura consistente.
+- Cambiado color de fines de semana de `amber` a `blue` para coincidir con `schedule-grid.tsx`.
+
+**Ficheros afectados**  
+- `app/multi-month/page.tsx`
+
+**Tests añadidos**  
+- `tests/e2e/sprint-24.spec.ts` — CP-149..152 (BUG-45, 46, 47, 49)

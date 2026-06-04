@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Header } from "@/components/layout/header";
-import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
+import { ShiftCell } from "@/components/schedule/shift-cell";
+import { ShiftType } from "@/lib/constants/shift-colors";
 import type { ScheduleAssignment, ScheduleEmployee } from "@/lib/schedules/types";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -218,7 +219,7 @@ export default function MultiMonthPage() {
                         key={`h-${col.year}-${col.month}-${col.day}`}
                         className={`border-b border-gray-200 text-center py-0.5 ${
                           isLastOfMonth ? "border-r border-r-gray-300" : ""
-                        } ${isWeekend ? "bg-amber-50 text-amber-700" : "bg-gray-50 text-gray-500"}`}
+                        } ${isWeekend ? "bg-blue-100 text-blue-800" : "bg-gray-50 text-gray-500"}`}
                         style={{ minWidth: 26, width: 26 }}
                       >
                         <div className="text-[10px] font-medium leading-tight">{DAY_SHORT_ES[col.dow]}</div>
@@ -249,29 +250,19 @@ export default function MultiMonthPage() {
                       const shift = shiftLookup.get(`${emp.id}|${ds}`) ?? "";
                       const isWeekend = col.dow === 0 || col.dow === 6;
                       const isLastOfMonth = col.day === daysInMonth(col.year, col.month);
-                      const shiftConfig = SHIFT_COLORS[shift as ShiftType];
+                      const shiftConfig = shift as ShiftType;
 
                       return (
                         <td
                           key={ds}
-                          className={`p-0 text-center border-b border-gray-100 ${
+                          className={`h-7 p-0.5 border-b border-gray-100 ${
                             isLastOfMonth ? "border-r border-r-gray-300" : ""
-                          } ${isWeekend && !shiftConfig ? "bg-amber-50/30" : ""}`}
+                          } ${isWeekend && !shift ? "bg-blue-50" : ""}`}
                           style={{ minWidth: 26, width: 26 }}
                         >
-                          {shiftConfig ? (
-                            <span
-                              className="block w-full h-full py-0.5 text-[10px] font-bold leading-5 text-center"
-                              style={{
-                                backgroundColor: shiftConfig.color,
-                                color: shiftConfig.textColor,
-                              }}
-                            >
-                              {shift}
-                            </span>
-                          ) : (
-                            <span className="block w-full h-full py-0.5 leading-5" />
-                          )}
+                          {shift ? (
+                            <ShiftCell shiftType={shiftConfig} />
+                          ) : null}
                         </td>
                       );
                     })}
