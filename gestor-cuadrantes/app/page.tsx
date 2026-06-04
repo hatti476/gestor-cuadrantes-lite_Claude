@@ -220,25 +220,24 @@ export default function HomePage() {
 
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(5);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const stored = localStorage.getItem("activeProject");
-      return stored ? (JSON.parse(stored) as { id: string; name: string }).id : null;
-    } catch {
-      return null;
-    }
-  });
+  // Initialize to null for SSR/client parity — localStorage is read in useEffect below.
+  // Lazy initializers with typeof window checks cause hydration mismatches.
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [activeProjectRegion, setActiveProjectRegion] = useState<string | null>(null);
 
-  const [activeProjectRegion, setActiveProjectRegion] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
+  // Hydrate from localStorage after first client render (avoids SSR mismatch)
+  useEffect(() => {
     try {
       const stored = localStorage.getItem("activeProject");
-      return stored ? ((JSON.parse(stored) as { region?: string | null }).region ?? null) : null;
+      if (stored) {
+        const parsed = JSON.parse(stored) as { id: string; region?: string | null };
+        setActiveProjectId(parsed.id ?? null);
+        setActiveProjectRegion(parsed.region ?? null);
+      }
     } catch {
-      return null;
+      // ignore malformed localStorage
     }
-  });
+  }, []);
 
   // PROJECT_ADMIN también puede editar celdas de su proyecto
   const canEdit = isAdmin || (session?.user?.projectMemberships ?? []).some(
