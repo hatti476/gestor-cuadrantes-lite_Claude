@@ -77,6 +77,20 @@ Bloqueos obligatorios:
 ¿Es decisión de arquitectura?                               → respondo yo directamente
 ```
 
+## Regla dura — tests obligatorios con cada fix o cambio
+
+**Sin test no hay commit.** Esta regla aplica a CUALQUIER cambio, no solo al cierre de sprint:
+
+| Tipo de cambio | Test requerido | Ubicación |
+|----------------|---------------|-----------|
+| Fix de algoritmo / lógica pura | Test unitario que falle sin el fix | `tests/unit/` |
+| Fix de UI / comportamiento de página | Test E2E (Playwright) | `tests/e2e/sprint-{N}.spec.ts` |
+| Feature nueva (cualquier capa) | Test unitario + E2E según alcance | Ambas |
+
+Flujo de un fix: **diagnóstico → implementación → test → `tsc --noEmit` → commit (fix + test juntos)**
+
+Nunca se hace commit del fix sin su test en el mismo commit o en uno inmediatamente anterior.
+
 ## Cierre de sprint — checklist obligatorio
 
 Cuando un sprint termina (keywords: "sprint cerrado", "hacer commit", "subir rama",
