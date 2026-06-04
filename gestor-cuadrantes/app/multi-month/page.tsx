@@ -133,26 +133,25 @@ export default function MultiMonthPage() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
       <main className="flex-1 p-6">
-        {/* Page header */}
-        <div className="flex items-center gap-4 mb-4 flex-wrap">
+        {/* Toolbar — mismo estilo que barra de herramientas de página principal */}
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
           <button
             onClick={() => router.back()}
-            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 text-sm transition-colors print:hidden"
+            className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors print:hidden"
+            data-testid="btn-back"
           >
             ‹ Volver
           </button>
-          <h2 className="text-xl font-semibold text-gray-800">
+          <h2 className="text-sm font-semibold text-gray-700">
             Vista ampliada — {MONTH_NAMES_ES[monthParam - 1]} {yearParam}
           </h2>
-          <div className="ml-auto flex items-center gap-3 print:hidden">
-            <label htmlFor="span-select" className="text-sm text-gray-600 font-medium">
-              Meses:
-            </label>
+          <div className="ml-auto flex items-center gap-2 print:hidden">
+            <span className="text-xs text-gray-600 font-medium">Meses:</span>
             <select
               id="span-select"
               value={span}
               onChange={(e) => setSpan(Number(e.target.value))}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
             >
               {[2, 3, 4, 6].map((n) => (
                 <option key={n} value={n}>{n} meses</option>
@@ -160,7 +159,7 @@ export default function MultiMonthPage() {
             </select>
             <button
               onClick={() => window.print()}
-              className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 text-sm transition-colors"
+              className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors"
             >
               Imprimir
             </button>

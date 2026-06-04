@@ -310,6 +310,12 @@ export default function HomePage() {
   // Carga datos del mes
   // ---------------------------------------------------------------------------
   const loadSchedule = useCallback(async () => {
+    // Guard: no cargar si no hay proyecto seleccionado (evita fetch sin projectId
+    // que traería todos los empleados de la BD en vez de los del proyecto activo)
+    if (!activeProjectId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const projectParam = activeProjectId ? `&projectId=${activeProjectId}` : "";
@@ -749,12 +755,14 @@ export default function HomePage() {
                   currentUserId={session?.user?.id ?? null}
                 />
                 {employees.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-4 items-start justify-between">
-                    <div className="flex flex-wrap gap-4 items-start">
+                  <div className="mt-2 flex gap-4 items-start justify-between">
+                    <div className="flex flex-wrap gap-4 items-start min-w-0">
                       <CountersTable employees={employees} assignments={assignments} />
                       <ExtraPayTable employees={employees} assignments={assignments} month={month} />
                     </div>
-                    <RatesLegend month={month} />
+                    <div className="flex-shrink-0">
+                      <RatesLegend month={month} />
+                    </div>
                   </div>
                 )}
                 {employees.length === 0 && monthStatus === "ungenerated" && (
