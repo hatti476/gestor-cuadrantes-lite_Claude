@@ -4,6 +4,18 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
+## [2.4.0] - 2026-06-04 🔄
+
+### Added
+- **Vista ampliada multi-mes**: nueva página `/multi-month` con scroll horizontal tipo Excel (2/3/4/6 meses configurables, empleados en filas, fechas en columnas, coloreado por tipo de turno). Accesible desde el botón "↔ Vista ampliada" en la barra de herramientas del cuadrante.
+- **Leyenda de tarifas** (`RatesLegend`): caja visual a la derecha del resumen de complementos mostrando la tarifa por turno (MF=33€, TF=33€, N=38,5€, NF=49,5€, MN/TN/NN=126,5€ en Navidad).
+
+### Fixed
+- **BUG-41**: leyenda de tarifas de complementos desaparecida — restaurada con `RatesLegend` y CP-110 endurecido para verificar contenido visible.
+- **BUG-42**: empleados con preferencia T nunca recibían fines de semana — añadido Tier 2.5 en `ensureWeekendPlan` que ignora el límite de ventana de trabajo para empleados con preferencia coincidente.
+- **BUG-43**: empleados recibían >2 fines de semana entre bloques de noche — añadido `getWeekendsSinceLastNightBlock` y filtro en modo estricto (Tiers 1/2).
+- **BUG-44**: más de 5 turnos de día consecutivos causados por reparación de cobertura en fin de semana — eliminada guardia `!isWeekend` al añadir a `forcedRestDates`, haciendo los descansos forzados de sábado/domingo inmunes a la fase de reparación.
+
 ## [2.3.1] - 2026-06-02
 
 ### Fixed

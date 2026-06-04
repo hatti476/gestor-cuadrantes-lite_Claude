@@ -14,13 +14,12 @@ y permite edición manual posterior. Dos roles: admin (edita) y empleado (consul
 - **Infraestructura**: Docker + Docker Compose
 - **API externa**: nager.at para festivos públicos por CCAA (`/api/holidays/public`)
 
-## Estado <!-- Actualizado: 2026-06-01 -->
-**Sprint 23 completado** — versión 2.3.0 en main. 
-- **Tests**: 419 unit + 142 E2E (22/22 smoke green)
-- **Features**: Publication control (RF-20) fully implemented
-- **Fixes**: Night block integrity (7-tech), Ultrawide layout
-- **Docs**: REQUIREMENTS.md v2.3.0, CHANGELOG.md updated, Release notes + analysis completed
-- **Status**: Production-ready; merged to main 2026-06-01
+## Estado <!-- Actualizado: 2026-06-04 -->
+**Sprint 24 en curso** — versión 2.4.0 en `feature/sprint-24-scheduling-fixes`. 
+- **Tests baseline**: 419 unit + 142 E2E (22/22 smoke green)
+- **Fixes**: BUG-41 (leyenda tarifas), BUG-42 (T-pref weekends), BUG-43 (max 2 weekends/nightblock), BUG-44 (>5 consecutive days repair)
+- **Feature**: Vista ampliada multi-mes (`/multi-month`, horizontal scroll)
+- **Pendiente**: favicon ICO, E2E para multi-month view
 
 ## Reglas Globales
 - Escribe todo el código en inglés (variables, funciones, tipos, comentarios técnicos)
