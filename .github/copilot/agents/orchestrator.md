@@ -14,15 +14,82 @@ o si puedo responderte directamente.
 ## Mapa de delegación
 | Si necesitas... | Agente |
 |----------------|--------|
+| Planificar el siguiente sprint (bugs + features + scope) | `sprint-planner` |
+| Implementar lógica de servidor, API, Prisma, auth | `backend-dev` |
+| Implementar UI, componentes, estilos, estado cliente | `frontend-dev` |
+| Implementar una feature que toca ambas capas | `new-feature` (coordina `backend-dev` + `frontend-dev`) |
+| Refactorizar un módulo sin cambiar comportamiento | `refactor` |
 | Revisar código antes de hacer commit | `review-safe` |
 | Entender o corregir un error / bug | `debug-pipeline` |
-| Implementar una nueva funcionalidad | `new-feature` |
 | Actualizar la documentación del proyecto | `context-sync` |
 | "QA", "testing", "validar release", "pasar pruebas", "ejecutar tests" | `qa-tester` |
 | Registrar bugs, informes de esfuerzo, documentación final del proyecto | `doc-writer` |
 | Crear o revisar Pull Requests, checks, issues o comentarios en GitHub | `pre-merge-review` + GitHub MCP |
 | Entender la arquitectura o una decisión técnica | Respondo directamente |
 | Saber cómo hacer algo en Next.js / Prisma / NextAuth | Respondo directamente |
+
+### Criterio de ruteo — Sprint Planning (detección automática)
+
+Activo `sprint-planner` automáticamente cuando el usuario mencione:
+- "planificar sprint", "siguiente sprint", "sprint N", "qué metemos en el sprint"
+- "tengo estos bugs", "quiero añadir esta feature al sprint"
+- "scope del sprint", "qué entra en el sprint"
+- Comparte una lista de bugs o features sin pedir implementación directa
+
+El flujo es siempre:
+```
+Usuario → Orchestrator → sprint-planner (discovery + scope confirmado + prompt)
+                               ↓ (prompt aprobado)
+          Orchestrator → [CREAR RAMA feature/sprint-{N}-* desde main]
+                               ↓ (rama creada y pusheada)
+          Orchestrator → backend-dev / frontend-dev / new-feature / debug-pipeline
+```
+
+### Regla dura — creación de rama al inicio de sprint (NO EXCEPCIONES)
+
+**Antes de escribir una sola línea de código de implementación**, debo:
+
+1. Verificar en qué número de sprint estoy (leer `context.md`).
+2. Crear la rama desde `main`:
+   ```bash
+   git checkout main && git pull origin main
+   git checkout -b feature/sprint-{N}-{slug-corto}
+   git push -u origin feature/sprint-{N}-{slug-corto}
+   ```
+3. Confirmar al usuario que la rama está creada antes de delegar a agentes de implementación.
+
+**No existe excepción**: aunque el scope esté ya confirmado desde una sesión anterior, aunque el usuario pida "arrancar ya", aunque sea una fix urgente — la rama debe existir **primero**.
+
+Si el usuario pide implementar algo sin haber pasado por `sprint-planner`, creo la rama igualmente antes de delegar. El nombre del slug debe ser descriptivo del scope principal (ej. `scheduling-fixes`, `multi-month-view`, `auth-refactor`).
+
+Bloqueos obligatorios:
+
+1. Si no existe rama `feature/sprint-{N}-*` para el sprint actual → STOP, crearla primero.
+2. Si el HEAD está en `main` o en una rama de sprint anterior → STOP, crear nueva rama.
+3. Si la rama ya existe en origin (sprint recuperado entre sesiones) → hacer checkout y continuar, sin crear duplicada.
+
+### Criterio de ruteo para tareas de desarrollo
+
+```
+¿Toca app/api/, lib/, prisma/, auth?                        → backend-dev
+¿Toca components/, app/**/page.tsx, hooks cliente, estilos? → frontend-dev
+¿Toca AMBAS capas?                                          → new-feature (coordina el orden)
+¿Es decisión de arquitectura?                               → respondo yo directamente
+```
+
+## Regla dura — tests obligatorios con cada fix o cambio
+
+**Sin test no hay commit.** Esta regla aplica a CUALQUIER cambio, no solo al cierre de sprint:
+
+| Tipo de cambio | Test requerido | Ubicación |
+|----------------|---------------|-----------|
+| Fix de algoritmo / lógica pura | Test unitario que falle sin el fix | `tests/unit/` |
+| Fix de UI / comportamiento de página | Test E2E (Playwright) | `tests/e2e/sprint-{N}.spec.ts` |
+| Feature nueva (cualquier capa) | Test unitario + E2E según alcance | Ambas |
+
+Flujo de un fix: **diagnóstico → implementación → test → `tsc --noEmit` → commit (fix + test juntos)**
+
+Nunca se hace commit del fix sin su test en el mismo commit o en uno inmediatamente anterior.
 
 ## Cierre de sprint — checklist obligatorio
 

@@ -475,6 +475,29 @@ export function generateMonthSchedule(
     const packageDates = getWeekendPackageDates(satDate);
     const packageWeekKey = weekKey(satDate);
 
+    // Bug 3: compute weekends since last night block for this employee.
+    // A night block ends at startFriday + 9 (last post-rest day). We count
+    // weekendShift entries that were assigned after that end date.
+    const getWeekendsSinceLastNightBlock = (empId: string): number => {
+      const empBlockEnds = nightBlocks
+        .filter((b) => b.employeeId === empId)
+        .map((b) => addDays(b.startFriday, 9))
+        .filter((d) => d.getTime() < satDate.getTime())
+        .sort((a, b) => b.getTime() - a.getTime());
+      const lastBlockEnd = empBlockEnds[0] ?? null;
+      const empState = stateMap.get(empId);
+      if (!empState) return 0;
+      let count = 0;
+      for (const [wk] of empState.weekendShift) {
+        // wk is the Monday of the weekend's week; Saturday is 5 days later
+        const satOfWeek = addDays(fromDateStr(wk), 5);
+        if (lastBlockEnd === null || satOfWeek.getTime() > lastBlockEnd.getTime()) {
+          count++;
+        }
+      }
+      return count;
+    };
+
     const availableForPackage = (enforceRestWindow: boolean): ScheduleEmployee[] =>
       sortedEmps.filter((e) => {
         if (e.shiftPreference === "J") return false;
@@ -489,6 +512,10 @@ export function generateMonthSchedule(
         if (s.forcedRestDaysRemaining > 0) return false;
 
         if (enforceRestWindow && wouldExceedWorkWindow(s, packageDates, planningDate)) return false;
+
+        // Bug 3: max 2 weekends between consecutive night blocks (BUG-43 fix).
+        // Only enforced in strict mode (Tiers 1 & 2); Tier 3 relaxes this.
+        if (enforceRestWindow && getWeekendsSinceLastNightBlock(e.id) >= 2) return false;
 
         return true;
       });
@@ -530,6 +557,22 @@ export function generateMonthSchedule(
     if (!mfEmp || !tfEmp) {
       mfEmp = mfEmp ?? pickEmployee("MF", strictAvailable);
       tfEmp = tfEmp ?? pickEmployee("TF", strictAvailable, mfEmp?.id);
+    }
+
+    // Tier 2.5: prefer preference-matched employees even when they exceed the work window.
+    // T-preference employees who work Mon–Fri every week always reach consecutiveCount=5
+    // and are systematically excluded from Tiers 1/2 — so they would never get weekend
+    // assignments without this tier (BUG-42 fix).
+    const relaxedNoConsec = availableForPackage(false).filter((e) => !wouldGet3rdConsec(e));
+    if (!mfEmp || mfEmp.shiftPreference !== "M") {
+      const mPref = relaxedNoConsec.filter((e) => e.shiftPreference === "M");
+      const betterMf = pickEmployee("MF", mPref);
+      if (betterMf) mfEmp = betterMf;
+    }
+    if (!tfEmp || tfEmp.shiftPreference !== "T") {
+      const tPref = relaxedNoConsec.filter((e) => e.shiftPreference === "T");
+      const betterTf = pickEmployee("TF", tPref, mfEmp?.id);
+      if (betterTf) tfEmp = betterTf;
     }
 
     // Tier 3: relax rest window entirely (last resort)
@@ -795,13 +838,11 @@ export function generateMonthSchedule(
         } else {
           state.forcedRestDaysRemaining = 1;
         }
-        // HARD rest days on non-weekend days (Mon–Fri, including holidays) are permanently
-        // protected and cannot be converted to work shifts by the repair phase.
-        // Weekend forced rest (Sat/Sun) remains D-assigned but IS repairable by the
-        // weekend-package planner (which can reassign the slot to another available employee).
-        if (!isWeekend(date)) {
-          forcedRestDates.add(key);
-        }
+        // HARD rest days are permanently protected and cannot be converted to work
+        // shifts by the repair phase. This applies to ALL days (Mon–Sun), ensuring
+        // that an employee with ≥5 consecutive work days cannot have their forced rest
+        // overridden on weekends either (BUG-44 fix: prevents >5 consecutive day shifts).
+        forcedRestDates.add(key);
         // Emit coverage warning if day-coverage minimum cannot be guaranteed
         if (!isWeekend(date) && !holidayDates.has(dateStr)) {
           const mCovered = cov.M >= 1;
@@ -1541,6 +1582,69 @@ export function generateMonthSchedule(
     }
   };
 
+  /**
+   * Swap repair: when M coverage is ≥2 and T=0 (or vice-versa), convert one
+   * surplus day-shift employee to the missing type.  This handles the common
+   * case where all D-cells are locked by the night plan and the normal D→T
+   * (or D→M) repair cannot find a candidate.
+   *
+   * Constraints preserved:
+   *   • Only generated (non-existing) assignments are touched
+   *   • Night-plan slots are never modified
+   *   • Forced-rest dates are respected
+   *   • Shift-transition rules are validated for prev/next days
+   */
+  const repairCoverageByDayShiftSwap = (): void => {
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(Date.UTC(year, month - 1, day));
+      const dateStr = toDateStr(date);
+      const dayAvailable = availablePerDay.get(dateStr) ?? sortedEmps.length;
+      if (dayAvailable < 2) continue;
+
+      const isSpecialDay = isWeekend(date) || holidayDates.has(dateStr);
+      const targetM = applyChristmasSpecialRule(isSpecialDay ? "MF" : "M", date);
+      const targetT = applyChristmasSpecialRule(isSpecialDay ? "TF" : "T", date);
+
+      const mCount = sortedEmps.filter((e) => {
+        const s = getGeneratedOrExistingShift(e.id, date);
+        return s !== null && normalizeShift(s) === "M";
+      }).length;
+      const tCount = sortedEmps.filter((e) => {
+        const s = getGeneratedOrExistingShift(e.id, date);
+        return s !== null && normalizeShift(s) === "T";
+      }).length;
+
+      const trySwap = (fromBase: "M" | "T", toShift: string): void => {
+        for (const emp of sortedEmps) {
+          const key = `${emp.id}|${dateStr}`;
+          const assignment = resultByKey.get(key);
+          if (!assignment || normalizeShift(assignment.shiftType) !== fromBase) continue;
+          if (existingDates.has(key)) continue;
+          if (nightPlan.has(key)) continue;
+          if (forcedRestDates.has(key)) continue;
+          if (emp.shiftPreference === "J") continue;
+
+          const prevShift = getGeneratedOrExistingShift(emp.id, addDays(date, -1));
+          if (prevShift && isValidShiftType(prevShift) && isValidShiftType(toShift)) {
+            if (!validateShiftTransition(prevShift, toShift).valid) continue;
+          }
+          const nextShift = getGeneratedOrExistingShift(emp.id, addDays(date, 1));
+          if (nextShift && isValidShiftType(nextShift) && isValidShiftType(toShift)) {
+            if (!validateShiftTransition(toShift, nextShift).valid) continue;
+          }
+
+          setGeneratedShift(emp.id, date, toShift);
+          return;
+        }
+      };
+
+      // Surplus M (≥2), no T → move one M employee to T
+      if (mCount >= 2 && tCount === 0) trySwap("M", targetT);
+      // Surplus T (≥2), no M → move one T employee to M
+      if (tCount >= 2 && mCount === 0) trySwap("T", targetM);
+    }
+  };
+
   repairAllDailyCoverage();
   repairAllWeekendPackageConsistency();
   repairAdjacentDayShiftFlips();
@@ -1548,6 +1652,7 @@ export function generateMonthSchedule(
   repairAllDailyCoverage();
   repairAllWeekendPackageConsistency();
   repairAdjacentDayShiftFlips();
+  repairCoverageByDayShiftSwap();
 
   return result;
 }

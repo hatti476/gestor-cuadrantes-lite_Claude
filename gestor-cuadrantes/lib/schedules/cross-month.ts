@@ -148,6 +148,27 @@ export function applyCrossMonthNightBlocks(
       // Employee mid-block: add remaining nights + 3D post-rest to nightPlan with priority.
       // Stop immediately if a locked date (V/B/manual) interrupts the continuation.
       const nightsRemaining = 7 - trailingNights;
+
+      // GUARD: If this employee already has a new-rotation night block assigned in nightPlan
+      // within the continuation+rest window, skip cross-month continuation for them.
+      // This prevents 11+ consecutive nights when rotation order changes between months:
+      //   - Old rotation had emp A doing nights at end of prev month (e.g. 3 trailing nights).
+      //   - New rotation assigns emp A a fresh block starting early in the current month.
+      //   - Without this guard, cross-month would (a) force 4 more nights for A on top of the
+      //     new block, and (b) wrongly delete another employee's legitimately-assigned N's.
+      // When the new rotation already covers the slot, no continuation is needed.
+      const restPeriodDays = nightsRemaining + 3; // nights to complete + 3 rest days
+      let hasEarlyNewBlock = false;
+      for (let chk = 0; chk < restPeriodDays; chk++) {
+        const chkDate = addDays(monthStart, chk);
+        if (chkDate.getUTCMonth() + 1 !== month) break;
+        if (nightPlan.get(`${empId}|${toDateStr(chkDate)}`) === "N") {
+          hasEarlyNewBlock = true;
+          break;
+        }
+      }
+      if (hasEarlyNewBlock) continue; // new rotation handles this employee's nights
+
       let contDate = monthStart;
       let actualNightsPlanned = 0;
 
@@ -156,10 +177,16 @@ export function applyCrossMonthNightBlocks(
         const ds = toDateStr(contDate);
         const empKey = `${empId}|${ds}`;
         if (existingDates.has(empKey)) break;
-        // Remove conflicting N from any other employee assigned to this date
+        // Remove conflicting N from any other employee assigned to this date.
+        // Only remove N's from employees who also have cross-month trailing nights
+        // (i.e., also in prevByEmpNight). Rotation-assigned N's from employees with
+        // no trailing nights must not be deleted — those are legitimate coverage.
         for (const [existingKey, existingShift] of nightPlan.entries()) {
           if (existingKey !== empKey && existingKey.endsWith(`|${ds}`) && existingShift === "N") {
-            nightPlan.delete(existingKey);
+            const otherEmpId = existingKey.split("|")[0];
+            if (prevByEmpNight.has(otherEmpId)) {
+              nightPlan.delete(existingKey);
+            }
           }
         }
         nightPlan.set(empKey, "N");

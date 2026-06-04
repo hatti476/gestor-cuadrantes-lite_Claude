@@ -2,7 +2,7 @@
 
 **Proyecto:** Gestor de Cuadrantes  
 **Mantenido por:** Agente `doc-writer`  
-**Última actualización:** 2026-05-26  
+**Última actualización:** 2026-06-04  
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Total bugs | Críticos | Altos | Medios | Bajos | Abiertos | Resueltos |
 |-----------|----------|-------|--------|-------|----------|-----------|
-| 40 | 0 | 23 | 11 | 6 | 0 | 40 |
+| 52 | 5 | 24 | 16 | 7 | 0 | 52 |
 
 ---
 
@@ -58,6 +58,18 @@
 | [BUG-38](#bug-38) | Sprint 19 | 🟠 High | ✅ Fixed | Transición N→turno de día sin descanso mínimo en path de reparación de última instancia |
 | [BUG-39](#bug-39) | Sprint 19 | 🟠 High | ✅ Fixed | Empleados acumulan 3+ fines de semana consecutivos en planificación inicial |
 | [BUG-40](#bug-40) | Sprint 19 | 🟠 High | ✅ Fixed | `repairSingleRestDays` puede crear 3er fin de semana consecutivo al mover paquetes |
+| [BUG-41](#bug-41) | Sprint 24 | 🟡 Medium | ✅ Fixed | Leyenda de tarifas de complementos desaparecida de la UI |
+| [BUG-42](#bug-42) | Sprint 24 | 🔴 High | ✅ Fixed | Empleados con preferencia T nunca reciben turnos de fin de semana |
+| [BUG-43](#bug-43) | Sprint 24 | 🔴 High | ✅ Fixed | Empleado recibe >2 fines de semana entre bloques de noche |
+| [BUG-44](#bug-44) | Sprint 24 | 🔴 High | ✅ Fixed | Más de 5 turnos de día consecutivos por reparación de cobertura en fin de semana |
+| [BUG-45](#bug-45) | Sprint 24 | 🟡 Medium | ✅ Fixed | RatesLegend se muestra debajo de la tabla en lugar de a la derecha |
+| [BUG-46](#bug-46) | Sprint 24 | 🔴 High | ✅ Fixed | Se muestran empleados de otros proyectos al volver de la vista multi-mes |
+| [BUG-47](#bug-47) | Sprint 24 | 🟡 Medium | ✅ Fixed | Estilo del toolbar de vista multi-mes inconsistente con la app principal |
+| [BUG-48](#bug-48) | Sprint 24 | 🔴 High | ✅ Fixed | 11+ noches consecutivas al cambiar el orden de rotación entre meses |
+| [BUG-49](#bug-49) | Sprint 24 | 🟡 Medium | ✅ Fixed | Celdas de vista multi-mes no siguen el estilo visual de la app principal |
+| [BUG-50](#bug-50) | Sprint 24 | 🟡 Medium | ✅ Fixed | RatesLegend se apila verticalmente debajo de ExtraPayTable |
+| [BUG-51](#bug-51) | Sprint 24 | 🟢 Low | ✅ Fixed | Tres tablas de resumen no alineadas en fila (justify-between separaba RatesLegend) |
+| [BUG-52](#bug-52) | Sprint 24 | 🟠 High | ✅ Fixed | Turno Tarde sin cobertura cuando surplus de Mañana y sin candidatos D |
 
 ---
 
@@ -1573,3 +1585,291 @@ sin necesidad de importar el tipo concreto.
 
 *Registro mantenido por el agente `doc-writer`. Actualizar tras cada sesión de QA.*
 
+
+---
+
+## BUG-41 — Leyenda de tarifas de complementos desaparecida de la UI
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Revisión manual (regresión no detectada por E2E) |
+| **Fecha detección** | 2026-06-02 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | fix/sprint-23-iteration-extra-pay-alignment |
+
+**Descripción**  
+La caja de "Tarifas por turno" (MF=33€/turno, TF=33€/turno, N=38.5€/turno, NF=49.5€/turno) dejó de mostrarse en la UI. El test CP-110 solo verificaba que `data-testid="extra-pay-legend"` existía en el DOM (satisfecho por el wrapper div de ExtraPayTable), pero no comprobaba que las tarifas reales fueran visibles para el usuario.
+
+**Resultado esperado**  
+Los usuarios pueden ver las tarifas unitarias por tipo de turno junto al resumen de complementos.
+
+**Fix aplicado**  
+Añadido componente `RatesLegend` en `app/page.tsx` que muestra las tarifas usando `EXTRA_PAY_RATES` de `lib/schedules/business-logic.ts`. Se reutiliza `euroFormatter` y `SHIFT_COLORS` para consistencia visual. Actualizado CP-110 en `tests/e2e/sprint-16.spec.ts` para verificar que `data-testid="extra-pay-rates-legend"` es visible y contiene los textos "Tarifas", los códigos MF/TF/N/NF y el sufijo "/turno".
+
+**Ficheros afectados**  
+- `app/page.tsx`
+- `tests/e2e/sprint-16.spec.ts`
+
+---
+
+## BUG-42 — Empleados con preferencia T nunca reciben turnos de fin de semana
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Inspección de cuadrante (Test1, preferencia T, solo noches/tardes) |
+| **Fecha detección** | 2026-06-02 |
+| **Severidad** | 🔴 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | fix/sprint-23-iteration-extra-pay-alignment |
+
+**Descripción**  
+Los empleados con preferencia T que trabajan de lunes a viernes (5 turnos T consecutivos) quedaban sistemáticamente excluidos de la selección de paquetes de fin de semana. `wouldExceedWorkWindow` devolvía `true` (5+0+2=7>5), excluyéndolos de los Tiers 1 y 2. Con suficientes empleados M disponibles, los slots MF y TF eran cubiertos antes de que se aplicara el Tier 3, por lo que el empleado T nunca era asignado.
+
+**Resultado esperado**  
+Los empleados con preferencia T deben recibir fines de semana (slot TF) con rotación equitativa entre el equipo.
+
+**Fix aplicado**  
+Añadido Tier 2.5 en `ensureWeekendPlan` (función `monthly-schedule-engine.ts`). Después de los Tiers 1 y 2, si algún slot fue asignado a un empleado cuya preferencia no coincide con el slot (ej. empleado M ocupando TF), se intenta sustituir por un empleado con preferencia coincidente del pool relajado (sin límite de ventana de trabajo), siempre que no suponga el 3er fin de semana consecutivo.
+
+**Ficheros afectados**  
+- `lib/schedules/monthly-schedule-engine.ts`
+
+---
+
+## BUG-43 — Empleado recibe >2 fines de semana entre bloques de noche
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Inspección de cuadrante (Test2, febrero 2026, 4 fines de semana entre bloques) |
+| **Fecha detección** | 2026-06-02 |
+| **Severidad** | 🔴 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | fix/sprint-23-iteration-extra-pay-alignment |
+
+**Descripción**  
+El algoritmo solo impedía 3+ fines de semana CONSECUTIVOS, pero el requisito es que entre dos bloques de noches del mismo empleado no haya más de 2 fines de semana asignados. En meses con un intervalo largo entre bloques de noche era posible acumular 4 o más fines de semana seguidos sin violar la regla de "no 3 consecutivos".
+
+**Resultado esperado**  
+Máximo 2 fines de semana asignados a un empleado entre dos bloques de noche consecutivos suyos.
+
+**Fix aplicado**  
+Añadida función auxiliar `getWeekendsSinceLastNightBlock` dentro de `ensureWeekendPlan`. Filtra los bloques de noche del empleado cuyo fin (startFriday+9) es anterior al sábado planificado, calcula el más reciente y cuenta cuántos fines de semana se han asignado en `weekendShift` después de ese fin. Si el recuento es ≥ 2, el empleado queda excluido del pool en modo estricto (Tiers 1 y 2). El Tier 3 (último recurso) no aplica este límite para garantizar cobertura.
+
+**Ficheros afectados**  
+- `lib/schedules/monthly-schedule-engine.ts`
+
+---
+
+## BUG-44 — Más de 5 turnos de día consecutivos por reparación de cobertura en fin de semana
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Inspección de cuadrante (Test2, mayo 2026, 6+ turnos MF consecutivos) |
+| **Fecha detección** | 2026-06-02 |
+| **Severidad** | 🔴 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | fix/sprint-23-iteration-extra-pay-alignment |
+
+**Descripción**  
+Cuando un empleado alcanzaba 5 turnos de día consecutivos (lunes–viernes), la Priority 2 le asignaba descanso forzado (D) el sábado. Sin embargo, la clave del sábado NO se añadía a `forcedRestDates` (por la condición `if (!isWeekend(date))`). La fase de reparación de cobertura (`repairCoverage`), al no encontrar la clave del sábado en `forcedRestDates`, podía convertir ese D en MF, generando 6 o más turnos de trabajo consecutivos, violando la regla de máximo 5.
+
+**Resultado esperado**  
+El descanso forzado por consecutividad (≥5 días de trabajo) es inviolable tanto en días de semana como en fin de semana.
+
+**Fix aplicado**  
+Eliminada la condición `if (!isWeekend(date))` al añadir la clave a `forcedRestDates`. Ahora todos los descansos forzados por consecutividad (incluyendo sábados y domingos) son protegidos de la fase de reparación. La liberación del paquete de fin de semana (`releaseWeekendPackageShift`) ya gestiona la reasignación del slot a otros empleados disponibles.
+
+**Ficheros afectados**  
+- `lib/schedules/monthly-schedule-engine.ts`
+
+---
+
+## BUG-45 — RatesLegend se muestra debajo de la tabla en lugar de a la derecha
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario |
+| **Fecha detección** | 2026-06-03 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 6fb2172 |
+
+**Descripción**  
+La leyenda de tarifas (`RatesLegend`) aparecía debajo de la tabla `ExtraPayTable` en lugar de alineada a su derecha. El contenedor flex tenía `flex-wrap` activo, por lo que cuando el contenido era demasiado ancho se rompía a la segunda fila dejando la leyenda sola a la izquierda.
+
+**Fix aplicado**  
+Eliminado `flex-wrap` del contenedor exterior. Añadido `min-w-0` a la div de tablas (permite shrink). `RatesLegend` envuelta en `<div className="flex-shrink-0">`.
+
+**Ficheros afectados**  
+- `app/page.tsx`
+
+---
+
+## BUG-46 — Se muestran empleados de otros proyectos al volver de la vista multi-mes
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario |
+| **Fecha detección** | 2026-06-03 |
+| **Severidad** | 🔴 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 6fb2172 |
+
+**Descripción**  
+Después de navegar a la vista multi-mes y volver a la vista principal, la lista de empleados mostraba empleados de todos los proyectos mezclados. La causa raíz era efecto colateral del fix de hidratación (BUG-41): `activeProjectId` se inicializa a `null` en el primer render. `loadSchedule` se disparaba sin esperar a que el `useEffect` hidratara el valor desde localStorage, llamando a `/api/employees` sin `projectId` y devolviendo todos los empleados.
+
+**Fix aplicado**  
+Añadido guard al inicio de `loadSchedule`: `if (!activeProjectId) { setLoading(false); return; }`.
+
+**Ficheros afectados**  
+- `app/page.tsx`
+
+---
+
+## BUG-47 — Estilo del toolbar de vista multi-mes inconsistente con la app principal
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario |
+| **Fecha detección** | 2026-06-03 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 6fb2172 |
+
+**Descripción**  
+El toolbar de la vista multi-mes usaba `text-xl`/`text-sm` y `gap-4`, mientras que la app principal usa `text-xs` y `gap-2`. Visualmente inconsistente.
+
+**Fix aplicado**  
+Normalizado a `text-xs`/`gap-2`. Reemplazado `<label>` por `<span>`. Añadido `data-testid="btn-back"`.
+
+**Ficheros afectados**  
+- `app/multi-month/page.tsx`
+
+---
+
+## BUG-48 — 11+ noches consecutivas al cambiar el orden de rotación entre meses
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario (Test1, junio 2026) |
+| **Fecha detección** | 2026-06-03 |
+| **Severidad** | 🔴 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 6fb2172 |
+
+**Descripción**  
+Cuando el orden de rotación nocturna cambiaba entre meses, un empleado podía acumular 11+ noches consecutivas. La causa:
+1. Empleado A termina el mes anterior con N noches al final (ej. 3 trailing nights).
+2. La nueva rotación asigna un bloque de 7N a A a partir de la primera semana del nuevo mes.
+3. `applyCrossMonthNightBlocks` detecta las 3 trailing nights y añade 4 noches más de continuación al inicio del nuevo mes, solapándose con el nuevo bloque.
+4. Además, borraba legítimamente las N's de otros empleados que tenían cobertura rotacional (no cross-month) en esas fechas.
+
+**Fix aplicado**  
+En `applyCrossMonthNightBlocks`:
+- Antes de añadir continuación, comprobar si el empleado ya tiene un bloque de rotación nueva (`N` en `nightPlan`) dentro de la ventana `nightsRemaining + 3` días. Si existe, omitir la continuación (la nueva rotación cubre el slot).
+- Al borrar N's conflictivas de otros empleados, solo eliminar las de empleados que también tengan trailing nights (`prevByEmpNight`). N's de empleados sin trailing nights son asignaciones de rotación legítimas y no deben borrarse.
+
+**Ficheros afectados**  
+- `lib/schedules/cross-month.ts`
+
+**Tests añadidos**  
+- `tests/unit/schedules/cross-month-nights.test.ts` (3 casos)
+
+---
+
+## BUG-49 — Celdas de vista multi-mes no siguen el estilo visual de la app principal
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario |
+| **Fecha detección** | 2026-06-04 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+
+**Descripción**  
+Las celdas de turno en la vista multi-mes se renderizaban como rectángulos planos de anchura completa sin relleno (`p-0`, sin `rounded-sm`). En cambio, el grid principal usa el componente `ShiftCell` con `p-0.5` en `<td>` y `rounded-sm` en el badge, dando un aspecto de píldora con pequeño margen. Además los encabezados de columna de fin de semana usaban `amber` en multi-mes y `blue` en el grid principal.
+
+**Fix aplicado**  
+- Importado y usado `ShiftCell` en vez de `<span>` inline con estilos crudos.
+- Añadido `p-0.5` + `h-7` en `<td>` para margen interior y altura consistente.
+- Cambiado color de fines de semana de `amber` a `blue` para coincidir con `schedule-grid.tsx`.
+
+**Ficheros afectados**  
+- `app/multi-month/page.tsx`
+
+**Tests añadidos**  
+- `tests/e2e/sprint-24.spec.ts` — CP-149..152 (BUG-45, 46, 47, 49)
+
+
+---
+
+## BUG-50 — RatesLegend se apila verticalmente debajo de ExtraPayTable
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-50 |
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario |
+| **Fecha detección** | 2026-06-04 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 925ede7 |
+
+**Descripción**  
+Tras el fix de BUG-45, `RatesLegend` fue añadido al layout de `app/page.tsx` pero aparecía apilado verticalmente debajo de `ExtraPayTable` en lugar de alinearse en la misma fila horizontal. El componente se encontraba fuera del contenedor `flex-row` compartido con `CountersTable` y `ExtraPayTable`.
+
+**Fix aplicado**  
+Reubicado `RatesLegend` dentro del contenedor flex correcto para que se muestre en línea horizontal con las otras dos tablas.
+
+**Ficheros afectados**  
+- `app/page.tsx`
+
+**Tests añadidos**  
+- `tests/e2e/sprint-24.spec.ts` — CP-153
+
+---
+
+## BUG-51 — Las tres tablas de resumen no se alinean en fila (justify-between separaba RatesLegend)
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-51 |
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Revisión de layout usuario |
+| **Fecha detección** | 2026-06-04 |
+| **Severidad** | 🟢 Low |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 3886758 |
+
+**Descripción**  
+El contenedor de las tres tablas (`CountersTable`, `ExtraPayTable`, `RatesLegend`) usaba `justify-between`, lo que empujaba `RatesLegend` al extremo derecho del viewport en lugar de alinearlas secuencialmente a la izquierda. En pantallas anchas el efecto era especialmente visible: las dos primeras tablas aparecían juntas a la izquierda y la tercera sola a la derecha.
+
+**Fix aplicado**  
+Eliminado `justify-between` y la anidación de dos divs. Reemplazado por un único contenedor `flex flex-wrap gap-4 items-start` que agrupa las tres tablas de izquierda a derecha sin separación forzada.
+
+**Ficheros afectados**  
+- `app/page.tsx`
+
+**Tests añadidos**  
+- `tests/e2e/sprint-24.spec.ts` — CP-154
+
+---
+
+## BUG-52 — Turno Tarde sin cobertura cuando todos los empleados disponibles tienen turno Mañana
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-52 |
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario (captura pantalla marzo 2026) |
+| **Fecha detección** | 2026-06-04 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed (parcial) |
+| **Commit fix** | 3886758 |
+
+**Descripción**  
+En algunos días del cuadrante generado, el turno Tarde (T/TF) aparecía sin ningún empleado asignado mientras Mañana (M/MF) tenía ≥2 empleados. La causa: `repairAllDailyCoverage` solo convierte días de descanso (`D`) al turno deficitario. Cuando todos los empleados disponibles ya tenían un turno de trabajo asignado (M o T) y ningún candidato `D` existía, la reparación no actuaba.
+
+**Fix aplicado**  
+Nueva función `repairCoverageByDayShiftSwap()` ejecutada como último paso del pipeline de reparación. Cuando detecta M con ≥2 empleados y T=0 (o T≥2 y M=0), convierte uno de los empleados surplus —que no esté en `nightPlan`, `forcedRestDates`, ni tenga preferencia `J`, y cuya transición sea válida— de M→T (o T→M).
+
+**Limitación conocida**  
+Los huecos de cobertura TF en fines de semana donde los empleados tienen MF en días adyacentes no se reparan: la transición T→M (bloqueada por la regla de 8h de descanso mínimo) impide el swap. Requiere rediseño del paquete de fin de semana.
+
+**Ficheros afectados**  
+- `lib/schedules/monthly-schedule-engine.ts`
+
+**Tests añadidos**  
+- `tests/unit/schedules/coverage-swap-repair.test.ts` — CP-155, CP-156, CP-157

@@ -29,5 +29,20 @@ el mismo protocolo antes de proponer cualquier solución.
 - Si necesito más información, la pido antes de proponer soluciones
 - Siempre incluyo cómo verificar que el fix ha funcionado
 
+## Entrega del fix — pasos obligatorios al terminar
+
+Cuando el fix está implementado y verificado:
+1. **Escribir el test ANTES del commit** (NO es opcional):
+   - Fix de algoritmo / lógica pura → test unitario en `tests/unit/` con vitest
+   - Fix de UI / comportamiento de página → test E2E en `tests/e2e/sprint-{N}.spec.ts` con Playwright
+   - El test debe fallar sin el fix y pasar con él
+2. Ejecutar `npx tsc --noEmit` — sin errores de tipos antes de hacer commit
+3. Hacer commit del fix y del test juntos en el mismo commit
+4. Indicar al usuario los ficheros modificados y el test añadido
+5. Recomendar explícitamente: **invocar `review-safe` antes del commit** si el fix toca ficheros críticos (`generate.ts`, `permissions.ts`, `shift-colors.ts`, `business-logic.ts`) o elimina/mueve lógica existente
+6. Si el bug no estaba registrado en `docs/bugs/BUG-REGISTRY.md`, indicar que debe registrarse vía `doc-writer`
+
+**Nunca cierro un bug sin test. Sin test no hay fix.**
+
 ## Base de conocimiento
 Leo `.github/copilot/context.md` para entender el stack y la arquitectura.

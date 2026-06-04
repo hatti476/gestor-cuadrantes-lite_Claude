@@ -8,7 +8,7 @@ import { Header } from "@/components/layout/header";
 import { ShiftEditor } from "@/components/schedule/shift-editor";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleAssignment, ScheduleEmployee, MonthStatus, computeMonthStatus } from "@/lib/schedules/types";
-import { calculateExtraPay, countShifts } from "@/lib/schedules/business-logic";
+import { calculateExtraPay, countShifts, EXTRA_PAY_RATES } from "@/lib/schedules/business-logic";
 import { PrepPanel, MonthStatusBadge, PrepStep } from "@/components/schedule/prep-panel";
 import { useToast } from "@/components/ui/toast-provider";
 
@@ -182,6 +182,36 @@ function ExtraPayTable({
   );
 }
 
+
+function RatesLegend({ month }: { month: number }) {
+  const shifts = month === 12 || month === 1
+    ? EXTRA_PAY_SHIFTS
+    : EXTRA_PAY_SHIFTS.filter((s) => s !== "MN" && s !== "TN" && s !== "NN");
+  return (
+    <div
+      className="mt-2 rounded-lg border border-gray-200 shadow-sm bg-white px-4 py-3"
+      data-testid="extra-pay-rates-legend"
+    >
+      <p className="text-xs font-semibold text-gray-600 mb-2">Tarifas</p>
+      <div className="flex flex-col gap-2">
+        {shifts.map((shift) => (
+          <div key={shift} className="flex items-center gap-1.5">
+            <span
+              className="w-7 h-7 flex items-center justify-center rounded-sm text-xs font-bold select-none"
+              style={{ backgroundColor: SHIFT_COLORS[shift].color, color: SHIFT_COLORS[shift].textColor }}
+            >
+              {shift}
+            </span>
+            <span className="text-xs text-gray-700 font-mono tabular-nums whitespace-nowrap">
+              {euroFormatter.format(EXTRA_PAY_RATES[shift]!)}/turno
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "SUPER_ADMIN";
@@ -190,25 +220,24 @@ export default function HomePage() {
 
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(5);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const stored = localStorage.getItem("activeProject");
-      return stored ? (JSON.parse(stored) as { id: string; name: string }).id : null;
-    } catch {
-      return null;
-    }
-  });
+  // Initialize to null for SSR/client parity — localStorage is read in useEffect below.
+  // Lazy initializers with typeof window checks cause hydration mismatches.
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [activeProjectRegion, setActiveProjectRegion] = useState<string | null>(null);
 
-  const [activeProjectRegion, setActiveProjectRegion] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
+  // Hydrate from localStorage after first client render (avoids SSR mismatch)
+  useEffect(() => {
     try {
       const stored = localStorage.getItem("activeProject");
-      return stored ? ((JSON.parse(stored) as { region?: string | null }).region ?? null) : null;
+      if (stored) {
+        const parsed = JSON.parse(stored) as { id: string; region?: string | null };
+        setActiveProjectId(parsed.id ?? null);
+        setActiveProjectRegion(parsed.region ?? null);
+      }
     } catch {
-      return null;
+      // ignore malformed localStorage
     }
-  });
+  }, []);
 
   // PROJECT_ADMIN también puede editar celdas de su proyecto
   const canEdit = isAdmin || (session?.user?.projectMemberships ?? []).some(
@@ -281,6 +310,12 @@ export default function HomePage() {
   // Carga datos del mes
   // ---------------------------------------------------------------------------
   const loadSchedule = useCallback(async () => {
+    // Guard: no cargar si no hay proyecto seleccionado (evita fetch sin projectId
+    // que traería todos los empleados de la BD en vez de los del proyecto activo)
+    if (!activeProjectId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const projectParam = activeProjectId ? `&projectId=${activeProjectId}` : "";
@@ -645,9 +680,23 @@ export default function HomePage() {
             </span>
           )}
           <button
+            data-testid="btn-expanded-view"
+            onClick={() =>
+              activeProjectId &&
+              router.push(
+                `/multi-month?projectId=${activeProjectId}&year=${year}&month=${month}`
+              )
+            }
+            disabled={!activeProjectId}
+            className="ml-auto text-xs px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-colors print:hidden disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Vista expandida multi-mes (scroll horizontal)"
+          >
+            ↔ Vista ampliada
+          </button>
+          <button
             data-testid="btn-export-csv"
             onClick={handleExportCSV}
-            className="ml-auto text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors print:hidden"
+            className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition-colors print:hidden"
           >
             Exportar CSV
           </button>
@@ -709,6 +758,7 @@ export default function HomePage() {
                   <div className="mt-2 flex flex-wrap gap-4 items-start">
                     <CountersTable employees={employees} assignments={assignments} />
                     <ExtraPayTable employees={employees} assignments={assignments} month={month} />
+                    <RatesLegend month={month} />
                   </div>
                 )}
                 {employees.length === 0 && monthStatus === "ungenerated" && (

@@ -568,13 +568,22 @@ test("CP-110 — el resumen de complementos se renderiza bajo el cuadrante con t
     const counters = page.getByTestId("counters-table");
     const extraPayLegend = page.getByTestId("extra-pay-legend");
     const extraPayTable = page.getByTestId("extra-pay-table");
+    const ratesLegend = page.getByTestId("extra-pay-rates-legend");
 
     await expect(grid).toBeVisible({ timeout: 10_000 });
     await expect(counters).toBeVisible({ timeout: 10_000 });
     await expect(extraPayLegend).toBeVisible({ timeout: 10_000 });
     await expect(extraPayTable).toBeVisible({ timeout: 10_000 });
+    await expect(ratesLegend).toBeVisible({ timeout: 10_000 });
 
     await expect(extraPayLegend).not.toContainText("Paga/turno");
+    // Verify actual tariff rates are displayed (BUG-41)
+    await expect(ratesLegend).toContainText("Tarifas");
+    await expect(ratesLegend).toContainText("MF");
+    await expect(ratesLegend).toContainText("TF");
+    await expect(ratesLegend).toContainText("N");
+    await expect(ratesLegend).toContainText("NF");
+    await expect(ratesLegend).toContainText("/turno");
     await expect(extraPayTable).toContainText("P. Extra");
     await expect(extraPayTable).toContainText("MF");
     await expect(extraPayTable).toContainText("TF");

@@ -93,8 +93,10 @@ El fichero se guarda en `docs/qa-results/YYYY-MM-DD_HH-MM_sprint-{N}.md`.
 **Resultado obtenido**: ...  
 **Fix aplicado**: ...
 
-> ⚠️ Tras el informe, actualizar `docs/bugs/BUG-REGISTRY.md` con cada nuevo bug.
-> El agente `doc-writer` es el responsable de mantener ese registro actualizado.
+> ⚠️ **Handoff obligatorio tras el informe**: si he encontrado bugs reales del producto (no fallos del spec de test),
+> invoco al agente `doc-writer` explícitamente:
+> "Registra en `docs/bugs/BUG-REGISTRY.md` los siguientes bugs encontrados en QA del Sprint N: [lista]."
+> No espero a que el usuario lo pida. El registro es responsabilidad del `doc-writer`, no del usuario.
 
 ## Fixes aplicados durante la sesión de QA
 Lista de correcciones al spec aplicadas antes de dar el informe final.
