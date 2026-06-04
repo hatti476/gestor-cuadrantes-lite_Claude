@@ -1666,3 +1666,92 @@ Eliminada la condición `if (!isWeekend(date))` al añadir la clave a `forcedRes
 
 **Ficheros afectados**  
 - `lib/schedules/monthly-schedule-engine.ts`
+
+---
+
+## BUG-45 — RatesLegend se muestra debajo de la tabla en lugar de a la derecha
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario |
+| **Fecha detección** | 2026-06-03 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 6fb2172 |
+
+**Descripción**  
+La leyenda de tarifas (`RatesLegend`) aparecía debajo de la tabla `ExtraPayTable` en lugar de alineada a su derecha. El contenedor flex tenía `flex-wrap` activo, por lo que cuando el contenido era demasiado ancho se rompía a la segunda fila dejando la leyenda sola a la izquierda.
+
+**Fix aplicado**  
+Eliminado `flex-wrap` del contenedor exterior. Añadido `min-w-0` a la div de tablas (permite shrink). `RatesLegend` envuelta en `<div className="flex-shrink-0">`.
+
+**Ficheros afectados**  
+- `app/page.tsx`
+
+---
+
+## BUG-46 — Se muestran empleados de otros proyectos al volver de la vista multi-mes
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario |
+| **Fecha detección** | 2026-06-03 |
+| **Severidad** | 🔴 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 6fb2172 |
+
+**Descripción**  
+Después de navegar a la vista multi-mes y volver a la vista principal, la lista de empleados mostraba empleados de todos los proyectos mezclados. La causa raíz era efecto colateral del fix de hidratación (BUG-41): `activeProjectId` se inicializa a `null` en el primer render. `loadSchedule` se disparaba sin esperar a que el `useEffect` hidratara el valor desde localStorage, llamando a `/api/employees` sin `projectId` y devolviendo todos los empleados.
+
+**Fix aplicado**  
+Añadido guard al inicio de `loadSchedule`: `if (!activeProjectId) { setLoading(false); return; }`.
+
+**Ficheros afectados**  
+- `app/page.tsx`
+
+---
+
+## BUG-47 — Estilo del toolbar de vista multi-mes inconsistente con la app principal
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario |
+| **Fecha detección** | 2026-06-03 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 6fb2172 |
+
+**Descripción**  
+El toolbar de la vista multi-mes usaba `text-xl`/`text-sm` y `gap-4`, mientras que la app principal usa `text-xs` y `gap-2`. Visualmente inconsistente.
+
+**Fix aplicado**  
+Normalizado a `text-xs`/`gap-2`. Reemplazado `<label>` por `<span>`. Añadido `data-testid="btn-back"`.
+
+**Ficheros afectados**  
+- `app/multi-month/page.tsx`
+
+---
+
+## BUG-48 — 11+ noches consecutivas al cambiar el orden de rotación entre meses
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Testing manual usuario (Test1, junio 2026) |
+| **Fecha detección** | 2026-06-03 |
+| **Severidad** | 🔴 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | 6fb2172 |
+
+**Descripción**  
+Cuando el orden de rotación nocturna cambiaba entre meses, un empleado podía acumular 11+ noches consecutivas. La causa:
+1. Empleado A termina el mes anterior con N noches al final (ej. 3 trailing nights).
+2. La nueva rotación asigna un bloque de 7N a A a partir de la primera semana del nuevo mes.
+3. `applyCrossMonthNightBlocks` detecta las 3 trailing nights y añade 4 noches más de continuación al inicio del nuevo mes, solapándose con el nuevo bloque.
+4. Además, borraba legítimamente las N's de otros empleados que tenían cobertura rotacional (no cross-month) en esas fechas.
+
+**Fix aplicado**  
+En `applyCrossMonthNightBlocks`:
+- Antes de añadir continuación, comprobar si el empleado ya tiene un bloque de rotación nueva (`N` en `nightPlan`) dentro de la ventana `nightsRemaining + 3` días. Si existe, omitir la continuación (la nueva rotación cubre el slot).
+- Al borrar N's conflictivas de otros empleados, solo eliminar las de empleados que también tengan trailing nights (`prevByEmpNight`). N's de empleados sin trailing nights son asignaciones de rotación legítimas y no deben borrarse.
+
+**Ficheros afectados**  
+- `lib/schedules/cross-month.ts`
+
+**Tests añadidos**  
+- `tests/unit/schedules/cross-month-nights.test.ts` (3 casos)
