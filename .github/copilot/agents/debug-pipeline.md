@@ -29,5 +29,12 @@ el mismo protocolo antes de proponer cualquier solución.
 - Si necesito más información, la pido antes de proponer soluciones
 - Siempre incluyo cómo verificar que el fix ha funcionado
 
+## Entrega del fix — pasos obligatorios al terminar
+
+Cuando el fix está implementado y verificado:
+1. Indicar al usuario los ficheros modificados y el test añadido
+2. Recomendar explícitamente: **invocar `review-safe` antes del commit** si el fix toca ficheros críticos (`generate.ts`, `permissions.ts`, `shift-colors.ts`, `business-logic.ts`) o elimina/mueve lógica existente
+3. Si el bug no estaba registrado en `docs/bugs/BUG-REGISTRY.md`, indicar que debe registrarse vía `doc-writer`
+
 ## Base de conocimiento
 Leo `.github/copilot/context.md` para entender el stack y la arquitectura.

@@ -1573,3 +1573,96 @@ sin necesidad de importar el tipo concreto.
 
 *Registro mantenido por el agente `doc-writer`. Actualizar tras cada sesión de QA.*
 
+
+---
+
+## BUG-41 — Leyenda de tarifas de complementos desaparecida de la UI
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Revisión manual (regresión no detectada por E2E) |
+| **Fecha detección** | 2026-06-02 |
+| **Severidad** | 🟡 Medium |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | fix/sprint-23-iteration-extra-pay-alignment |
+
+**Descripción**  
+La caja de "Tarifas por turno" (MF=33€/turno, TF=33€/turno, N=38.5€/turno, NF=49.5€/turno) dejó de mostrarse en la UI. El test CP-110 solo verificaba que `data-testid="extra-pay-legend"` existía en el DOM (satisfecho por el wrapper div de ExtraPayTable), pero no comprobaba que las tarifas reales fueran visibles para el usuario.
+
+**Resultado esperado**  
+Los usuarios pueden ver las tarifas unitarias por tipo de turno junto al resumen de complementos.
+
+**Fix aplicado**  
+Añadido componente `RatesLegend` en `app/page.tsx` que muestra las tarifas usando `EXTRA_PAY_RATES` de `lib/schedules/business-logic.ts`. Se reutiliza `euroFormatter` y `SHIFT_COLORS` para consistencia visual. Actualizado CP-110 en `tests/e2e/sprint-16.spec.ts` para verificar que `data-testid="extra-pay-rates-legend"` es visible y contiene los textos "Tarifas", los códigos MF/TF/N/NF y el sufijo "/turno".
+
+**Ficheros afectados**  
+- `app/page.tsx`
+- `tests/e2e/sprint-16.spec.ts`
+
+---
+
+## BUG-42 — Empleados con preferencia T nunca reciben turnos de fin de semana
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Inspección de cuadrante (Test1, preferencia T, solo noches/tardes) |
+| **Fecha detección** | 2026-06-02 |
+| **Severidad** | 🔴 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | fix/sprint-23-iteration-extra-pay-alignment |
+
+**Descripción**  
+Los empleados con preferencia T que trabajan de lunes a viernes (5 turnos T consecutivos) quedaban sistemáticamente excluidos de la selección de paquetes de fin de semana. `wouldExceedWorkWindow` devolvía `true` (5+0+2=7>5), excluyéndolos de los Tiers 1 y 2. Con suficientes empleados M disponibles, los slots MF y TF eran cubiertos antes de que se aplicara el Tier 3, por lo que el empleado T nunca era asignado.
+
+**Resultado esperado**  
+Los empleados con preferencia T deben recibir fines de semana (slot TF) con rotación equitativa entre el equipo.
+
+**Fix aplicado**  
+Añadido Tier 2.5 en `ensureWeekendPlan` (función `monthly-schedule-engine.ts`). Después de los Tiers 1 y 2, si algún slot fue asignado a un empleado cuya preferencia no coincide con el slot (ej. empleado M ocupando TF), se intenta sustituir por un empleado con preferencia coincidente del pool relajado (sin límite de ventana de trabajo), siempre que no suponga el 3er fin de semana consecutivo.
+
+**Ficheros afectados**  
+- `lib/schedules/monthly-schedule-engine.ts`
+
+---
+
+## BUG-43 — Empleado recibe >2 fines de semana entre bloques de noche
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Inspección de cuadrante (Test2, febrero 2026, 4 fines de semana entre bloques) |
+| **Fecha detección** | 2026-06-02 |
+| **Severidad** | 🔴 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | fix/sprint-23-iteration-extra-pay-alignment |
+
+**Descripción**  
+El algoritmo solo impedía 3+ fines de semana CONSECUTIVOS, pero el requisito es que entre dos bloques de noches del mismo empleado no haya más de 2 fines de semana asignados. En meses con un intervalo largo entre bloques de noche era posible acumular 4 o más fines de semana seguidos sin violar la regla de "no 3 consecutivos".
+
+**Resultado esperado**  
+Máximo 2 fines de semana asignados a un empleado entre dos bloques de noche consecutivos suyos.
+
+**Fix aplicado**  
+Añadida función auxiliar `getWeekendsSinceLastNightBlock` dentro de `ensureWeekendPlan`. Filtra los bloques de noche del empleado cuyo fin (startFriday+9) es anterior al sábado planificado, calcula el más reciente y cuenta cuántos fines de semana se han asignado en `weekendShift` después de ese fin. Si el recuento es ≥ 2, el empleado queda excluido del pool en modo estricto (Tiers 1 y 2). El Tier 3 (último recurso) no aplica este límite para garantizar cobertura.
+
+**Ficheros afectados**  
+- `lib/schedules/monthly-schedule-engine.ts`
+
+---
+
+## BUG-44 — Más de 5 turnos de día consecutivos por reparación de cobertura en fin de semana
+
+| **Sprint** | Sprint 24 |
+| **Detectado por** | Inspección de cuadrante (Test2, mayo 2026, 6+ turnos MF consecutivos) |
+| **Fecha detección** | 2026-06-02 |
+| **Severidad** | 🔴 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | fix/sprint-23-iteration-extra-pay-alignment |
+
+**Descripción**  
+Cuando un empleado alcanzaba 5 turnos de día consecutivos (lunes–viernes), la Priority 2 le asignaba descanso forzado (D) el sábado. Sin embargo, la clave del sábado NO se añadía a `forcedRestDates` (por la condición `if (!isWeekend(date))`). La fase de reparación de cobertura (`repairCoverage`), al no encontrar la clave del sábado en `forcedRestDates`, podía convertir ese D en MF, generando 6 o más turnos de trabajo consecutivos, violando la regla de máximo 5.
+
+**Resultado esperado**  
+El descanso forzado por consecutividad (≥5 días de trabajo) es inviolable tanto en días de semana como en fin de semana.
+
+**Fix aplicado**  
+Eliminada la condición `if (!isWeekend(date))` al añadir la clave a `forcedRestDates`. Ahora todos los descansos forzados por consecutividad (incluyendo sábados y domingos) son protegidos de la fase de reparación. La liberación del paquete de fin de semana (`releaseWeekendPackageShift`) ya gestiona la reasignación del slot a otros empleados disponibles.
+
+**Ficheros afectados**  
+- `lib/schedules/monthly-schedule-engine.ts`

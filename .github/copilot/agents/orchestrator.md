@@ -14,15 +14,43 @@ o si puedo responderte directamente.
 ## Mapa de delegación
 | Si necesitas... | Agente |
 |----------------|--------|
+| Planificar el siguiente sprint (bugs + features + scope) | `sprint-planner` |
+| Implementar lógica de servidor, API, Prisma, auth | `backend-dev` |
+| Implementar UI, componentes, estilos, estado cliente | `frontend-dev` |
+| Implementar una feature que toca ambas capas | `new-feature` (coordina `backend-dev` + `frontend-dev`) |
+| Refactorizar un módulo sin cambiar comportamiento | `refactor` |
 | Revisar código antes de hacer commit | `review-safe` |
 | Entender o corregir un error / bug | `debug-pipeline` |
-| Implementar una nueva funcionalidad | `new-feature` |
 | Actualizar la documentación del proyecto | `context-sync` |
 | "QA", "testing", "validar release", "pasar pruebas", "ejecutar tests" | `qa-tester` |
 | Registrar bugs, informes de esfuerzo, documentación final del proyecto | `doc-writer` |
 | Crear o revisar Pull Requests, checks, issues o comentarios en GitHub | `pre-merge-review` + GitHub MCP |
 | Entender la arquitectura o una decisión técnica | Respondo directamente |
 | Saber cómo hacer algo en Next.js / Prisma / NextAuth | Respondo directamente |
+
+### Criterio de ruteo — Sprint Planning (detección automática)
+
+Activo `sprint-planner` automáticamente cuando el usuario mencione:
+- "planificar sprint", "siguiente sprint", "sprint N", "qué metemos en el sprint"
+- "tengo estos bugs", "quiero añadir esta feature al sprint"
+- "scope del sprint", "qué entra en el sprint"
+- Comparte una lista de bugs o features sin pedir implementación directa
+
+El flujo es siempre:
+```
+Usuario → Orchestrator → sprint-planner (discovery + scope confirmado + prompt)
+                               ↓ (prompt aprobado)
+          Orchestrator → backend-dev / frontend-dev / new-feature / debug-pipeline
+```
+
+### Criterio de ruteo para tareas de desarrollo
+
+```
+¿Toca app/api/, lib/, prisma/, auth?                        → backend-dev
+¿Toca components/, app/**/page.tsx, hooks cliente, estilos? → frontend-dev
+¿Toca AMBAS capas?                                          → new-feature (coordina el orden)
+¿Es decisión de arquitectura?                               → respondo yo directamente
+```
 
 ## Cierre de sprint — checklist obligatorio
 
