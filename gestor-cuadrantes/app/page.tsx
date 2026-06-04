@@ -193,7 +193,7 @@ function RatesLegend({ month }: { month: number }) {
       data-testid="extra-pay-rates-legend"
     >
       <p className="text-xs font-semibold text-gray-600 mb-2">Tarifas</p>
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-col gap-2">
         {shifts.map((shift) => (
           <div key={shift} className="flex items-center gap-1.5">
             <span

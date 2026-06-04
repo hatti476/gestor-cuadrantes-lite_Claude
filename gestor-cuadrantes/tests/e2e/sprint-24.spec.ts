@@ -104,7 +104,37 @@ test("CP-151 — Vista multi-mes tiene botón Volver con data-testid correcto @s
   }
 });
 
-// ── BUG-49: Multi-month cell styling matches main grid ─────────────────────────
+// ── BUG-50: RatesLegend vertical layout ────────────────────────────────────────
+
+test("CP-153 — Las tarifas se muestran en columna vertical, no en fila horizontal @smoke", async ({ page }) => {
+  try {
+    await loginAsAdmin(page);
+    await generateScheduleAndWait(page);
+
+    const legend = page.locator('[data-testid="extra-pay-rates-legend"]');
+    await expect(legend).toBeVisible({ timeout: 10_000 });
+
+    // Get the bounding boxes of the first two rate items
+    const items = legend.locator('.flex.items-center.gap-1\\.5');
+    const count = await items.count();
+    expect(count).toBeGreaterThanOrEqual(2);
+
+    const box0 = await items.nth(0).boundingBox();
+    const box1 = await items.nth(1).boundingBox();
+
+    expect(box0).not.toBeNull();
+    expect(box1).not.toBeNull();
+
+    // Vertical layout: second item must be BELOW the first (higher y), not to the right
+    expect(box1!.y).toBeGreaterThan(box0!.y + box0!.height * 0.5);
+    // And roughly same x (within 10px)
+    expect(Math.abs(box1!.x - box0!.x)).toBeLessThan(10);
+  } catch (error) {
+    await screenshotOnFail(page, "CP-153");
+    throw error;
+  }
+});
+
 
 test("CP-152 — Celdas de vista multi-mes usan ShiftCell con esquinas redondeadas @smoke", async ({ page }) => {
   try {
