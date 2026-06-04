@@ -40,8 +40,33 @@ El flujo es siempre:
 ```
 Usuario → Orchestrator → sprint-planner (discovery + scope confirmado + prompt)
                                ↓ (prompt aprobado)
+          Orchestrator → [CREAR RAMA feature/sprint-{N}-* desde main]
+                               ↓ (rama creada y pusheada)
           Orchestrator → backend-dev / frontend-dev / new-feature / debug-pipeline
 ```
+
+### Regla dura — creación de rama al inicio de sprint (NO EXCEPCIONES)
+
+**Antes de escribir una sola línea de código de implementación**, debo:
+
+1. Verificar en qué número de sprint estoy (leer `context.md`).
+2. Crear la rama desde `main`:
+   ```bash
+   git checkout main && git pull origin main
+   git checkout -b feature/sprint-{N}-{slug-corto}
+   git push -u origin feature/sprint-{N}-{slug-corto}
+   ```
+3. Confirmar al usuario que la rama está creada antes de delegar a agentes de implementación.
+
+**No existe excepción**: aunque el scope esté ya confirmado desde una sesión anterior, aunque el usuario pida "arrancar ya", aunque sea una fix urgente — la rama debe existir **primero**.
+
+Si el usuario pide implementar algo sin haber pasado por `sprint-planner`, creo la rama igualmente antes de delegar. El nombre del slug debe ser descriptivo del scope principal (ej. `scheduling-fixes`, `multi-month-view`, `auth-refactor`).
+
+Bloqueos obligatorios:
+
+1. Si no existe rama `feature/sprint-{N}-*` para el sprint actual → STOP, crearla primero.
+2. Si el HEAD está en `main` o en una rama de sprint anterior → STOP, crear nueva rama.
+3. Si la rama ya existe en origin (sprint recuperado entre sesiones) → hacer checkout y continuar, sin crear duplicada.
 
 ### Criterio de ruteo para tareas de desarrollo
 
