@@ -1873,3 +1873,56 @@ Los huecos de cobertura TF en fines de semana donde los empleados tienen MF en d
 
 **Tests añadidos**  
 - `tests/unit/schedules/coverage-swap-repair.test.ts` — CP-155, CP-156, CP-157
+---
+
+## BUG-53 — Vista ampliada inaccessible para usuarios con rol EMPLOYEE (403 en /api/employees y /api/holidays)
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-53 |
+| **Sprint** | Sprint 25 |
+| **Detectado por** | QA manual (test1@cuadrantes.local, rol viewer/EMPLOYEE) |
+| **Fecha detección** | 2026-06-05 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+El endpoint `GET /api/employees` devolvía 403 para usuarios con rol EMPLOYEE en el proyecto (global role USER). Esto hacía que la vista ampliada (`/multi-month`) mostrase "Error al cargar empleados" para cualquier usuario que no fuese SUPER_ADMIN, SUPER_VIEWER o PROJECT_ADMIN. Igualmente, `GET /api/holidays` devolvía 403 para los mismos usuarios, impidiendo que se mostrasen los festivos en cualquier vista no-admin.
+
+**Fix aplicado**  
+- `app/api/employees/route.ts`: La lógica de autorización ahora permite a usuarios con `canViewProject` (miembros del proyecto, incluyendo rol EMPLOYEE) ver los empleados cuando se especifica un `projectId` en la petición.  
+- `app/api/holidays/route.ts`: Se elimina la restricción `canViewHolidays` del GET. Cualquier usuario autenticado puede ver festivos (son información pública necesaria para mostrar el cuadrante correctamente).
+
+**Ficheros afectados**  
+- `app/api/employees/route.ts`
+- `app/api/holidays/route.ts`
+
+**Tests añadidos**  
+- `tests/e2e/sprint-25.spec.ts` — CP-158
+
+---
+
+## BUG-54 — Proyecto activo se resetea al primer proyecto en cada carga de página (stale closure)
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-54 |
+| **Sprint** | Sprint 25 |
+| **Detectado por** | QA manual (admin y project_admin no pueden seleccionar proyectos) |
+| **Fecha detección** | 2026-06-05 |
+| **Severidad** | 🔴 Critical |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | pendiente |
+
+**Descripción**  
+En `app/page.tsx`, el efecto de validación del proyecto activo capturaba `activeProjectId` desde el closure del componente al montar (siempre `null`, porque ambos efectos — lectura de localStorage y validación — se ejecutan en el mismo ciclo de mount con `[]` como dependencias). Como resultado, `projects.find(p => p.id === null)` nunca encontraba el proyecto guardado, y el efecto sobreescribía siempre la selección con el primer proyecto de la API. Esto hacía imposible mantener un proyecto seleccionado diferente al primero.
+
+**Fix aplicado**  
+El efecto de validación lee el `id` del proyecto activo directamente desde `localStorage` dentro del callback `.then()` (después de que el fetch resuelve), evitando el stale closure. Esto garantiza que se compara contra el valor real en localStorage, no contra el valor de estado capturado en el closure de mount.
+
+**Ficheros afectados**  
+- `app/page.tsx`
+
+**Tests añadidos**  
+- `tests/e2e/sprint-25.spec.ts` — CP-159

@@ -257,9 +257,17 @@ export default function HomePage() {
           setActiveProjectRegion(null);
           return;
         }
+        // Leer el id actual directamente de localStorage (evita stale closure:
+        // activeProjectId en el closure siempre es null en la primera ejecución)
+        let currentId: string | null = null;
+        try {
+          const lsData = localStorage.getItem("activeProject");
+          if (lsData) currentId = (JSON.parse(lsData) as { id: string }).id ?? null;
+        } catch { /* ignore */ }
+
         // Comprobar si el proyecto guardado sigue existiendo
-        const stored = projects.find((p) => p.id === activeProjectId);
-        if (stored) return; // sigue siendo válido, no hacer nada
+        const found = projects.find((p) => p.id === currentId);
+        if (found) return; // sigue siendo válido, no hacer nada
 
         // El proyecto guardado ya no existe → seleccionar el primero disponible
         const { id, name, region } = projects[0];
