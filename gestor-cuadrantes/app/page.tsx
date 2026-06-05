@@ -683,7 +683,7 @@ export default function HomePage() {
             </span>
           )}
           {canEdit && !prepStep && (
-            <span className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1 print:hidden">
+            <span data-testid="edit-mode-banner" className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1 print:hidden">
               Modo edición — clic en celda para asignar turno
             </span>
           )}
@@ -779,8 +779,8 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* Panel de preparación (solo admins) */}
-          {isAdmin && !loading && (
+          {/* Panel de preparación (SUPER_ADMIN y PROJECT_ADMIN del proyecto activo) */}
+          {canEdit && !loading && (
             <div className="w-56 flex-shrink-0 print:hidden">
               <PrepPanel
                 monthStatus={monthStatus}

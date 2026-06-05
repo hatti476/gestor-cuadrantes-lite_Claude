@@ -41,6 +41,28 @@ y extraigo:
    El nombre incluye la fecha y hora de ejecución y el número de sprint.
    Si el directorio no existe, lo creo con `mkdir -p docs/qa-results`.
 
+## Regla dura — matriz de roles (NO EXCEPCIONES)
+
+**Cualquier sprint que toque permisos, UI condicional o lógica de roles DEBE incluir tests para TODOS los roles afectados.**
+
+| Rol | Credencial | Qué puede hacer |
+|-----|-----------|----------------|
+| SUPER_ADMIN | `admin@cuadrantes.local` | Todo |
+| PROJECT_ADMIN | `pm@cuadrantes.local` | Editar + generar cuadrante en su proyecto |
+| EMPLOYEE | `tecnico1@cuadrantes.local` | Ver cuadrante publicado, vista multi-mes |
+| SUPER_VIEWER | `viewer@cuadrantes.local` | Solo lectura global |
+| USER (sin proyecto) | cualquier user sin membresía | Solo login |
+
+**Comprobación obligatoria antes de cerrar QA**: para CADA feature o fix de UI condicional (`{isAdmin && ...}`, `{canEdit && ...}`, `{canPublish && ...}`, etc.):
+1. Verificar que el elemento SÍ aparece para roles que deben verlo
+2. Verificar que el elemento NO aparece para roles que no deben verlo
+3. Si algún rol esperado no puede acceder → nuevo test de regresión inmediatamente
+
+**Patrón de detección automática**: si el código modificado contiene cualquiera de estas expresiones, añado tests multi-rol:
+- `isAdmin`, `canEdit`, `canPublish`, `canViewProject`, `isSuperAdmin`, `isProjectAdmin`
+- `session?.user?.role`, `projectMemberships`
+- cualquier condicional de render basado en permisos
+
 ## Reglas de generación de tests
 - Un `test()` de Playwright por cada CP-XX de la release note
 - El nombre del test incluye el ID: `test('CP-01 — Acceso sin sesión', ...)`
@@ -50,6 +72,7 @@ y extraigo:
 - Cada test hace su propio setup (no depende del estado de otro test)
 - Los fallos guardan captura automática en `tests/screenshots/{CP-ID}-fail.png`
 - Al terminar todos los tests, no detiene la suite ante fallos individuales
+- **Usar siempre `data-testid` específicos** — nunca `.locator('button', { hasText: "X" })` cuando puede haber múltiples botones con ese texto; preferir `[data-testid="btn-specific"]`
 
 ## Estructura de ficheros que genero
 

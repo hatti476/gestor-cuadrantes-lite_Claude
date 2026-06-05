@@ -1,13 +1,15 @@
 /**
  * Sprint 25 E2E regression tests.
  * Covers: BUG-53 (viewer 403 en multi-month), BUG-54 (stale closure proyecto activo),
- *         Feature: fila resaltada usuario, Feature: festivos en vista ampliada.
+ *         Feature: fila resaltada usuario, Feature: festivos en vista ampliada,
+ *         BUG-55 (PROJECT_ADMIN no ve PrepPanel).
  */
 
 import { test, expect } from "@playwright/test";
 import {
   loginAsAdmin,
   loginAsTech,
+  loginAsPM,
   generateScheduleAndWait,
   screenshotOnFail,
 } from "./helpers";
@@ -247,6 +249,37 @@ test("CP-161 — Los festivos se marcan en rojo en la cabecera de la vista ampli
     await expect(redHeaders.first()).toBeVisible({ timeout: 5_000 });
   } catch (error) {
     await screenshotOnFail(page, "CP-161");
+    throw error;
+  }
+});
+
+// ── BUG-55: PROJECT_ADMIN ve el PrepPanel (Generar, Vacaciones, etc.) ──────────
+
+test("CP-162 — PROJECT_ADMIN tiene acceso al PrepPanel (Generar cuadrante) @smoke", async ({ page }) => {
+  try {
+    await loginAsPM(page);
+    await expect(page).toHaveURL("/", { timeout: 10_000 });
+
+    // Esperar a que la página cargue
+    await page.waitForLoadState("networkidle");
+
+    // El PrepPanel debe estar visible
+    const prepPanel = page.locator('[data-testid="prep-panel"]');
+    await expect(prepPanel).toBeVisible({ timeout: 10_000 });
+
+    // El botón "Generar cuadrante" debe estar presente (usa testid específico)
+    const generateBtn = page.locator('[data-testid="btn-generate"]');
+    await expect(generateBtn).toBeVisible({ timeout: 5_000 });
+
+    // El paso "Vacaciones" también debe estar presente
+    const vacacionesStep = page.locator('[data-testid="prep-step-vacaciones"]');
+    await expect(vacacionesStep).toBeVisible({ timeout: 5_000 });
+
+    // El modo edición debe estar activo (canEdit = true para PROJECT_ADMIN)
+    const editModeBanner = page.locator('[data-testid="edit-mode-banner"]');
+    await expect(editModeBanner).toBeVisible({ timeout: 5_000 });
+  } catch (error) {
+    await screenshotOnFail(page, "CP-162");
     throw error;
   }
 });

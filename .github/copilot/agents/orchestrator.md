@@ -86,10 +86,21 @@ Bloqueos obligatorios:
 | Fix de algoritmo / lógica pura | Test unitario que falle sin el fix | `tests/unit/` |
 | Fix de UI / comportamiento de página | Test E2E (Playwright) | `tests/e2e/sprint-{N}.spec.ts` |
 | Feature nueva (cualquier capa) | Test unitario + E2E según alcance | Ambas |
+| Fix/feature que toca permisos o UI condicional | Tests E2E multi-rol | `tests/e2e/sprint-{N}.spec.ts` |
 
 Flujo de un fix: **diagnóstico → implementación → test → `tsc --noEmit` → commit (fix + test juntos)**
 
 Nunca se hace commit del fix sin su test en el mismo commit o en uno inmediatamente anterior.
+
+### Regla dura — validación multi-rol en UI (NO EXCEPCIONES)
+
+Si el fix o feature modifica código que contiene `isAdmin`, `canEdit`, `canPublish`, `isSuperAdmin`, `isProjectAdmin`, o cualquier otro condicional de permisos en el **render de componentes**, DEBO:
+
+1. Identificar TODOS los roles que deberían ver / no ver el elemento
+2. Delegar a `qa-tester` para crear tests con cada rol afectado
+3. No dar el fix por cerrado hasta que los tests de TODOS los roles pasen
+
+**Causa raíz de BUG-55 (Sprint 25)**: el PrepPanel usaba `{isAdmin && ...}` (solo SUPER_ADMIN) pero debía usar `{canEdit && ...}` (también PROJECT_ADMIN). Se detectó en prueba manual, no en QA automatizado, porque los tests solo cubrían SUPER_ADMIN y EMPLOYEE, nunca PROJECT_ADMIN. Esta regla existe para evitar que se repita.
 
 ## Cierre de sprint — checklist obligatorio
 

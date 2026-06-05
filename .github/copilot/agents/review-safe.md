@@ -49,6 +49,31 @@ Si alguna señal se activa:
    - ¿Se verifica el rol `admin` antes de operaciones de escritura?
    - ¿Hay secretos o credenciales hardcodeadas?
    - ¿Los inputs del usuario están sanitizados antes de llegar a Prisma?
+
+### 1b. **Permisos de UI — checklist obligatorio** (nuevo desde Sprint 25, BUG-55):
+
+Cuando el diff contiene `isAdmin`, `canEdit`, `canPublish`, o cualquier condicional de render basado en roles, ejecuto este checklist:
+
+```bash
+git diff HEAD -- app/ components/ | grep -E "isAdmin|canEdit|canPublish|isSuperAdmin|isProjectAdmin"
+```
+
+Para cada ocurrencia:
+- ¿El condicional usa la variable correcta? (`isAdmin` solo es `SUPER_ADMIN`; `canEdit` incluye `PROJECT_ADMIN`)
+- ¿Debería un `PROJECT_ADMIN` también poder acceder a este elemento? Si sí → usar `canEdit`, no `isAdmin`
+- ¿Debería un `SUPER_VIEWER` ver este elemento en modo lectura?
+
+**Mapa de variables de permiso en `app/page.tsx`**:
+| Variable | Verdadero para |
+|----------|---------------|
+| `isAdmin` | Solo SUPER_ADMIN (`session?.user?.role === "SUPER_ADMIN"`) |
+| `canEdit` | SUPER_ADMIN + PROJECT_ADMIN del proyecto activo |
+| `canPublish` | `canEdit && !!activeProjectId` |
+
+**Error típico a detectar**: usar `{isAdmin && <PrepPanel>}` cuando el elemento debe ser visible también para PROJECT_ADMIN → debe ser `{canEdit && <PrepPanel>}`.
+
+Si encuentro este error: 🔴 CRÍTICO — paro y corrijo antes de aceptar el commit.
+
 ### 2. **Bugs en lógica de turnos**:
    - ¿El algoritmo respeta las reglas de cobertura mínima (2M + 2T en laborables)?
    - ¿Se valida que no haya dos personas asignadas a noche el mismo día?
