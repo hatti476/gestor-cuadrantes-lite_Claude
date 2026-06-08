@@ -1885,7 +1885,7 @@ Los huecos de cobertura TF en fines de semana donde los empleados tienen MF en d
 | **Fecha detección** | 2026-06-05 |
 | **Severidad** | 🟠 High |
 | **Estado** | ✅ Fixed |
-| **Commit fix** | pendiente |
+| **Commit fix** | `8cf8803` |
 
 **Descripción**  
 El endpoint `GET /api/employees` devolvía 403 para usuarios con rol EMPLOYEE en el proyecto (global role USER). Esto hacía que la vista ampliada (`/multi-month`) mostrase "Error al cargar empleados" para cualquier usuario que no fuese SUPER_ADMIN, SUPER_VIEWER o PROJECT_ADMIN. Igualmente, `GET /api/holidays` devolvía 403 para los mismos usuarios, impidiendo que se mostrasen los festivos en cualquier vista no-admin.
@@ -1913,7 +1913,7 @@ El endpoint `GET /api/employees` devolvía 403 para usuarios con rol EMPLOYEE en
 | **Fecha detección** | 2026-06-05 |
 | **Severidad** | 🔴 Critical |
 | **Estado** | ✅ Fixed |
-| **Commit fix** | pendiente |
+| **Commit fix** | `8cf8803` |
 
 **Descripción**  
 En `app/page.tsx`, el efecto de validación del proyecto activo capturaba `activeProjectId` desde el closure del componente al montar (siempre `null`, porque ambos efectos — lectura de localStorage y validación — se ejecutan en el mismo ciclo de mount con `[]` como dependencias). Como resultado, `projects.find(p => p.id === null)` nunca encontraba el proyecto guardado, y el efecto sobreescribía siempre la selección con el primer proyecto de la API. Esto hacía imposible mantener un proyecto seleccionado diferente al primero.
@@ -1926,3 +1926,32 @@ El efecto de validación lee el `id` del proyecto activo directamente desde `loc
 
 **Tests añadidos**  
 - `tests/e2e/sprint-25.spec.ts` — CP-159
+
+---
+
+## BUG-55 — PROJECT_ADMIN no puede ver ni usar el PrepPanel (Generar, Vacaciones, Bajas...)
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-55 |
+| **Sprint** | Sprint 25 |
+| **Detectado por** | QA manual (pm@cuadrantes.local, rol PROJECT_ADMIN) |
+| **Fecha detección** | 2026-06-08 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `9c03938` |
+
+**Descripción**  
+Un usuario con rol PROJECT_ADMIN podía editar celdas del cuadrante (el banner "Modo edición" era visible) pero no vía el panel lateral de preparación que contiene los pasos: Vacaciones, Días libres, Bajas, Festivos y Generar cuadrante. Esto le impedía completar el flujo de preparación y generación.
+
+**Causa raíz**  
+En `app/page.tsx`, el PrepPanel estaba condicionado con `{isAdmin && !loading && (` donde `isAdmin = session?.user?.role === "SUPER_ADMIN"`. Un PROJECT_ADMIN tiene `canEdit = true` (es miembro con ese rol en el proyecto) pero `isAdmin = false` (su rol global es USER). La condición excluía implícitamente a cualquier rol no SUPER_ADMIN. El backend ya aceptaba PROJECT_ADMIN correctamente en `/api/schedules/generate` y `/api/schedules/publish`.
+
+**Fix aplicado**  
+Cambiar `{isAdmin && !loading && (` por `{canEdit && !loading && (` en el bloque del PrepPanel. También se añadió `data-testid="edit-mode-banner"` al span del modo edición para facilitar tests futuros.
+
+**Ficheros afectados**  
+- `app/page.tsx`
+
+**Tests añadidos**  
+- `tests/e2e/sprint-25.spec.ts` — CP-162
