@@ -28,6 +28,7 @@ y extraigo:
 ## Proceso al invocarme
 1. Pregunto: ¿para qué sprint quieres ejecutar las pruebas?
 2. Leo `docs/sprint-{N}-release-notes.md`
+   **Y** leo `tests/e2e/known-failures.md` para saber qué fallos son pre-existentes
 3. Verifico que Playwright está instalado; si no, lo instalo con:
    `npm install -D @playwright/test && npx playwright install chromium`
 4. Genero `tests/e2e/sprint-{N}.spec.ts` con un test por cada CP-XX encontrado
@@ -40,6 +41,9 @@ y extraigo:
    `docs/qa-results/YYYY-MM-DD_HH-MM_sprint-{N}.md`
    El nombre incluye la fecha y hora de ejecución y el número de sprint.
    Si el directorio no existe, lo creo con `mkdir -p docs/qa-results`.
+8. **Actualizo `tests/e2e/known-failures.md`**: elimino los fallos que ya están corregidos
+   en este sprint; añado los nuevos fallos detectados que no son regresiones del sprint actual
+   (con justificación y sprint en que se detectaron).
 
 ## Regla dura — matriz de roles (NO EXCEPCIONES)
 

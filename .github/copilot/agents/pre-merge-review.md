@@ -42,12 +42,23 @@ Si se activa algún bloqueo → reportar al usuario con:
 > capturado antes del merge.*
 
 ### 1. Verificación de tests
-Ejecuta los siguientes comandos y verifica que pasan al 100%:
-- `npm run test:unit`
-- `npx playwright test`
 
-Si algún test falla → STOP. No continúo hasta que estén en verde.
-Si todos pasan → continúo al siguiente paso.
+Primero leo `tests/e2e/known-failures.md` para saber qué fallos son pre-existentes
+y cuáles serían regresiones reales.
+
+Ejecuta los siguientes comandos:
+```bash
+npm run test:unit
+npx playwright test --reporter=list
+```
+
+Criterios de aceptación:
+- `npm run test:unit` → 100% verde. Sin excepciones.
+- `npx playwright test` → cualquier fallo que NO esté en `known-failures.md` es 🔴 BLOQUEANTE.
+- `npx playwright test --grep @smoke` → 100% verde. Los @smoke nunca pueden fallar al hacer merge.
+
+Si un fallo está en `known-failures.md` → documentarlo en el informe de PR como "fallo pre-existente conocido, no introducido en este sprint".
+Si un fallo NO está en `known-failures.md` → STOP. Es una regresión. No continúo hasta resolver.
 
 ### 1b. Cobertura de tests — BLOQUEANTE si falta
 Reviso el diff con main buscando **lógica de negocio sin test**:

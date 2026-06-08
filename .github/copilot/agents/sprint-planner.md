@@ -230,6 +230,20 @@ git commit -m "chore: baseline sprint N — NNN unit, NN smoke green"
 **Verificación del resultado:**
 - [Criterio concreto y comprobable, no subjetivo]
 
+**Criterios de aceptación (CP-XX) — se definen AQUÍ, antes de implementar:**
+
+> Estos criterios se convierten directamente en tests Playwright. Definirlos antes evita
+> que los tests solo validen lo que se hizo en lugar de lo que se especificó.
+
+```
+CP-{NNN}: [Título del criterio]
+  DADO:    [estado inicial / usuario logado como X]
+  CUANDO:  [acción del usuario]
+  ENTONCES: [resultado observable y comprobable]
+  Roles:   [qué roles deben ver esto / qué roles NO deben verlo]
+  Testid:  [data-testid esperado en el elemento a validar]
+```
+
 **Tests a añadir:**
 - Tipo: [unitario | E2E | @smoke]
 - Caso: [descripción del escenario]
@@ -249,11 +263,17 @@ git commit -m "tipo: descripción del cambio"
 
 ```bash
 npm run test:unit          # → mínimo NNN/NNN ✅
-npx playwright test        # → mínimo NNN/NNN ✅
-npx playwright test --grep @smoke  # → mínimo NN/NN ✅
+npx playwright test        # → mínimo NNN/NNN ✅ (o fallos justificados en known-failures.md)
+npx playwright test --grep @smoke  # → mínimo NN/NN ✅ (100% — ningún @smoke puede fallar)
 npm run ci:check           # → 0 errores TypeScript, 0 warnings ESLint
 npm run build              # → build de producción OK
 ```
+
+**Verificar known-failures.md:**
+```bash
+cat tests/e2e/known-failures.md
+```
+Cualquier fallo en la suite que NO esté listado en `known-failures.md` es una regresión → STOP.
 
 Documentos obligatorios a actualizar antes del push:
 - `docs/REQUIREMENTS.md` — nuevos RF-XX si los hay
