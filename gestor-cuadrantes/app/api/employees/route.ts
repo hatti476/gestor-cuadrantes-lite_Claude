@@ -9,7 +9,7 @@ import { canViewProject, isSuperAdmin, canViewEmployees } from "@/lib/auth/permi
 // ---------------------------------------------------------------------------
 // GET /api/employees[?projectId=xxx] — lista empleados
 // Roles permitidos: SUPER_ADMIN, SUPER_VIEWER, PROJECT_ADMIN (cualquier proyecto)
-// Los VIEWER (USER/EMPLOYEE sin rol de admin de proyecto) NO tienen acceso.
+// También permitido: cualquier miembro del proyecto (EMPLOYEE) cuando se especifica projectId.
 // ---------------------------------------------------------------------------
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -17,14 +17,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  if (!canViewEmployees(session)) {
-    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
-  }
-
   const { searchParams } = req.nextUrl;
   const projectId = searchParams.get("projectId") || null;
   // includeInactive=true solo para la página de gestión de empleados (SUPER_ADMIN)
   const includeInactive = isSuperAdmin(session) && searchParams.get("includeInactive") === "true";
+
+  // canViewEmployees cubre SUPER_ADMIN, SUPER_VIEWER y PROJECT_ADMIN globalmente.
+  // Los miembros con rol EMPLOYEE pueden ver los empleados de su proyecto específico.
+  if (!canViewEmployees(session)) {
+    if (!projectId || !canViewProject(session, projectId)) {
+      return NextResponse.json({ error: "Prohibido" }, { status: 403 });
+    }
+  }
 
   if (projectId && !canViewProject(session, projectId)) {
     return NextResponse.json({ error: "Prohibido" }, { status: 403 });

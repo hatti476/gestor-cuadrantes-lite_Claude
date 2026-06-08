@@ -2,18 +2,14 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { canViewHolidays, canManageHolidays } from "@/lib/auth/permissions";
+import { canManageHolidays } from "@/lib/auth/permissions";
 
 // GET /api/holidays?year=2026
-// Roles permitidos: SUPER_ADMIN, SUPER_VIEWER, PROJECT_ADMIN
-// Los VIEWER (USER sin rol de admin de proyecto) NO tienen acceso.
+// Cualquier usuario autenticado puede ver festivos (información necesaria para
+// mostrar correctamente el cuadrante, incluyendo vistas de rol EMPLOYEE/viewer).
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-
-  if (!canViewHolidays(session)) {
-    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
-  }
 
   const yearParam = req.nextUrl.searchParams.get("year");
   const year = yearParam ? parseInt(yearParam, 10) : new Date().getFullYear();

@@ -4,7 +4,25 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
-## [2.4.0] - 2026-06-04 🔄
+## [2.5.0] - 2026-06-08 ✅
+
+### Added
+- **Fila propia resaltada en multi-mes**: la fila del empleado logado aparece con fondo índigo, borde `ring-2 ring-indigo-300` e indicador `▶` en la vista `/multi-month`, consistente con la vista mensual normal.
+- **Festivos en rojo en multi-mes**: las cabeceras de días festivos aparecen con `bg-red-200 text-red-800` en `/multi-month`; celdas sin turno en festivos con `bg-red-50`.
+- **`tests/e2e/known-failures.md`**: nuevo fichero con 14 fallos E2E pre-existentes documentados, para distinguir regresiones de fallos conocidos en cada sprint.
+
+### Fixed
+- **BUG-53** 🟠: EMPLOYEE recibía 403 en `/api/employees` y `/api/holidays`, impidiendo ver la vista multi-mes. Fix: permisos ampliados a miembros del proyecto con `canViewProject`.
+- **BUG-54** 🔴: Proyecto activo se reseteaba al primer proyecto en cada carga (stale closure en `useEffect`). Fix: leer `localStorage` dentro del `.then()` del fetch.
+- **BUG-55** 🟠: PROJECT_ADMIN no veía el PrepPanel (Generar, Vacaciones, Bajas…). Fix: condición `{isAdmin && ...}` cambiada a `{canEdit && ...}`.
+
+### Process
+- Smoke tests obligatorios tras cada commit de tarea en el flujo de agentes.
+- `review-safe` mandatorio para ficheros críticos de UI/permisos.
+- CP-XX (criterios de aceptación) definidos en sprint planning antes de implementar.
+- Matriz de roles en `qa-tester`: todo cambio de permisos genera tests multi-rol.
+
+## [2.4.0] - 2026-06-04 ✅
 
 ### Added
 - **Vista ampliada multi-mes**: nueva página `/multi-month` con scroll horizontal tipo Excel (2/3/4/6 meses configurables, empleados en filas, fechas en columnas, coloreado por tipo de turno). Accesible desde el botón "↔ Vista ampliada" en la barra de herramientas del cuadrante.

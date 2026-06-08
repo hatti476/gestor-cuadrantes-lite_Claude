@@ -86,10 +86,45 @@ Bloqueos obligatorios:
 | Fix de algoritmo / lógica pura | Test unitario que falle sin el fix | `tests/unit/` |
 | Fix de UI / comportamiento de página | Test E2E (Playwright) | `tests/e2e/sprint-{N}.spec.ts` |
 | Feature nueva (cualquier capa) | Test unitario + E2E según alcance | Ambas |
+| Fix/feature que toca permisos o UI condicional | Tests E2E multi-rol | `tests/e2e/sprint-{N}.spec.ts` |
 
-Flujo de un fix: **diagnóstico → implementación → test → `tsc --noEmit` → commit (fix + test juntos)**
+Flujo de un fix: **diagnóstico → implementación → test → `tsc --noEmit` → commit → smoke tests**
 
 Nunca se hace commit del fix sin su test en el mismo commit o en uno inmediatamente anterior.
+
+### Regla dura — smoke tests INMEDIATAMENTE después de cada commit de tarea
+
+Después de CADA commit (no solo al cerrar el sprint), ejecuto:
+
+```bash
+npx playwright test --grep @smoke --reporter=list
+```
+
+Si algún smoke test que antes pasaba ahora falla → **STOP. Fix inmediato antes de pasar a la siguiente tarea.**
+
+No espero a QA al final del sprint para detectar regresiones. Cada tarea cierra con smoke en verde.
+
+**Por qué**: BUG-55 estuvo en el código desde sprints anteriores porque QA solo corría al cerrar el sprint. Con smoke tras cada commit, una regresión de permisos de UI se detecta en el commit que la introduce, no 6 commits después.
+
+### Regla dura — `review-safe` obligatorio para ficheros críticos de UI/permisos
+
+Antes de commitear cualquier cambio que toque los siguientes ficheros, **DEBO** invocar `review-safe`:
+
+- `app/page.tsx`
+- `lib/auth/permissions.ts`
+- cualquier componente que contenga `{isAdmin && ...}`, `{canEdit && ...}`, `{canPublish && ...}`
+
+No es opcional. Si el agente de implementación no lo hizo → lo hago yo antes de aceptar el commit.
+
+### Regla dura — validación multi-rol en UI (NO EXCEPCIONES)
+
+Si el fix o feature modifica código que contiene `isAdmin`, `canEdit`, `canPublish`, `isSuperAdmin`, `isProjectAdmin`, o cualquier otro condicional de permisos en el **render de componentes**, DEBO:
+
+1. Identificar TODOS los roles que deberían ver / no ver el elemento
+2. Delegar a `qa-tester` para crear tests con cada rol afectado
+3. No dar el fix por cerrado hasta que los tests de TODOS los roles pasen
+
+**Causa raíz de BUG-55 (Sprint 25)**: el PrepPanel usaba `{isAdmin && ...}` (solo SUPER_ADMIN) pero debía usar `{canEdit && ...}` (también PROJECT_ADMIN). Se detectó en prueba manual, no en QA automatizado, porque los tests solo cubrían SUPER_ADMIN y EMPLOYEE, nunca PROJECT_ADMIN. Esta regla existe para evitar que se repita.
 
 ## Cierre de sprint — checklist obligatorio
 
@@ -108,6 +143,7 @@ Si alguno falta, lo genero o delego a `doc-writer` sin esperar a que el usuario 
 | 6 | Changelog del proyecto | `CHANGELOG.md` | `doc-writer` |
 | 7 | Tests unitarios | `tests/unit/` | yo |
 | 7b | **Tests E2E** ⚠️ **OBLIGATORIO** | `tests/e2e/` | yo |
+| 7c | **known-failures.md actualizado** | `tests/e2e/known-failures.md` | yo |
 | 8 | Commits atómicos por tarea | rama feature | yo |
 | 9 | Rama pusheada a origin | GitHub | yo |
 | 10 | Pull Request abierta | GitHub | `pre-merge-review` |

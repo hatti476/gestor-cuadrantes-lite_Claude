@@ -257,9 +257,17 @@ export default function HomePage() {
           setActiveProjectRegion(null);
           return;
         }
+        // Leer el id actual directamente de localStorage (evita stale closure:
+        // activeProjectId en el closure siempre es null en la primera ejecución)
+        let currentId: string | null = null;
+        try {
+          const lsData = localStorage.getItem("activeProject");
+          if (lsData) currentId = (JSON.parse(lsData) as { id: string }).id ?? null;
+        } catch { /* ignore */ }
+
         // Comprobar si el proyecto guardado sigue existiendo
-        const stored = projects.find((p) => p.id === activeProjectId);
-        if (stored) return; // sigue siendo válido, no hacer nada
+        const found = projects.find((p) => p.id === currentId);
+        if (found) return; // sigue siendo válido, no hacer nada
 
         // El proyecto guardado ya no existe → seleccionar el primero disponible
         const { id, name, region } = projects[0];
@@ -675,7 +683,7 @@ export default function HomePage() {
             </span>
           )}
           {canEdit && !prepStep && (
-            <span className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1 print:hidden">
+            <span data-testid="edit-mode-banner" className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1 print:hidden">
               Modo edición — clic en celda para asignar turno
             </span>
           )}
@@ -771,8 +779,8 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* Panel de preparación (solo admins) */}
-          {isAdmin && !loading && (
+          {/* Panel de preparación (SUPER_ADMIN y PROJECT_ADMIN del proyecto activo) */}
+          {canEdit && !loading && (
             <div className="w-56 flex-shrink-0 print:hidden">
               <PrepPanel
                 monthStatus={monthStatus}
