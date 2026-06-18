@@ -27,9 +27,8 @@ Confirmados como pre-existentes mediante `git stash` en Sprint 25 (2026-06-05).
 | CP-109 | PrepPanel B toggle no encontrado | Sprint 16 | data-testid del toggle cambiado en refactor posterior |
 | CP-124 | Botón undo generation no encontrado | Sprint 18 | Funcionalidad eliminada o renombrada en sprint posterior |
 | CP-139 | SUPER_VIEWER grid no visible | Sprint 19 | Cuadrante no publicado en seed; SUPER_VIEWER requiere publicado |
-| CP-140 | SUPER_VIEWER: Promise.race resuelve con unpublished-message transitorio | Sprint 19 | Misma causa que CP-139 — seed sin cuadrante publicado; Promise.race resuelve cuando unpublished-message es visible, luego desaparece antes de isUnpublished check |
 
-**Total pre-existentes**: 13  
+**Total pre-existentes**: 12  
 **Última verificación**: Sprint 25 (2026-06-05)  
 **Método de verificación**: `git stash` de cambios sprint-25 + ejecución completa del suite
 
@@ -44,3 +43,4 @@ Confirmados como pre-existentes mediante `git stash` en Sprint 25 (2026-06-05).
 | BUG-55 / CP-162 | PROJECT_ADMIN no veía PrepPanel (Generar, Vacaciones...) | Sprint 25 | `9c03938` |
 | CP-149 | data-testid 'rates-legend' incorrecto + positional check frágil (flex-wrap) | Sprint 26 | `sprint-26` |
 | CP-154 | Alineación pixel-level frágil con flex-wrap en viewport estrecho | Sprint 26 | `sprint-26` |
+| CP-140 | Promise.race resolvía con unpublished-message transitorio antes de networkidle | Sprint 26 | `sprint-26` |

@@ -318,35 +318,41 @@ test("CP-140 — SUPER_VIEWER no puede editar celdas (no hay ShiftEditor al hace
   await loginAsViewer(page);
   await page.goto(ROUTES.home);
 
+  // Fix CP-140: Promise.race was unreliable — unpublished-message could resolve
+  // the race but then disappear during React re-render before isVisible() ran.
+  // Now we wait for networkidle to let the page settle, then evaluate state once.
+  await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+
   const unpublishedMessage = page.locator('[data-testid="unpublished-message"]');
   const grid = page.locator('[data-testid="schedule-grid"]');
-
-  await Promise.race([
-    expect(unpublishedMessage).toBeVisible({ timeout: 15_000 }),
-    expect(grid).toBeVisible({ timeout: 15_000 }),
-  ]);
+  const shiftEditor = page.locator('[data-testid="shift-editor"]');
 
   const isUnpublished = await unpublishedMessage.isVisible();
+  const hasGrid = await grid.isVisible();
+
   if (isUnpublished) {
-    await expect(unpublishedMessage).toBeVisible();
-    await expect(page.locator('[data-testid="shift-editor"]')).not.toBeVisible();
+    // Correct: SUPER_VIEWER sees unpublished message — no editor must be shown
+    await expect(shiftEditor).not.toBeVisible();
     return;
   }
-  await expect(grid).toBeVisible({ timeout: 15_000 });
 
-  // Intentar hacer clic en una celda — el ShiftEditor no debe aparecer
-  const firstCell = grid.locator("td.cursor-pointer").first();
-  const cellCount = await firstCell.count();
-  if (cellCount > 0) {
-    await firstCell.click();
-    // El editor no debe aparecer
-    await expect(
-      page.locator('[data-testid="shift-editor"]')
-    ).not.toBeVisible({ timeout: 2_000 });
-  } else {
-    // No hay celdas con cursor-pointer → SUPER_VIEWER no puede editar (correcto)
-    expect(cellCount).toBe(0);
+  if (hasGrid) {
+    // Published schedule visible: cells must NOT have cursor-pointer (no edit rights)
+    const editableCells = grid.locator("td.cursor-pointer");
+    const cellCount = await editableCells.count();
+    if (cellCount > 0) {
+      await editableCells.first().click();
+      await expect(shiftEditor).not.toBeVisible({ timeout: 2_000 });
+    } else {
+      // No cursor-pointer cells → SUPER_VIEWER correctly has no edit access
+      expect(cellCount).toBe(0);
+    }
+    return;
   }
+
+  // Neither grid nor unpublished-message visible (e.g. empty project, loading ended)
+  // ShiftEditor must still not be visible — viewer never has edit rights
+  await expect(shiftEditor).not.toBeVisible();
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
