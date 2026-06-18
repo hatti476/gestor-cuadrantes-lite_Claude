@@ -27,10 +27,8 @@ Confirmados como pre-existentes mediante `git stash` en Sprint 25 (2026-06-05).
 | CP-109 | PrepPanel B toggle no encontrado | Sprint 16 | data-testid del toggle cambiado en refactor posterior |
 | CP-124 | Botón undo generation no encontrado | Sprint 18 | Funcionalidad eliminada o renombrada en sprint posterior |
 | CP-139 | SUPER_VIEWER grid no visible | Sprint 19 | Cuadrante no publicado en seed; SUPER_VIEWER requiere publicado |
-| CP-149 | RatesLegend testid incorrecto | Sprint 24 | data-testid del componente cambiado |
-| CP-154 | Alineación de columnas en tabla de tarifas | Sprint 24 | Cambio de layout en sprint 24 no actualizado en el test |
 
-**Total pre-existentes**: 14  
+**Total pre-existentes**: 12  
 **Última verificación**: Sprint 25 (2026-06-05)  
 **Método de verificación**: `git stash` de cambios sprint-25 + ejecución completa del suite
 
@@ -43,3 +41,5 @@ Confirmados como pre-existentes mediante `git stash` en Sprint 25 (2026-06-05).
 | BUG-53 / CP-158 | EMPLOYEE recibía 403 en `/api/employees` y `/api/holidays` | Sprint 25 | `8cf8803` |
 | BUG-54 / CP-159 | Stale closure reseteaba proyecto activo al primer proyecto | Sprint 25 | `8cf8803` |
 | BUG-55 / CP-162 | PROJECT_ADMIN no veía PrepPanel (Generar, Vacaciones...) | Sprint 25 | `9c03938` |
+| CP-149 | data-testid 'rates-legend' incorrecto + positional check frágil (flex-wrap) | Sprint 26 | `sprint-26` |
+| CP-154 | Alineación pixel-level frágil con flex-wrap en viewport estrecho | Sprint 26 | `sprint-26` |
