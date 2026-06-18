@@ -7,7 +7,8 @@
  *
  * REGLA: Consistencia semanal — un empleado no cambia de M a T (ni viceversa)
  *        dentro de la misma semana (ISO week). Solo se rompe cuando la cobertura
- *        hard (RF-16) lo requiere.
+ *        hard (RF-16) lo requiere (urgentT puede cambiar M→T, que es transición
+ *        válida per ET Art.34.3; urgentM NO puede cambiar T→M porque gap=8h).
  * REGLA: Preferencia de turno tiene prioridad sobre equidad solo cuando la
  *        cobertura soft ya está cubierta.
  */
@@ -17,7 +18,20 @@
 /**
  * Select the best weekday shift (M or T) for an employee based on:
  * weekly consistency (weekShift), shift preference, and coverage equity.
- * Returns "M", "T", or "D" (rest day if forced rest is required).
+ * Returns "M", "T", or "J".
+ *
+ * BUG-56 fix: every return path that assigns M or T now records the choice in
+ * state.weekShift so that weekly consistency holds for all subsequent days of
+ * the same ISO week.
+ *
+ * BUG-57 fix (RF-16 override): urgentT is checked BEFORE the weekly-consistency
+ * guard so that an employee locked to M can be switched to T when coverage hard
+ * minimum would otherwise not be met (M→T is a valid ≥12h transition).
+ * urgentM does NOT override a T-locked employee (T→M = 8h gap, invalid).
+ *
+ * BUG-57 fix (soft target balance): the soft-target steerer no longer carries
+ * `pref !== "M"` / `pref !== "T"` guards, allowing it to steer preference
+ * employees toward the under-covered shift when the ≥2M/≥2T target demands it.
  */
 export function pickWorkdayShift(
   emp: { id: string; rotationOrder: number; shiftPreference?: string | null },
@@ -40,52 +54,62 @@ export function pickWorkdayShift(
   // J does not count toward M/T coverage — handled by _pickWeekendShift returning "D".
   if (pref === "J") return "J";
 
-  // Weekly consistency: if already assigned M or T this week, prefer keeping same
+  // BUG-56 fix: helper that always records the weekly shift before returning.
+  // All paths that can assign M or T when weeklyShift is null must call this.
+  const setAndReturn = (shift: "M" | "T"): string => {
+    if (!state.weekShift.has(wKey)) state.weekShift.set(wKey, shift);
+    return shift;
+  };
+
   const weeklyShift = state.weekShift.get(wKey) ?? null;
+  const urgentM = cov.M < 1;
+  const urgentT = cov.T < 1;
+
+  // BUG-57 fix: RF-16 hard minimum overrides weekly consistency.
+  // urgentT can switch a M-locked employee to T (M→T: ≥24h gap → valid).
+  // urgentM CANNOT switch a T-locked employee to M (T→M: 8h gap → invalid).
+  if (urgentT && !urgentM && weeklyShift === "M") {
+    state.weekShift.set(wKey, "T");
+    return "T";
+  }
+
   if (preserveWeeklyShiftForLaterCoverage && (weeklyShift === "M" || weeklyShift === "T")) {
     return weeklyShift;
   }
 
-  // Weekly consistency: maintain same shift type all week. Coverage repair runs
-  // after the first pass and can use a different employee if a slot remains open.
+  // Weekly consistency: maintain same shift type all week.
   if (weeklyShift === "M") return "M";
   if (weeklyShift === "T") return "T";
 
-  // Hard minimum (RF-16): ≥1M and ≥1T — handle urgency first.
-  // BUG-30 fix: dailyOrder (see caller) processes preference-null employees first each day
-  // so urgency is resolved by neutral employees before preference employees arrive.
-  // These lines then almost never fire against preference, but must remain for the
-  // edge case where all neutral employees are in night blocks (RF-16 must hold).
-  const urgentM = cov.M < 1;
-  const urgentT = cov.T < 1;
+  // From here: weeklyShift === null — first assignment this week.
 
-  // When both shifts are simultaneously urgent and weeklyShift is null (first day of week),
-  // defer to a later preference employee when available (deferShift indicates which shift
-  // a later preference employee can cover, so this employee takes the opposite).
-  if (urgentM && urgentT && weeklyShift === null) {
-    if (deferShift === "T") return "M"; // a T-pref employee comes later → take M now
-    if (deferShift === "M") return "T"; // an M-pref employee comes later → take T now
-    return state.mCount <= state.tCount ? "M" : "T"; // equity fallback
+  // Hard minimum (RF-16): both urgent simultaneously on first day of week.
+  // BUG-56 fix: setAndReturn records the chosen shift.
+  if (urgentM && urgentT) {
+    if (deferShift === "T") return setAndReturn("M");
+    if (deferShift === "M") return setAndReturn("T");
+    return setAndReturn(state.mCount <= state.tCount ? "M" : "T");
   }
 
-  if (urgentM && !urgentT && weeklyShift === null) return "M";
-  if (urgentT && !urgentM && weeklyShift === null) return "T";
+  if (urgentM) return setAndReturn("M");
+  if (urgentT) return setAndReturn("T");
 
-  // No weeklyShift yet for this week — seed it with the employee's preference
-  // when coverage is already satisfied, so the rest of the week stays consistent.
+  // Soft target ≥2M and ≥2T (best-effort balance).
+  // BUG-57 fix: steerer no longer guards on pref — the coverage target takes
+  // priority over preference when one shift is already at ≥2 and the other is not.
   const softNeedM = cov.M < 2;
   const softNeedT = cov.T < 2;
 
-  // Prefer seeding with employee's preference when possible
-  if (pref === "M" && !softNeedT) { state.weekShift.set(wKey, "M"); return "M"; }
-  if (pref === "T" && !softNeedM) { state.weekShift.set(wKey, "T"); return "T"; }
+  // Seed with preference only when the opposite soft target is already met.
+  if (pref === "M" && !softNeedT) return setAndReturn("M");
+  if (pref === "T" && !softNeedM) return setAndReturn("T");
 
-  // Soft target ≥2M and ≥2T (best effort — do not override employee preference)
-  if (softNeedM && !softNeedT && pref !== "T") return "M";
-  if (softNeedT && !softNeedM && pref !== "M") return "T";
+  // One soft slot still needed — steer unconditionally (overrides preference).
+  if (softNeedM && !softNeedT) return setAndReturn("M");
+  if (softNeedT && !softNeedM) return setAndReturn("T");
 
-  // Coverage met (or preference takes priority over soft target) — preference then equitable
-  if (pref === "M") return "M";
-  if (pref === "T") return "T";
-  return state.mCount <= state.tCount ? "M" : "T";
+  // Both soft slots needed simultaneously — preference wins, then equity.
+  if (pref === "M") return setAndReturn("M");
+  if (pref === "T") return setAndReturn("T");
+  return setAndReturn(state.mCount <= state.tCount ? "M" : "T");
 }
