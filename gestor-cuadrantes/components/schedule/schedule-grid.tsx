@@ -102,7 +102,7 @@ export function ScheduleGrid({
                     isHoliday
                       ? "bg-red-200 text-red-800 cursor-pointer select-none"
                       : isWeekend
-                      ? "bg-blue-100 text-blue-800"
+                      ? "bg-blue-200 text-blue-900"
                       : "text-gray-600"
                   }`}
                 >
@@ -160,7 +160,7 @@ export function ScheduleGrid({
                       onClick={clickable ? () => onCellClick(emp.id, dateStr, cell?.shiftType) : undefined}
                       data-locked={isLocked ? "true" : undefined}
                       className={`w-8 min-w-8 max-w-8 h-8 p-0.5 border-r border-b border-gray-200 relative ${
-                        isHolidayCell ? "bg-red-50" : isWeekend ? "bg-blue-50" : ""
+                        isHolidayCell ? "bg-red-50" : isWeekend ? "bg-blue-100" : ""
                       } ${clickable ? "cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset" : ""} ${
                         isLocked ? "ring-2 ring-inset ring-dashed ring-amber-400" : ""
                       }`}

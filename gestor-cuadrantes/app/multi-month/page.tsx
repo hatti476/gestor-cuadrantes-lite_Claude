@@ -238,12 +238,12 @@ export default function MultiMonthPage() {
                       <th
                         key={`h-${col.year}-${col.month}-${col.day}`}
                         className={`border-b border-gray-200 text-center py-0.5 ${
-                          isLastOfMonth ? "border-r border-r-gray-300" : ""
+                          isLastOfMonth ? "border-r-2 border-r-gray-400" : ""
                         } ${
                           isHoliday
                             ? "bg-red-200 text-red-800"
                             : isWeekend
-                            ? "bg-blue-100 text-blue-800"
+                            ? "bg-blue-200 text-blue-900"
                             : "bg-gray-50 text-gray-500"
                         }`}
                         style={{ minWidth: 26, width: 26 }}
@@ -300,12 +300,12 @@ export default function MultiMonthPage() {
                         <td
                           key={ds}
                           className={`h-7 p-0.5 border-b border-gray-100 ${
-                            isLastOfMonth ? "border-r border-r-gray-300" : ""
-                          } ${
+                          isLastOfMonth ? "border-r-2 border-r-gray-400" : ""
+                        } ${
                             isHoliday && !shift
                               ? "bg-red-50"
                               : isWeekend && !shift
-                              ? "bg-blue-50"
+                              ? "bg-blue-100"
                               : ""
                           }`}
                           style={{ minWidth: 26, width: 26 }}
