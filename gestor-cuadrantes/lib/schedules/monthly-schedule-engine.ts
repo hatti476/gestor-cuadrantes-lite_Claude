@@ -44,13 +44,8 @@ export { isWeekend, toDateStr, fromDateStr, addDays, isWeekendOrHoliday, applySp
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
-export interface ScheduleEmployee {
-  id: string;
-  /** 0-based position used to order the employees */
-  rotationOrder: number;
-  /** Shift preference: "M" (morning) | "T" (afternoon) | null */
-  shiftPreference?: string | null;
-}
+import type { ScheduleEmployee } from "./types";
+export type { ScheduleEmployee };
 
 export interface GeneratedAssignment {
   employeeId: string;

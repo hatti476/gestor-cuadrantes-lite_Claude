@@ -4,10 +4,10 @@
  *              empleados, resolución de conflictos (vacaciones/bajas en los
  *              7 días de guardia nocturna → transferencia al siguiente empleado
  *              que lleva más tiempo sin hacer noches).
- * @dependencies date-utils (addDays, toDateStr)
+ * @dependencies date-utils (addDays, toDateStr, fromDateStr, normalizeShift)
  */
 
-import { addDays, toDateStr } from "./date-utils";
+import { addDays, toDateStr, fromDateStr, normalizeShift } from "./date-utils";
 
 // ─── Night-block logic ───────────────────────────────────────────────────────
 

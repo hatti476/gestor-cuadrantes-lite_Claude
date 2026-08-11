@@ -2,7 +2,7 @@
 
 export interface ScheduleEmployee {
   id: string;
-  name: string;
+  name?: string;
   rotationOrder: number;
   shiftPreference?: string | null;
   /** Id del usuario (User.id) vinculado a este empleado — para resaltar la fila propia */
