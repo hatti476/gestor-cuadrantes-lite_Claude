@@ -4,6 +4,20 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
+## [2.6.0] - 2026-06-19 ✅
+
+### Fixed
+- **BUG-56** 🔴: `weeklyShift` no se registraba en 6 de los 8 caminos de retorno de `pickWorkdayShift`, causando transiciones T→M inválidas que el motor convertía en `D` aislados.
+- **BUG-57** 🟠: Override `urgentT` bloqueado por la guardia de consistencia semanal; ahora se evalúa antes para permitir M→T cuando hay déficit de cobertura urgente.
+- **BUG-58** 🟠: Días `D` aislados sin vacaciones/baja — consecuencia de BUG-56, resuelto automáticamente.
+
+### Changed
+- **CHG-01**: Celdas de fin de semana con sombreado más intenso (`bg-blue-100` / `bg-blue-200`) en vista mensual y multi-mes.
+- **CHG-02**: Separador entre meses en vista multi-mes con `border-r-2 border-r-gray-400` para mayor visibilidad.
+
+### Refactored
+- `ScheduleEmployee` consolidado en `lib/schedules/types.ts`; eliminada la interfaz duplicada de `monthly-schedule-engine.ts`.
+
 ## [2.5.0] - 2026-06-08 ✅
 
 ### Added

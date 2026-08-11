@@ -2,7 +2,7 @@
 
 **Proyecto:** Gestor de Cuadrantes  
 **Mantenido por:** Agente `doc-writer`  
-**Última actualización:** 2026-06-04  
+**Última actualización:** 2026-08-11  
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Total bugs | Críticos | Altos | Medios | Bajos | Abiertos | Resueltos |
 |-----------|----------|-------|--------|-------|----------|-----------|
-| 52 | 5 | 24 | 16 | 7 | 0 | 52 |
+| 58 | 6 | 29 | 16 | 7 | 0 | 58 |
 
 ---
 
@@ -70,6 +70,12 @@
 | [BUG-50](#bug-50) | Sprint 24 | 🟡 Medium | ✅ Fixed | RatesLegend se apila verticalmente debajo de ExtraPayTable |
 | [BUG-51](#bug-51) | Sprint 24 | 🟢 Low | ✅ Fixed | Tres tablas de resumen no alineadas en fila (justify-between separaba RatesLegend) |
 | [BUG-52](#bug-52) | Sprint 24 | 🟠 High | ✅ Fixed | Turno Tarde sin cobertura cuando surplus de Mañana y sin candidatos D |
+| [BUG-53](#bug-53) | Sprint 25 | 🟠 High | ✅ Fixed | EMPLOYEE recibe 403 en `/api/employees` y `/api/holidays` |
+| [BUG-54](#bug-54) | Sprint 25 | 🔴 Critical | ✅ Fixed | Proyecto activo se resetea al primer proyecto en cada carga de página |
+| [BUG-55](#bug-55) | Sprint 25 | 🟠 High | ✅ Fixed | PROJECT_ADMIN no puede ver ni usar el PrepPanel |
+| [BUG-56](#bug-56) | Sprint 26 | 🔴 High | ✅ Fixed | weeklyShift no registrado en 6/8 caminos de retorno de pickWorkdayShift |
+| [BUG-57](#bug-57) | Sprint 26 | 🟠 High | ✅ Fixed | urgentT override bloqueado por guardia de consistencia semanal |
+| [BUG-58](#bug-58) | Sprint 26 | 🟠 High | ✅ Fixed | Días D aislados sin vacaciones/baja (consecuencia de BUG-56) |
 
 ---
 
@@ -1955,3 +1961,84 @@ Cambiar `{isAdmin && !loading && (` por `{canEdit && !loading && (` en el bloque
 
 **Tests añadidos**  
 - `tests/e2e/sprint-25.spec.ts` — CP-162
+
+---
+
+## BUG-56 — weeklyShift no registrado en todos los caminos de retorno de pickWorkdayShift
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-56 |
+| **Sprint** | Sprint 26 |
+| **Detectado por** | Análisis de código (revisión de `workday-shifts.ts`) |
+| **Fecha detección** | 2026-06-18 |
+| **Severidad** | 🔴 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `2024e38` |
+
+**Descripción**  
+`pickWorkdayShift` registraba el turno asignado en `state.weekShift` solo en 2 de sus 8 caminos de retorno. Los 6 restantes (urgency, equity, soft-target, preference, equity-fallback) asignaban el turno sin anotarlo. Esto permitía que un empleado recibiese M el lunes y T el miércoles, generando una transición T→M inválida (< 8 h de descanso mínimo según ET Art. 34.3) que el motor reparaba convirtiendo el día conflictivo a `D`.
+
+**Fix aplicado**  
+Todos los caminos de retorno de `pickWorkdayShift` registran ahora `state.weekShift[employeeId] = assignedShift` antes de devolver el turno.
+
+**Ficheros afectados**  
+- `lib/schedules/workday-shifts.ts`
+
+**Tests añadidos**  
+- `tests/unit/scheduler/sprint-26-workday-shifts.test.ts` — CP-163, CP-164
+
+---
+
+## BUG-57 — urgentT override bloqueado por guardia de consistencia semanal
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-57 |
+| **Sprint** | Sprint 26 |
+| **Detectado por** | Análisis de código (revisión de `workday-shifts.ts`) |
+| **Fecha detección** | 2026-06-18 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `2024e38` |
+
+**Descripción**  
+Cuando T necesitaba cobertura urgente (`urgentT = true`) y todos los candidatos con turno `D` ya estaban asignados, el motor no podía convertir empleados con turno M a T. La guardia de consistencia semanal (`weekShift[emp] === 'M'`) se evaluaba antes del bloque `urgentT`, impidiendo el override aunque la transición M→T sea válida (≥ 24 h de descanso). El soft-target steerer también tenía restricciones `pref !== 'M'`/`pref !== 'T'` que impedían balancear coberturas.
+
+**Fix aplicado**  
+El bloque `urgentT` se evalúa ahora ANTES de la guardia de consistencia semanal. `urgentM` NO hace lo mismo (T→M inválido por ET Art. 34.3). Eliminadas las guardias de preferencia del soft-target steerer.
+
+**Ficheros afectados**  
+- `lib/schedules/workday-shifts.ts`
+
+**Tests añadidos**  
+- `tests/unit/scheduler/sprint-26-workday-shifts.test.ts` — CP-165
+
+---
+
+## BUG-58 — Días D aislados sin vacaciones ni baja registrada
+
+| Campo | Valor |
+|-------|-------|
+| **ID** | BUG-58 |
+| **Sprint** | Sprint 26 |
+| **Detectado por** | Análisis de código (revisión de generación) |
+| **Fecha detección** | 2026-06-18 |
+| **Severidad** | 🟠 High |
+| **Estado** | ✅ Fixed |
+| **Commit fix** | `2024e38` |
+
+**Descripción**  
+Algunos empleados presentaban un único día `D` aislado en mitad de una semana laboral sin vacaciones (`V`), baja (`B`) ni día libre (`J`). Aparecía de forma aleatoria según el orden de rotación.
+
+**Causa raíz**  
+Consecuencia directa de BUG-56: la transición T→M forzada por inconsistencia semanal era inválida (< 8 h), y el motor la reparaba convirtiendo el día a `D`.
+
+**Fix aplicado**  
+Resuelto automáticamente al corregir BUG-56. No requirió código adicional.
+
+**Ficheros afectados**  
+- `lib/schedules/workday-shifts.ts` (vía fix BUG-56)
+
+**Tests añadidos**  
+- `tests/unit/scheduler/sprint-26-workday-shifts.test.ts` — CP-166

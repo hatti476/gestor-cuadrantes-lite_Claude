@@ -14,12 +14,13 @@ y permite edición manual posterior. Dos roles: admin (edita) y empleado (consul
 - **Infraestructura**: Docker + Docker Compose
 - **API externa**: nager.at para festivos públicos por CCAA (`/api/holidays/public`)
 
-## Estado <!-- Actualizado: 2026-06-04 -->
-**Sprint 24 en curso** — versión 2.4.0 en `feature/sprint-24-scheduling-fixes`. 
-- **Tests baseline**: 419 unit + 142 E2E (22/22 smoke green)
-- **Fixes**: BUG-41 (leyenda tarifas), BUG-42 (T-pref weekends), BUG-43 (max 2 weekends/nightblock), BUG-44 (>5 consecutive days repair)
-- **Feature**: Vista ampliada multi-mes (`/multi-month`, horizontal scroll)
-- **Pendiente**: favicon ICO, E2E para multi-month view
+## Estado <!-- Actualizado: 2026-08-11 -->
+**Sprint 26 completado** — versión 2.6.0 en `feature/sprint-26-scheduling-fixes`. Pendiente merge a main.
+
+- **Tests**: 439 unit (2 pre-existing failures en `generate.test.ts`) + E2E smoke green
+- **Fixes**: BUG-56 (weeklyShift no registrado), BUG-57 (urgentT override), BUG-58 (D aislados)
+- **Cambios**: CHG-01 (weekend shading), CHG-02 (month separator multi-mes)
+- **Refactor**: ScheduleEmployee consolidado en `lib/schedules/types.ts`; tsc clean
 
 ## Reglas Globales
 - Escribe todo el código en inglés (variables, funciones, tipos, comentarios técnicos)
