@@ -249,10 +249,10 @@ describe("Modelos eliminados no existen", () => {
   });
 
   test("Project model no existe en Prisma Client", () => {
-    expect((prisma as any).project).toBeUndefined();
+    expect((prisma as unknown as Record<string, unknown>).project).toBeUndefined();
   });
 
   test("ProjectMember model no existe en Prisma Client", () => {
-    expect((prisma as any).projectMember).toBeUndefined();
+    expect((prisma as unknown as Record<string, unknown>).projectMember).toBeUndefined();
   });
 });

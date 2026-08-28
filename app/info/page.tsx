@@ -1,0 +1,188 @@
+"use client";
+
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { Header } from "@/components/layout/header";
+import { isAdmin, isTecnico, isViewer } from "@/lib/auth/permissions";
+
+// Secciones exclusivas para ADMIN
+const ADMIN_ONLY_SECTIONS = [
+  {
+    title: "Gestión de usuarios",
+    icon: "👥",
+    items: [
+      "Accede a «Administración» desde la barra de navegación para gestionar cuentas de usuario.",
+      "Crea cuentas ADMIN, TECNICO o VIEWER desde la pestaña «Usuarios».",
+      "Solo los usuarios con rol TECNICO tienen registro de empleado asociado (1:1).",
+      "Desactiva una cuenta pulsando «Desactivar» — el usuario no podrá iniciar sesión pero sus datos se conservan.",
+    ],
+  },
+];
+
+// Secciones para ADMIN (gestión de cuadrantes, festivos, empleados)
+const ADMIN_SECTIONS = [
+  {
+    title: "Preparar el cuadrante (5 pasos)",
+    icon: "⚙️",
+    items: [
+      "1. Vacaciones — Haz clic en las celdas del grid para marcar días de vacaciones (V). Quedan bloqueados y no se sobreescriben al generar.",
+      "2. Días libres — Haz clic en celdas para marcar descansos excepcionales (D). También quedan bloqueados.",
+      "3. Bajas — Haz clic en celdas para marcar bajas (B). Quedan bloqueadas igual que vacaciones y descansos manuales.",
+      "4. Festivos — Revisa los festivos precargados o gestiónalos manualmente desde «Gestionar festivos del mes» o «Cargar festivos públicos».",
+      "5. Generar — Pulsa «Guardar preparación» para conservar el estado actual y luego «Generar cuadrante» para aplicar la rotación automática sobre los días no bloqueados.",
+      "Deshacer — Tras generar, el botón «↩ Deshacer» restaura el estado inmediatamente anterior a la última generación.",
+      "Si un día tiene 0 o 1 empleado disponible, aparece un aviso de cobertura crítica en el panel de preparación antes de generar.",
+      "Puedes reabrir cualquier paso pulsando sobre él en el panel lateral derecho.",
+    ],
+  },
+  {
+    title: "Festivos precargados",
+    icon: "🎉",
+    items: [
+      "Al abrir un mes vacío, el sistema puede importar automáticamente los festivos públicos nacionales desde la API de nager.at.",
+      "Los festivos importados se añaden a la lista y son editables y eliminables manualmente.",
+      "Si la API externa no responde, aparece un aviso y puedes continuar añadiendo los festivos a mano desde «Gestionar festivos del mes».",
+      "Al añadir un festivo, los turnos M y T de ese día se convierten en MF y TF. El turno N vinculado al festivo pasa a ser NF.",
+      "Si un festivo cae pegado al fin de semana, se añade al paquete MF/TF del mismo fin de semana.",
+    ],
+  },
+  {
+    title: "Preferencias de turno (solo TECNICO)",
+    icon: "🔧",
+    items: [
+      "Sin preferencia — El algoritmo asigna M o T según la rotación equitativa del mes.",
+      "Solo mañanas — El empleado recibirá turno M en los días laborables (salvo que esté en bloque de noches o descanso).",
+      "Solo tardes — El empleado recibirá turno T en los días laborables.",
+      "Solo jornada (J) — El empleado trabajará en horario de jornada normal (09:00–18:00 de L a V). Los fines de semana y festivos se asignan como D.",
+      "Las preferencias se configuran en «Administración → Editar usuario TECNICO» y afectan a la generación automática.",
+    ],
+  },
+];
+
+// Secciones comunes para todos los roles
+const COMMON_SECTIONS = [
+  {
+    title: "Tipos de turno",
+    icon: "🕐",
+    items: [
+      "M  — Mañana           (07:00–15:00)  · Color naranja",
+      "T  — Tarde             (15:00–23:00)  · Color azul",
+      "N  — Noche             (23:00–07:00)  · Color verde",
+      "J  — Jornada normal    (09:00–18:00 L-V)  · Color amarillo",
+      "D  — Descanso          —  · Color gris claro",
+      "V  — Vacaciones        —  · Color negro",
+      "B  — Baja              —  · Color gris oscuro",
+      "MF — Mañana en festivo (07:00–15:00)  · Color naranja (igual que M)",
+      "TF — Tarde en festivo  (15:00–23:00)  · Color azul (igual que T)",
+      "NF — Noche en festivo  (23:00–07:00)  · Color verde (igual que N)",
+      "MN — Mañana Navidad    (07:00–15:00)  · Color naranja (igual que M)",
+      "TN — Tarde Navidad     (15:00–23:00)  · Color azul (igual que T)",
+      "NN — Noche Navidad     (23:00–07:00)  · Color verde (igual que N)",
+    ],
+  },
+  {
+    title: "Resumen legal de descansos",
+    icon: "⚖️",
+    items: [
+      "Entre el final de una jornada y el comienzo de la siguiente deben mediar al menos 12 horas de descanso.",
+      "El sistema evita automáticamente transiciones con menos de 12 horas, como T→M, T→MF, N→M, N→T, NF→MF o TN→MN.",
+      "Los bloques de noche incluyen descansos planificados antes y después del bloque para evitar encadenar jornadas incompatibles.",
+      "Cuando un empleado acumula un bloque de trabajo, el generador intenta garantizar al menos 2 descansos consecutivos antes del siguiente bloque.",
+      "Con carácter general, el descanso semanal mínimo es de día y medio ininterrumpido, acumulable por periodos de hasta 14 días.",
+      "La edición manual puede mostrar una advertencia legal si el turno elegido deja menos de 12 horas con el día anterior o siguiente; el aviso informa pero no bloquea la decisión del administrador.",
+    ],
+  },
+  {
+    title: "Cómo leer el cuadrante",
+    icon: "📋",
+    items: [
+      "El grid muestra filas de empleados y columnas de días del mes. Cada celda contiene el código de turno asignado.",
+      "El badge de estado del mes (arriba a la izquierda) indica: «Sin generar», «En preparación» o «Generado».",
+      "Las columnas de sábado y domingo tienen el encabezado en azul claro para distinguirlas de los días laborables.",
+      "Los días festivos tienen la cabecera en rojo intenso. Pasa el cursor sobre ellos para ver el nombre del festivo.",
+      "La tabla de contadores bajo el grid muestra cuántos turnos M, T, N, D, V, B tiene cada empleado en el mes.",
+      "La tabla de complementos muestra el importe de los turnos MF, TF, N, NF y, en diciembre/enero, MN, TN y NN.",
+      "Navega entre meses con los botones ‹ y › situados junto al nombre del mes.",
+    ],
+  },
+];
+
+// Sección para TECNICO y VIEWER (solo lectura)
+const READ_ONLY_SECTION = {
+  title: "Tu acceso de solo lectura",
+  icon: "👁️",
+  items: [
+    "Tu rol (TECNICO o VIEWER) te da acceso de solo lectura al cuadrante publicado.",
+    "Solo puedes ver el cuadrante cuando está publicado (badge «Publicado» en la cabecera).",
+    "No puedes generar, editar turnos, ni modificar la preparación.",
+    "Tu fila en el cuadrante aparece resaltada con un fondo de color diferente para que la identifiques fácilmente.",
+    "Desplázate horizontalmente si el mes tiene muchos días para ver todos tus turnos.",
+  ],
+};
+
+export default function InfoPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.replace("/login");
+  }, [status, router]);
+
+  if (status === "loading") return null;
+
+  const admin = isAdmin(session);
+  const tecnico = isTecnico(session);
+  const viewer = isViewer(session);
+  const readOnly = tecnico || viewer;
+
+  const roleLabel = admin ? "Admin" : tecnico ? "Técnico" : viewer ? "Viewer" : "—";
+
+  // Construir secciones según rol
+  const sections = [
+    ...(admin ? ADMIN_ONLY_SECTIONS : []),
+    ...(admin ? ADMIN_SECTIONS : []),
+    ...COMMON_SECTIONS,
+    ...(readOnly ? [READ_ONLY_SECTION] : []),
+  ];
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <Header />
+      <main className="flex-1 p-6 max-w-3xl mx-auto w-full">
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-1">Guía de uso</h2>
+          <p className="text-sm text-gray-500">
+            Perfil: <span className="font-medium text-gray-700">{roleLabel}</span>
+            {" — "}
+            {session?.user?.email}
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-6">
+          {sections.map((section) => (
+            <div
+              key={section.title}
+              className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
+            >
+              <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100 bg-gray-50">
+                <span className="text-xl">{section.icon}</span>
+                <h3 className="font-semibold text-gray-800" data-testid={`info-section-${section.title}`}>
+                  {section.title}
+                </h3>
+              </div>
+              <ul className="px-5 py-4 flex flex-col gap-2">
+                {section.items.map((item, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                    <span className="mt-0.5 text-blue-400 flex-shrink-0">•</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+}
