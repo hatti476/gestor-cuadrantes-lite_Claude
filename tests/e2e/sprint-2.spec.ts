@@ -31,14 +31,11 @@ test("CP-13 — Mes sin datos muestra grid vacío", async ({ page }) => {
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
     const emptyMonthOffset = await page.evaluate(async () => {
-      const stored = localStorage.getItem("activeProject");
-      const project = stored ? (JSON.parse(stored) as { id: string }) : null;
-      const projectParam = project?.id ? `&projectId=${project.id}` : "";
       for (let offset = 1; offset <= 24; offset++) {
         const date = new Date(Date.UTC(2026, 4 + offset, 1));
         const year = date.getUTCFullYear();
         const month = date.getUTCMonth() + 1;
-        const res = await fetch(`/api/schedules?year=${year}&month=${month}${projectParam}`, {
+        const res = await fetch(`/api/schedules?year=${year}&month=${month}`, {
           credentials: "include",
         });
         const data = await res.json();
@@ -95,7 +92,7 @@ test("CP-14 — Admin puede asignar un turno @smoke", async ({ page }) => {
 test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
   test.setTimeout(60_000);
   try {
-    await loginAsRole(page, "super_admin");
+    await loginAsRole(page, "admin");
     await waitForScheduleGrid(page);
 
     // Buscar una celda editable que no sea V/B (evita celdas bloqueadas de preparación).
@@ -247,7 +244,7 @@ test("CP-17 — Empleado no puede editar turnos", async ({ page }) => {
 });
 
 // ─── CP-18 ───────────────────────────────────────────────────────────────────
-test("CP-18 — API rechaza escritura sin rol SUPER_ADMIN", async ({ request }) => {
+test("CP-18 — API rechaza escritura sin rol ADMIN", async ({ request }) => {
   // POST sin autenticación debe devolver 401 o 403
   const response = await request.post("/api/schedules", {
     data: {
@@ -341,8 +338,8 @@ test("CP-22 — Admin puede editar un empleado", async ({ page }) => {
     await page.goto(ROUTES.employees);
     await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
-    // Pulsar "Editar" en una fila USER (con nombre editable)
-    const userRow = page.locator("table tbody tr").filter({ hasText: "USER" }).first();
+    // Pulsar "Editar" en una fila TECNICO (con nombre editable)
+    const userRow = page.locator("table tbody tr").filter({ hasText: "TECNICO" }).first();
     await expect(userRow).toBeVisible({ timeout: 8_000 });
     await userRow.getByRole("button", { name: /Editar/i }).click();
 
