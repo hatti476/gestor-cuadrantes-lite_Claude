@@ -18,8 +18,9 @@ El histórico de fallos del ciclo anterior (pre-`baseline sprint-01`) está arch
 |----|-------------|-----------------|----------------|
 | CP-164 | E2E webServer timeout: `next dev -p 3001` supera 60s en entorno local | Sprint 0 (baseline) | Infraestructura de tests; requiere servidor ya corriendo o timeout mayor |
 | CP-165 | ci:check: 9 ESLint errors (react-hooks/set-state-in-effect, @typescript-eslint/no-explicit-any) + 6 warnings | Sprint 0 (baseline) | Código pre-existente no cumple reglas actuales de lint |
+| CP-171 | CI "E2E smoke suite": los 30 tests fallan con el mismo timeout en el login (`page.waitForURL`, helpers.ts:40) | Sprint 1 (post-refactor) | Agotamiento de recursos en el runner: Playwright levanta su propio `next dev -p 3001` (independiente del servidor ya construido en el puerto 3000 que arranca el workflow) y, bajo Turbopack, compilar muchas rutas a la vez consume toda la CPU/memoria disponible. Reproducido en local: con el sistema sin memoria libre, el login se cuelga igual en todos los tests; liberando memoria, el login funciona (4/7 tests pasan). Mismo origen que CP-164, manifestado a escala de CI. Fix de raíz pendiente: apuntar los tests al servidor ya construido en :3000 en vez de levantar un segundo `next dev`. |
 
-**Total pre-existentes**: 2
+**Total pre-existentes**: 3
 **Última verificación**: Sprint 0 baseline (2026-08-27)
 **Método de verificación**: Ejecución directa `npm run test:unit`, `npm run test:e2e`, `npm run ci:check`
 
