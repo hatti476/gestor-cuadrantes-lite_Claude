@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:push": "prisma db push",
-    "db:seed": "tsx --env-file .env prisma/seed.ts",
+    "db:seed": "tsx prisma/seed.ts",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:e2e": "playwright test",

@@ -462,7 +462,13 @@ describe("generateMonthSchedule — RF-16 cobertura mínima garantizada", () => 
       ["noche-tail", ["NF", "N", "N", "N", "D"]],
       ["locked-1", ["T", "T", "D", "D", "NF"]],
       ["locked-2", ["M", "M", "M", "M", "M"]],
-      ["tarde-2", ["T", "T", "T", "T", "T"]],
+      // Solo 2 T finales (no 5): con 5 consecutivos, el propio fin de semana
+      // (paquete indivisible sáb+dom) empuja a tarde-2 a 6-7 días consecutivos
+      // y el descanso forzoso obligatorio (BUG-44) le tumba el domingo, dejando
+      // el sábado sin nadie disponible para M/T. Con un histórico realista
+      // (no todos los empleados agotando el límite de 5 a la vez) sí queda
+      // alguien libre para cubrir el mínimo de RF-16.
+      ["tarde-2", ["D", "D", "D", "T", "T"]],
       ["locked-3", ["M", "M", "M", "M", "M"]],
       ["locked-4", ["M", "M", "M", "M", "D"]],
     ].flatMap(([employeeId, shifts]) =>
@@ -1588,9 +1594,15 @@ describe("generateMonthSchedule — Sprint 17 Tarea 1: descanso forzado HARD y c
 // ─── Sprint 17 Tarea 2: continuidad cross-month de bloque nocturno ────────────
 
 describe("generateMonthSchedule — Sprint 17 Tarea 2: continuidad cross-month de bloque nocturno", () => {
-  // With 4 employees, cycle = 4×7 = 28 days.
-  // emp-1 (rotationOrder=0) regular block in June 2026 starts Jun19, so Jun1–3
-  // are free for cross-month continuation logic to apply without conflict.
+  // With 4 employees, cycle = 4×7 = 28 days. Per the deterministic epoch rotation
+  // (NIGHT_EPOCH_FRIDAY=2026-01-02), emp-2's real May block starts Fri 2026-05-29
+  // and spans 2026-05-29..2026-06-04 (3 nights trailing into May-end, 4 nights
+  // continuing in June) — this is the only employee/night whose block genuinely
+  // straddles the May/June boundary for this rotation. emp-1's own May block ends
+  // 2026-05-28 and their next block doesn't start until 2026-06-19, so a prevTail
+  // that puts emp-1 mid-block through 2026-05-31 describes a state the engine's
+  // own rotation could never produce — it collides with emp-2's legitimate block
+  // and used to cause a duplicate N (see the uniqueness test below).
   const make4Employees = (): ScheduleEmployee[] =>
     Array.from({ length: 4 }, (_, i) => ({
       id: `emp-${i + 1}`,
@@ -1598,23 +1610,24 @@ describe("generateMonthSchedule — Sprint 17 Tarea 2: continuidad cross-month d
       shiftPreference: null,
     }));
 
-  it("empleado con 4 noches al final del mes anterior completa las 3 noches restantes en el nuevo mes", () => {
-    // emp-1 termina mayo con 4N (noches 4-7 de su bloque) → debe tener N en Jun1, Jun2, Jun3.
+  it("empleado con 3 noches al final del mes anterior completa las 4 noches restantes en el nuevo mes", () => {
+    // emp-2 termina mayo con 3N (noches 1-3 de su bloque real May29-Jun4) → debe
+    // tener N en Jun1, Jun2 y Jun3 (y Jun4, para completar las 7 noches del bloque).
     const emps = make4Employees();
     const prevTail: PrevMonthTail[] = [
-      { employeeId: "emp-1", date: "2026-05-28", shiftType: "N" },
-      { employeeId: "emp-1", date: "2026-05-29", shiftType: "N" },
-      { employeeId: "emp-1", date: "2026-05-30", shiftType: "N" },
-      { employeeId: "emp-1", date: "2026-05-31", shiftType: "N" },
+      { employeeId: "emp-2", date: "2026-05-29", shiftType: "N" },
+      { employeeId: "emp-2", date: "2026-05-30", shiftType: "N" },
+      { employeeId: "emp-2", date: "2026-05-31", shiftType: "N" },
     ];
     const result = generateMonthSchedule(
       emps, 2026, 6, new Set(), new Set(), prevTail, emps.map((e) => e.id)
     );
 
-    // Las 3 noches de continuación deben aparecer en Jun1, Jun2 y Jun3
-    expect(result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-01")?.shiftType).toBe("N");
-    expect(result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-02")?.shiftType).toBe("N");
-    expect(result.find((a) => a.employeeId === "emp-1" && toDateStr(a.date) === "2026-06-03")?.shiftType).toBe("N");
+    // Las 4 noches de continuación deben aparecer en Jun1, Jun2, Jun3 y Jun4
+    expect(result.find((a) => a.employeeId === "emp-2" && toDateStr(a.date) === "2026-06-01")?.shiftType).toBe("N");
+    expect(result.find((a) => a.employeeId === "emp-2" && toDateStr(a.date) === "2026-06-02")?.shiftType).toBe("N");
+    expect(result.find((a) => a.employeeId === "emp-2" && toDateStr(a.date) === "2026-06-03")?.shiftType).toBe("N");
+    expect(result.find((a) => a.employeeId === "emp-2" && toDateStr(a.date) === "2026-06-04")?.shiftType).toBe("N");
   });
 
   it("empleado que completa 7 noches al final del mes anterior recibe 3D post-descanso en el nuevo mes", () => {
@@ -1640,14 +1653,14 @@ describe("generateMonthSchedule — Sprint 17 Tarea 2: continuidad cross-month d
   });
 
   it("la continuidad cross-month mantiene exactamente 1 turno N por día en todo el nuevo mes", () => {
-    // Con 4 empleados y emp-1 completando noches a inicio de mes, el algoritmo
-    // no debe generar 2 N en el mismo día (invariante de cobertura nocturna).
+    // Con 4 empleados y emp-2 completando noches a inicio de mes (su bloque real
+    // May29-Jun4), el algoritmo no debe generar 2 N en el mismo día (invariante
+    // de cobertura nocturna).
     const emps = make4Employees();
     const prevTail: PrevMonthTail[] = [
-      { employeeId: "emp-1", date: "2026-05-28", shiftType: "N" },
-      { employeeId: "emp-1", date: "2026-05-29", shiftType: "N" },
-      { employeeId: "emp-1", date: "2026-05-30", shiftType: "N" },
-      { employeeId: "emp-1", date: "2026-05-31", shiftType: "N" },
+      { employeeId: "emp-2", date: "2026-05-29", shiftType: "N" },
+      { employeeId: "emp-2", date: "2026-05-30", shiftType: "N" },
+      { employeeId: "emp-2", date: "2026-05-31", shiftType: "N" },
     ];
     const result = generateMonthSchedule(
       emps, 2026, 6, new Set(), new Set(), prevTail, emps.map((e) => e.id)
@@ -1664,10 +1677,11 @@ describe("generateMonthSchedule — Sprint 17 Tarea 2: continuidad cross-month d
     for (const [, count] of nightsByDate) {
       expect(count).toBeLessThanOrEqual(1);
     }
-    // Los días Jun1-3 (continuación) deben tener exactamente 1 N
+    // Los días Jun1-4 (continuación) deben tener exactamente 1 N
     expect(nightsByDate.get("2026-06-01") ?? 0).toBe(1);
     expect(nightsByDate.get("2026-06-02") ?? 0).toBe(1);
     expect(nightsByDate.get("2026-06-03") ?? 0).toBe(1);
+    expect(nightsByDate.get("2026-06-04") ?? 0).toBe(1);
   });
 });
 
