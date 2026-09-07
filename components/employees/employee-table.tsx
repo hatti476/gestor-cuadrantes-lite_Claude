@@ -19,9 +19,6 @@ const ROLE_BADGES: Record<string, { label: string; classes: string }> = {
   ADMIN: { label: "Admin", classes: "bg-red-100 text-red-700" },
   TECNICO: { label: "Técnico", classes: "bg-green-100 text-green-700" },
   VIEWER: { label: "Viewer", classes: "bg-gray-100 text-gray-600" },
-  SUPER_ADMIN: { label: "Super Admin", classes: "bg-blue-100 text-blue-700" }, // legacy compat
-  SUPER_VIEWER: { label: "Super Viewer", classes: "bg-gray-100 text-gray-600" }, // legacy compat
-  USER: { label: "Técnico", classes: "bg-gray-100 text-gray-600" }, // legacy compat
 };
 
 export function EmployeeTable({ employees, onEdit, onChangePassword, onHistory, onDeactivate, onReactivate }: EmployeeTableProps) {

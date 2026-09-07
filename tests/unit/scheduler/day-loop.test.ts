@@ -21,7 +21,6 @@ function key(employeeId: string, date: string): string {
 
 function buildInput(overrides: Partial<DayLoopInput> = {}): DayLoopInput {
   return {
-    projectId: "p1",
     year: 2026,
     month: 6,
     employees: EMPLOYEES,

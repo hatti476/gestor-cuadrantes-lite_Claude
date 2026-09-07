@@ -182,7 +182,6 @@ export interface NextMonthContext {
  * @example
  * ```ts
  * const input: DayLoopInput = {
- *   projectId: "p1",
  *   year: 2026,
  *   month: 6,
  *   employees: [],
@@ -196,7 +195,6 @@ export interface NextMonthContext {
  * ```
  */
 export interface DayLoopInput {
-  projectId: string;
   month: number;
   year: number;
   employees: Employee[];
