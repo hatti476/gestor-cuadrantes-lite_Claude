@@ -167,7 +167,6 @@ function updateConsecutiveState(state: DayLoopState, employeeId: string, shiftTy
  * @example
  * ```ts
  * const output = executeDayLoop({
- *   projectId: "p1",
  *   year: 2026,
  *   month: 6,
  *   employees,

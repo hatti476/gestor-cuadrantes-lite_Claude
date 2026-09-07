@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Header } from "@/components/layout/header";
@@ -48,6 +48,14 @@ interface MonthData {
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function MultiMonthPage() {
+  return (
+    <Suspense fallback={null}>
+      <MultiMonthView />
+    </Suspense>
+  );
+}
+
+function MultiMonthView() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();

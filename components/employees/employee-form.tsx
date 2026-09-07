@@ -26,7 +26,6 @@ export function EmployeeForm(props: EmployeeFormProps | EmployeeFormEditProps) {
   const [name, setName] = useState(mode === "edit" ? props.initial.name : "");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState(mode === "edit" ? props.initial.user.role : "USER");
   const [shiftPreference, setShiftPreference] = useState<string>(
     mode === "edit" ? (props.initial.shiftPreference ?? "ANY") : "ANY"
   );
@@ -39,10 +38,12 @@ export function EmployeeForm(props: EmployeeFormProps | EmployeeFormEditProps) {
     setSubmitting(true);
     try {
       if (mode === "create") {
-        await (props as EmployeeFormProps).onSubmit({ name, email, password, role });
+        // Todo empleado creado aquí es TECNICO — la API rechaza cualquier otro rol
+        // (un Employee siempre implica TECNICO; ADMIN/VIEWER se gestionan en /admin).
+        await (props as EmployeeFormProps).onSubmit({ name, email, password, role: "TECNICO" });
       } else {
         const prefValue = shiftPreference === "ANY" ? null : shiftPreference;
-        await (props as EmployeeFormEditProps).onSubmit({ name, role, shiftPreference: prefValue });
+        await (props as EmployeeFormEditProps).onSubmit({ name, shiftPreference: prefValue });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
@@ -120,20 +121,6 @@ export function EmployeeForm(props: EmployeeFormProps | EmployeeFormEditProps) {
               />
             </div>
           )}
-
-          {/* Rol */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600" htmlFor="emp-role">Rol</label>
-            <select
-              id="emp-role"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-            >
-              <option value="USER">Técnico (USER)</option>
-              <option value="SUPER_ADMIN">Administrador (SUPER_ADMIN)</option>
-            </select>
-          </div>
 
           {/* Preferencia de turno — solo en edición */}
           {mode === "edit" && (

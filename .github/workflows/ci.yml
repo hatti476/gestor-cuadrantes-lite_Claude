@@ -33,6 +33,9 @@ jobs:
       - name: ESLint
         run: npx eslint . --max-warnings 0
 
+      - name: Setup test database
+        run: npx prisma migrate deploy
+
       - name: Unit tests
         run: npx vitest run --reporter=verbose --reporter=junit --outputFile=reports/unit-junit.xml
 

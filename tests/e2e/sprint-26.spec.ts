@@ -56,29 +56,10 @@ test("CP-169 — Vista ampliada: celdas de finde usan bg-blue-100 y cabeceras bg
     await loginAsAdmin(page);
     await expect(page).toHaveURL("/");
 
-    await page.waitForSelector('[data-testid="schedule-grid"], [data-testid="active-project-badge"]', {
-      timeout: 15_000,
-    });
-
-    // Get projectId from localStorage
-    const projectId = await page.evaluate(() => {
-      try {
-        const raw = localStorage.getItem("activeProject");
-        if (!raw) return "";
-        const parsed = JSON.parse(raw);
-        return parsed?.id ?? parsed ?? "";
-      } catch {
-        return "";
-      }
-    });
-
-    if (!projectId) {
-      test.skip(true, "No active project in localStorage — skipping multi-month test");
-      return;
-    }
+    await page.waitForSelector('[data-testid="schedule-grid"]', { timeout: 15_000 });
 
     const now = new Date();
-    const url = `/multi-month?projectId=${projectId}&year=${now.getFullYear()}&month=${now.getMonth() + 1}`;
+    const url = `/multi-month?year=${now.getFullYear()}&month=${now.getMonth() + 1}`;
     await page.goto(url);
     await page.waitForSelector("table", { timeout: 15_000 });
 
@@ -104,28 +85,10 @@ test("CP-170 — Vista ampliada: separador entre meses usa border-r-2 @smoke", a
     await loginAsAdmin(page);
     await expect(page).toHaveURL("/");
 
-    await page.waitForSelector('[data-testid="schedule-grid"], [data-testid="active-project-badge"]', {
-      timeout: 15_000,
-    });
-
-    const projectId = await page.evaluate(() => {
-      try {
-        const raw = localStorage.getItem("activeProject");
-        if (!raw) return "";
-        const parsed = JSON.parse(raw);
-        return parsed?.id ?? parsed ?? "";
-      } catch {
-        return "";
-      }
-    });
-
-    if (!projectId) {
-      test.skip(true, "No active project in localStorage — skipping multi-month test");
-      return;
-    }
+    await page.waitForSelector('[data-testid="schedule-grid"]', { timeout: 15_000 });
 
     const now = new Date();
-    const url = `/multi-month?projectId=${projectId}&year=${now.getFullYear()}&month=${now.getMonth() + 1}`;
+    const url = `/multi-month?year=${now.getFullYear()}&month=${now.getMonth() + 1}`;
     await page.goto(url);
     await page.waitForSelector("table", { timeout: 15_000 });
 
