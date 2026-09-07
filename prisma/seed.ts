@@ -1,5 +1,8 @@
+import * as dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+
+dotenv.config({ path: ".env" });
 
 const prisma = new PrismaClient();
 

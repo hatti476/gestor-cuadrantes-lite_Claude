@@ -27,11 +27,10 @@ Confirmados como pre-existentes mediante `git stash` en Sprint 25 (2026-06-05).
 | CP-109 | PrepPanel B toggle no encontrado | Sprint 16 | data-testid del toggle cambiado en refactor posterior |
 | CP-124 | Botón undo generation no encontrado | Sprint 18 | Funcionalidad eliminada o renombrada en sprint posterior |
 | CP-139 | SUPER_VIEWER grid no visible | Sprint 19 | Cuadrante no publicado en seed; SUPER_VIEWER requiere publicado |
-| CP-163 | Unit tests: 2 fallos pre-existentes en generate.test.ts (RF-16 weekend coverage + cross-month night block uniqueness) | Sprint 0 (baseline) | Tests heredan expectativas que ya no coinciden con motor actual |
 | CP-164 | E2E webServer timeout: `next dev -p 3001` supera 60s en entorno local | Sprint 0 (baseline) | Infraestructura de tests; requiere servidor ya corriendo o timeout mayor |
 | CP-165 | ci:check: 9 ESLint errors (react-hooks/set-state-in-effect, @typescript-eslint/no-explicit-any) + 6 warnings | Sprint 0 (baseline) | Código pre-existente no cumple reglas actuales de lint |
 
-**Total pre-existentes**: 15  
+**Total pre-existentes**: 14  
 **Última verificación**: Sprint 0 baseline (2026-08-27)  
 **Método de verificación**: Ejecución directa `npm run test:unit`, `npm run test:e2e`, `npm run ci:check`
 
@@ -47,3 +46,4 @@ Confirmados como pre-existentes mediante `git stash` en Sprint 25 (2026-06-05).
 | CP-149 | data-testid 'rates-legend' incorrecto + positional check frágil (flex-wrap) | Sprint 26 | `sprint-26` |
 | CP-154 | Alineación pixel-level frágil con flex-wrap en viewport estrecho | Sprint 26 | `sprint-26` |
 | CP-140 | Promise.race resolvía con unpublished-message transitorio antes de networkidle | Sprint 26 | `sprint-26` |
+| CP-163 | Unit tests: 2 fallos pre-existentes en generate.test.ts (RF-16 weekend coverage + cross-month night block uniqueness) | fix/ci-seed-and-cp163 | Fixtures desactualizados: RF-16 exigía 5 turnos T consecutivos que disparaban el descanso forzoso obligatorio (BUG-44) dejando el fin de semana sin cobertura; el test de bloque nocturno cross-month usaba `emp-1` con un histórico que la rotación determinista (4 empleados) nunca produce — el empleado real cuyo bloque cruza mayo/junio es `emp-2` (3 noches finales + 4 de continuación). Se corrigieron los fixtures para reflejar el motor actual, sin cambios en el motor. |
