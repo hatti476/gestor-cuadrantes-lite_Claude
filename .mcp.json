@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "codebase-memory": {
+      "command": "npx",
+      "args": ["codebase-memory-mcp"],
+      "env": {
+        "DB_PATH": "./.memory/codebase.db",
+        "PROJECT_ROOT": "./"
+      }
+    }
+  }
+}

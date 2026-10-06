@@ -4,6 +4,25 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
+## [2.7.0] - 2026-09-07 ✅
+
+### Changed — Refactor multi-proyecto → single-tenant (Sprint 1)
+- **BREAKING**: eliminados `Project`, `ProjectMember` y `projectId` de todo el schema, APIs y UI. La app pasa de gestionar múltiples proyectos a un único cuadrante global.
+- Roles simplificados de `SUPER_ADMIN | SUPER_VIEWER | PROJECT_ADMIN | USER | EMPLOYEE` a **`ADMIN | TECNICO | VIEWER`**. `permissions.ts` reescrito desde cero junto con todos los guards de API y condicionales de UI.
+- Suite de tests auditada y realineada: 404 tests unitarios pasando (eliminados ~65 obsoletos de proyectos/roles antiguos, añadidos tests de permisos y roles), specs E2E de `/projects` y multi-proyecto eliminados.
+
+### Fixed — Fixes post-refactor (Sprint 2)
+- **Toggle modo preparación**: el segundo click sobre una celda V/D en modo preparación dejaba la celda en blanco; ahora restaura el turno anterior (o `D` por defecto).
+- **Vista multi-mes** (`/multi-month`): quedó rota al eliminar `projectId`; reescrita para consumir `/api/employees`, `/api/schedules` y `/api/holidays` sin parámetros de proyecto.
+- **Gestión de usuarios ADMIN**: añadido `DELETE /api/admin/users/[id]` (con transacción Employee+ShiftAssignments) y botón "Eliminar" con modal de confirmación en `/admin`.
+- CI: creación de la BD SQLite de test antes de los unit tests; fixtures de `generate.test.ts` desactualizados tras el refactor (CP-163); build roto por `useSearchParams` sin `Suspense` en `/multi-month`.
+
+### Fixed — CP-171 (fix de raíz)
+- La suite E2E `@smoke`/nightly en CI levantaba un segundo `next dev -p 3001` además del servidor ya construido en :3000, agotando CPU/memoria del runner y haciendo fallar los 30 tests en el login. Nuevo `playwright.ci.config.ts` sin `webServer` propio, apuntando al servidor ya levantado; `globalSetup` resiembra esa misma BD en vez de borrar el fichero. Workflows actualizados a `prisma migrate deploy` (antes `db push`) para que el `migrate deploy` de `globalSetup` sea idempotente.
+
+### Known issues
+- **CP-172**: al dejar de enmascararse por CP-171, 10 tests E2E (admin-users, multi-month, sprint-19, sprint-24) muestran fallos propios al correr contra un único servidor compartido — pendiente de investigar (ver `tests/e2e/known-failures.md`).
+
 ## [2.6.0] - 2026-06-19 ✅
 
 ### Fixed

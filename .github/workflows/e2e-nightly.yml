@@ -34,7 +34,11 @@ jobs:
         run: npx playwright install --with-deps
 
       - name: Seed test database
-        run: npm run db:push && npm run db:seed
+        # migrate deploy (no db:push) para que la BD quede con historial de
+        # migraciones: el globalSetup de Playwright vuelve a correr `migrate
+        # deploy` sobre esta misma BD (ya no la borra, ver CP-171) y sin
+        # historial Prisma lo rechaza con P3005 "schema not empty".
+        run: npx prisma migrate deploy && npm run db:seed
 
       - name: Build application
         run: npm run build
@@ -46,7 +50,7 @@ jobs:
         run: npx wait-on http://127.0.0.1:3000 --timeout 120000
 
       - name: Run full E2E suite
-        run: npx playwright test --reporter=line,html,json=playwright-results.json
+        run: npx playwright test --config=playwright.ci.config.ts --reporter=line,html,json=playwright-results.json
 
       - name: Upload Playwright HTML report
         if: always()

@@ -6,7 +6,7 @@
 |-------|-------|
 | ID | SPEC-006 |
 | Tipo | fix |
-| Estado | proposed |
+| Estado | done |
 | Prioridad | alta |
 | Agentes asignados | @orchestrator, @qa, @backend, @frontend |
 | Fecha de creación | 2026-09-04 |
@@ -53,31 +53,31 @@ para **limpiar usuarios de prueba o que ya no son necesarios**.
 ## Criterios de aceptación
 
 ### Bug 1: Toggle preparación (app/page.tsx)
-- [ ] AC-01: Click 1 en celda vacía → asigna V (modo vacaciones) o D (modo libres)
-- [ ] AC-02: Click 2 en misma celda (ya tiene V/D del modo actual) → **restaura estado anterior** (si había turno M/T/N/etc. vuelve a ese; si estaba vacía → D por defecto)
-- [ ] AC-03: Click 3 → vuelve a asignar V/D del modo actual
-- [ ] AC-04: Solo afecta al modo preparación (`prepStep === "vacaciones" || "libres"`), no al modo edición normal
-- [ ] AC-05: Tests unitarios para el comportamiento de toggle
+- [x] AC-01: Click 1 en celda vacía → asigna V (modo vacaciones) o D (modo libres)
+- [x] AC-02: Click 2 en misma celda (ya tiene V/D del modo actual) → **restaura estado anterior** (si había turno M/T/N/etc. vuelve a ese; si estaba vacía → D por defecto)
+- [x] AC-03: Click 3 → vuelve a asignar V/D del modo actual
+- [x] AC-04: Solo afecta al modo preparación (`prepStep === "vacaciones" || "libres"`), no al modo edición normal
+- [x] AC-05: Tests unitarios para el comportamiento de toggle
 
 ### Feature 2: Vista multi-mes (app/multi-month/page.tsx)
-- [ ] AC-06: Eliminar todo uso de `projectId` en queries y URLs
-- [ ] AC-07: Fetch empleados vía `GET /api/employees` (sin projectId)
-- [ ] AC-08: Fetch cuadrante vía `GET /api/schedules?year=X&month=Y` (sin projectId)
-- [ ] AC-09: Fetch festivos vía `GET /api/holidays?year=Y` (sin projectId)
-- [ ] AC-10: Selector de span (2/3/4/6 meses) funcional
-- [ ] AC-11: Navegación mes central (year/month) funcional
-- [ ] AC-12: Botón "Volver" navega a home `/`
-- [ ] AC-13: Accesible para todos los roles (ADMIN, TECNICO, VIEWER) — solo lectura
-- [ ] AC-14: Header sincronizado (sin selector de proyecto, badge proyecto activo si aplica)
-- [ ] AC-15: Tests E2E @smoke: carga vista, cambia span, navega meses
+- [x] AC-06: Eliminar todo uso de `projectId` en queries y URLs
+- [x] AC-07: Fetch empleados vía `GET /api/employees` (sin projectId)
+- [x] AC-08: Fetch cuadrante vía `GET /api/schedules?year=X&month=Y` (sin projectId)
+- [x] AC-09: Fetch festivos vía `GET /api/holidays?year=Y` (sin projectId)
+- [x] AC-10: Selector de span (2/3/4/6 meses) funcional
+- [x] AC-11: Navegación mes central (year/month) funcional
+- [x] AC-12: Botón "Volver" navega a home `/`
+- [x] AC-13: Accesible para todos los roles (ADMIN, TECNICO, VIEWER) — solo lectura
+- [x] AC-14: Header sincronizado (sin selector de proyecto, badge proyecto activo si aplica)
+- [x] AC-15: Tests E2E @smoke: carga vista, cambia span, navega meses
 
 ### Bug 3: Gestión usuarios ADMIN — DELETE (app/api/admin/users/[id]/route.ts)
-- [ ] AC-16: `DELETE /api/admin/users/[id]` — elimina usuario y su Employee asociado (si existe) en transacción
-- [ ] AC-17: Solo ADMIN puede ejecutarlo (403 para TECNICO/VIEWER)
-- [ ] AC-18: Validar que no se puede borrar a sí mismo (id === session.user.id → 400)
-- [ ] AC-19: UI: botón "Eliminar" en tabla de usuarios (además de Editar/Contraseña)
-- [ ] AC-20: Confirmación modal antes de borrar
-- [ ] AC-21: Tests unitarios + E2E @smoke
+- [x] AC-16: `DELETE /api/admin/users/[id]` — elimina usuario y su Employee asociado (si existe) en transacción
+- [x] AC-17: Solo ADMIN puede ejecutarlo (403 para TECNICO/VIEWER)
+- [x] AC-18: Validar que no se puede borrar a sí mismo (id === session.user.id → 400)
+- [x] AC-19: UI: botón "Eliminar" en tabla de usuarios (además de Editar/Contraseña)
+- [x] AC-20: Confirmación modal antes de borrar
+- [x] AC-21: Tests unitarios + E2E @smoke
 
 ---
 
@@ -209,3 +209,4 @@ export async function DELETE(
 | Fecha | Autor | Cambio |
 |-------|-------|--------|
 | 2026-09-04 | @orchestrator | Creación de la spec |
+| 2026-09-07 | @orchestrator | Estado actualizado a `done` — implementado en PR #1 "Sprint 2: Fixes post-refactor" (commit `e7e4cb7`): 17 tests unitarios toggle preparación, 7 tests unitarios admin-delete, 6 E2E multi-month, 3 E2E admin-delete. Todos los AC verificados. |
