@@ -14,7 +14,10 @@ jobs:
     name: E2E suite completa (142 tests)
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: file:./test.db
+      # Ruta absoluta (no "file:./test.db"): el servidor "next start" en
+      # background y el proceso aparte que siembra/resiembra la BD podrían
+      # resolver una ruta relativa de forma distinta según su cwd — ver CP-171.
+      DATABASE_URL: file:${{ github.workspace }}/prisma/test.db
       NEXTAUTH_SECRET: ci-test-secret
       NEXTAUTH_URL: http://localhost:3000
     steps:
