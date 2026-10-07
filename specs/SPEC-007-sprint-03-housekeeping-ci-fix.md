@@ -6,7 +6,7 @@
 |-------|-------|
 | ID | SPEC-007 |
 | Tipo | chore |
-| Estado | done |
+| Estado | in-progress |
 | Prioridad | media |
 | Agentes asignados | @orchestrator, @devlead, @qa |
 | Fecha de creación | 2026-10-06 |
@@ -47,9 +47,9 @@ para **que un fallo real de CI sea señal de regresión, no ruido de infraestruc
 - [x] AC-01: `.mcp.json` creado en la raíz del repo, espejando `.opencode/mcp.json`, para que Claude Code tenga acceso al servidor `codebase-memory` (requiere reinicio de sesión + aprobación del usuario; no verificable sin reiniciar)
 - [x] AC-02: `CHANGELOG.md` tiene una entrada para el cierre de Sprint 1/2 (refactor single-tenant + fixes post-refactor)
 - [x] AC-03: `SPEC-006` actualizada a estado `done` con los 21 AC marcados
-- [x] AC-04: Causa raíz de CP-171 identificada y corregida: la suite de CI deja de levantar un segundo `next dev` y reutiliza el servidor ya construido en `:3000`
-- [x] AC-05: Fix de CP-171 validado localmente reproduciendo el flujo de CI (seed → build → start → playwright) — el login deja de fallar uniformemente en todos los tests
-- [x] AC-06: `tests/e2e/known-failures.md` actualizado: CP-171 movido a "corregidos"; nuevos fallos descubiertos (antes enmascarados por CP-171) documentados como `CP-172`, sin intentar arreglarlos en este sprint (fuera de scope)
+- [x] AC-04: Causa raíz #1 de CP-171 identificada y corregida: la suite de CI dejó de levantar un segundo `next dev` y reutiliza el servidor ya construido en `:3000` — necesario pero **no suficiente** (ver AC-05)
+- [ ] AC-05: Fix de CP-171 validado en CI real (no solo local) — primera ejecución del PR #32 con servidor único volvió a fallar los 30 tests; traza apunta a contención de CPU entre `bcrypt.compare` (bcryptjs coste 12) y `workers:2` ejecutando 2 Chromium a la vez en el runner compartido de GitHub. Mitigación (`workers:1` + `timeout:45_000`) aplicada, pendiente de confirmar en el siguiente run.
+- [x] AC-06: `tests/e2e/known-failures.md` actualizado reflejando el estado real: CP-171 sigue en "activos" (reabierto, no corregido) con la causa adicional documentada; `CP-172` documentado como hallazgo aparte, sin arreglarlo (fuera de scope).
 
 ---
 
@@ -93,3 +93,4 @@ para **que un fallo real de CI sea señal de regresión, no ruido de infraestruc
 | Fecha | Autor | Cambio |
 |-------|-------|--------|
 | 2026-10-06 | @orchestrator | Creación de la spec, con el trabajo ya implementado y validado localmente en esta misma sesión |
+| 2026-10-07 | @qa | Primera ejecución real en CI (PR #32) de `e2e-smoke.yml` falla igual (30/30) con servidor único — el fix de AC-04 era necesario pero no suficiente. Causa adicional identificada vía traza de Playwright (contención bcryptjs vs. `workers:2`). Estado bajado de `done` a `in-progress`; AC-05 reabierto. |

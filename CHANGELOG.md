@@ -17,11 +17,12 @@ Formato inspirado en Keep a Changelog y versionado semántico.
 - **Gestión de usuarios ADMIN**: añadido `DELETE /api/admin/users/[id]` (con transacción Employee+ShiftAssignments) y botón "Eliminar" con modal de confirmación en `/admin`.
 - CI: creación de la BD SQLite de test antes de los unit tests; fixtures de `generate.test.ts` desactualizados tras el refactor (CP-163); build roto por `useSearchParams` sin `Suspense` en `/multi-month`.
 
-### Fixed — CP-171 (fix de raíz)
-- La suite E2E `@smoke`/nightly en CI levantaba un segundo `next dev -p 3001` además del servidor ya construido en :3000, agotando CPU/memoria del runner y haciendo fallar los 30 tests en el login. Nuevo `playwright.ci.config.ts` sin `webServer` propio, apuntando al servidor ya levantado; `globalSetup` resiembra esa misma BD en vez de borrar el fichero. Workflows actualizados a `prisma migrate deploy` (antes `db push`) para que el `migrate deploy` de `globalSetup` sea idempotente.
+### In progress — CP-171 (fix parcial, en verificación)
+- La suite E2E `@smoke`/nightly en CI levantaba un segundo `next dev -p 3001` además del servidor ya construido en :3000. Nuevo `playwright.ci.config.ts` sin `webServer` propio, apuntando al servidor ya levantado; `globalSetup` resiembra esa misma BD en vez de borrar el fichero. Workflows actualizados a `prisma migrate deploy` (antes `db push`) para que el `migrate deploy` de `globalSetup` sea idempotente.
+- **Este fix por sí solo no fue suficiente**: la primera ejecución real en CI con un único servidor siguió fallando los 30 tests. La causa adicional parece ser contención de CPU entre `bcrypt.compare` (bcryptjs, coste 12) y los 2 Chromium headless de `workers:2` en el runner compartido de GitHub. Mitigación en verificación: `workers:1` + `timeout:45_000` en `playwright.ci.config.ts`.
 
 ### Known issues
-- **CP-172**: al dejar de enmascararse por CP-171, 10 tests E2E (admin-users, multi-month, sprint-19, sprint-24) muestran fallos propios al correr contra un único servidor compartido — pendiente de investigar (ver `tests/e2e/known-failures.md`).
+- **CP-172**: 10 tests E2E (admin-users, multi-month, sprint-19, sprint-24) con fallos propios por condiciones de carrera de estado compartido al correr en paralelo — pendiente de investigar (ver `tests/e2e/known-failures.md`).
 
 ## [2.6.0] - 2026-06-19 ✅
 
