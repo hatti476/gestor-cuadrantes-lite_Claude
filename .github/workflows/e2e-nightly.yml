@@ -44,7 +44,9 @@ jobs:
         run: npm run build
 
       - name: Start application
-        run: npm run start &
+        # Salida redirigida a fichero: una vez termina este step, Actions deja
+        # de capturar el stdout del proceso en background (ver CP-171).
+        run: npm run start > /tmp/next-server.log 2>&1 &
 
       - name: Wait for app
         run: npx wait-on http://127.0.0.1:3000 --timeout 120000
@@ -59,6 +61,14 @@ jobs:
           name: playwright-nightly-report
           path: playwright-report
           retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload Next.js server log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-server-log
+          path: /tmp/next-server.log
           if-no-files-found: ignore
 
       - name: Create issue on failure
