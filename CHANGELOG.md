@@ -17,9 +17,10 @@ Formato inspirado en Keep a Changelog y versionado semántico.
 - **Gestión de usuarios ADMIN**: añadido `DELETE /api/admin/users/[id]` (con transacción Employee+ShiftAssignments) y botón "Eliminar" con modal de confirmación en `/admin`.
 - CI: creación de la BD SQLite de test antes de los unit tests; fixtures de `generate.test.ts` desactualizados tras el refactor (CP-163); build roto por `useSearchParams` sin `Suspense` en `/multi-month`.
 
-### In progress — CP-171 (fix parcial, en verificación)
-- La suite E2E `@smoke`/nightly en CI levantaba un segundo `next dev -p 3001` además del servidor ya construido en :3000. Nuevo `playwright.ci.config.ts` sin `webServer` propio, apuntando al servidor ya levantado; `globalSetup` resiembra esa misma BD en vez de borrar el fichero. Workflows actualizados a `prisma migrate deploy` (antes `db push`) para que el `migrate deploy` de `globalSetup` sea idempotente.
-- **Este fix por sí solo no fue suficiente**: la primera ejecución real en CI con un único servidor siguió fallando los 30 tests. La causa adicional parece ser contención de CPU entre `bcrypt.compare` (bcryptjs, coste 12) y los 2 Chromium headless de `workers:2` en el runner compartido de GitHub. Mitigación en verificación: `workers:1` + `timeout:45_000` en `playwright.ci.config.ts`.
+### In progress — CP-171 (causa real identificada, fix en verificación en CI)
+- La suite E2E `@smoke`/nightly en CI levantaba un segundo `next dev -p 3001` además del servidor ya construido en :3000. Nuevo `playwright.ci.config.ts` sin `webServer` propio, apuntando al servidor ya levantado; `globalSetup` resiembra esa misma BD en vez de borrar el fichero. Workflows actualizados a `prisma migrate deploy` (antes `db push`).
+- Tres hipótesis descartadas tras fallar en CI real: contención de CPU bcrypt/`workers:2` (falla igual con `workers:1`) y resolución de ruta relativa de `DATABASE_URL` (falla igual con ruta absoluta).
+- **Causa real**: el workflow arrancaba el servidor con `npm run start` (`next start`), combinación que Next.js marca explícitamente como no soportada con `output: standalone`. Reproducido en local: tras el primer intento de login, el servidor deja de procesar correctamente nuevas peticiones a esa ruta. Fix: arrancar con `node .next/standalone/server.js` (mismo patrón que `Dockerfile.prod`), copiando `public/`, `.next/static/`, `prisma/` y `node_modules/.prisma` dentro de `.next/standalone/`. Validado en local con 6 logins consecutivos correctos — pendiente de confirmación en CI real.
 
 ### Known issues
 - **CP-172**: 10 tests E2E (admin-users, multi-month, sprint-19, sprint-24) con fallos propios por condiciones de carrera de estado compartido al correr en paralelo — pendiente de investigar (ver `tests/e2e/known-failures.md`).

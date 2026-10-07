@@ -41,11 +41,25 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Prepare standalone server
+        # `next start` con `output: standalone` es una combinación que el
+        # propio Next.js marca como no soportada ("next start does not work
+        # with output: standalone... Use node .next/standalone/server.js
+        # instead") — y es la única variable de CP-171 que no se había
+        # probado aún. Replica exactamente el patrón ya usado en Dockerfile.
+        run: |
+          cp -r public .next/standalone/
+          mkdir -p .next/standalone/.next
+          cp -r .next/static .next/standalone/.next/
+          cp -r prisma .next/standalone/
+          mkdir -p .next/standalone/node_modules
+          cp -r node_modules/.prisma .next/standalone/node_modules/
+
       - name: Start application
         # Salida redirigida a fichero: una vez termina este step, Actions deja
         # de capturar el stdout del proceso en background — sin esto no se ve
         # nada de lo que loguea el servidor durante los tests (CP-171).
-        run: npm run start > /tmp/next-server.log 2>&1 &
+        run: node .next/standalone/server.js > /tmp/next-server.log 2>&1 &
 
       - name: Wait for app
         run: npx wait-on http://127.0.0.1:3000 --timeout 120000
