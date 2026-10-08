@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/auth/permissions";
+import { isValidShiftPreference } from "@/lib/employees/business-logic";
 import bcrypt from "bcryptjs";
 
 // ---------------------------------------------------------------------------
@@ -42,6 +43,11 @@ export async function PATCH(
   const globalRole = typeof b.globalRole === "string" ? b.globalRole : undefined;
   if (globalRole && !VALID_ROLES.includes(globalRole as ValidRole)) {
     return NextResponse.json({ error: "Rol inválido. Valores: ADMIN, TECNICO, VIEWER" }, { status: 400 });
+  }
+
+  // Validar shiftPreference si viene
+  if (b.shiftPreference !== undefined && !isValidShiftPreference(b.shiftPreference ?? null)) {
+    return NextResponse.json({ error: "shiftPreference inválido. Valores: M, T, J o null" }, { status: 400 });
   }
 
   // Validar email único

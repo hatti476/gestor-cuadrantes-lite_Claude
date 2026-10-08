@@ -4,6 +4,32 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
+## [2.7.0] - 2026-09-07 ✅
+
+### Changed — Refactor multi-proyecto → single-tenant (Sprint 1)
+- **BREAKING**: eliminados `Project`, `ProjectMember` y `projectId` de todo el schema, APIs y UI. La app pasa de gestionar múltiples proyectos a un único cuadrante global.
+- Roles simplificados de `SUPER_ADMIN | SUPER_VIEWER | PROJECT_ADMIN | USER | EMPLOYEE` a **`ADMIN | TECNICO | VIEWER`**. `permissions.ts` reescrito desde cero junto con todos los guards de API y condicionales de UI.
+- Suite de tests auditada y realineada: 404 tests unitarios pasando (eliminados ~65 obsoletos de proyectos/roles antiguos, añadidos tests de permisos y roles), specs E2E de `/projects` y multi-proyecto eliminados.
+
+### Fixed — Fixes post-refactor (Sprint 2)
+- **Toggle modo preparación**: el segundo click sobre una celda V/D en modo preparación dejaba la celda en blanco; ahora restaura el turno anterior (o `D` por defecto).
+- **Vista multi-mes** (`/multi-month`): quedó rota al eliminar `projectId`; reescrita para consumir `/api/employees`, `/api/schedules` y `/api/holidays` sin parámetros de proyecto.
+- **Gestión de usuarios ADMIN**: añadido `DELETE /api/admin/users/[id]` (con transacción Employee+ShiftAssignments) y botón "Eliminar" con modal de confirmación en `/admin`.
+- CI: creación de la BD SQLite de test antes de los unit tests; fixtures de `generate.test.ts` desactualizados tras el refactor (CP-163); build roto por `useSearchParams` sin `Suspense` en `/multi-month`.
+
+### Fixed — CP-171, causa raíz real (Sprint 3)
+- La suite E2E `@smoke`/nightly en CI levantaba un segundo `next dev -p 3001` además del servidor ya construido en :3000. Nuevo `playwright.ci.config.ts` sin `webServer` propio, apuntando al servidor ya levantado; `globalSetup` resiembra esa misma BD en vez de borrar el fichero. Workflows actualizados a `prisma migrate deploy` (antes `db push`).
+- Tres hipótesis descartadas tras fallar en CI real: contención de CPU bcrypt/`workers:2`, resolución de ruta relativa de `DATABASE_URL`, y `next start` incompatible con `output: standalone` (se cambió a `node .next/standalone/server.js`, mismo patrón que `Dockerfile.prod`) — necesario pero no suficiente.
+- **Causa raíz real**: el log del servidor (`next-server-log`, artifact de la ejecución fallida) mostraba `[auth] Usuario encontrado: ninguno` — el servidor respondía correctamente, pero `tests/e2e/config.ts` lee las credenciales de test de variables de entorno que normalmente provee `.env.test` (fichero en `.gitignore`, inexistente en CI), así que los 30 tests enviaban login con email/password vacíos contra usuarios reales ya sembrados. Fix: las 6 variables (`ADMIN_EMAIL`, `ADMIN_PASSWORD`, `TECH_EMAIL`, `TECH_PASSWORD`, `VIEWER_EMAIL`, `VIEWER_PASSWORD`) añadidas al bloque `env:` de `e2e-smoke.yml` y `e2e-nightly.yml`. **Confirmado en CI real** (PR #32, run 37751532946, commit `6cd3dbf`): 24/37 tests pasan (antes 2/37); los 10 restantes son CP-172 (ya documentado, sin relación con el login).
+
+### Fixed — Auditoría de usuarios TECNICO y preferencia de turno
+- **Seed con 8 técnicos en vez de 7**: `prisma/seed.ts` y `tests/e2e/global-setup.ts` creaban un "Técnico Ejemplo" extra (`tecnico@cuadrantes.local`) con `rotationOrder` colisionando con "Técnico 1" y sin turnos asignados. Eliminado; el seed ahora crea exactamente 1 ADMIN + 7 TECNICO + 1 VIEWER.
+- **BUG**: `POST /api/admin/users` rechazaba `shiftPreference: "J"` (jornada normal) con 400, aunque la UI de `/admin` ofrece esa opción y el motor de generación la trata como válida. Ahora usa `isValidShiftPreference` (misma fuente de verdad que `/api/employees/[id]`).
+- **BUG**: `PATCH /api/admin/users/[id]` no validaba `shiftPreference` en absoluto. Ahora rechaza con 400 cualquier valor fuera de `M | T | J | null`.
+
+### Known issues
+- **CP-172**: 10 tests E2E (admin-users, multi-month, sprint-19, sprint-24) con fallos propios por condiciones de carrera de estado compartido al correr en paralelo — pendiente de investigar (ver `tests/e2e/known-failures.md`).
+
 ## [2.6.0] - 2026-06-19 ✅
 
 ### Fixed

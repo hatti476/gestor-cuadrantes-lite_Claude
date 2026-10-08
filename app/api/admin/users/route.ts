@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/auth/permissions";
+import { isValidShiftPreference } from "@/lib/employees/business-logic";
 import bcrypt from "bcryptjs";
 
 // ---------------------------------------------------------------------------
@@ -81,10 +82,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Validar shiftPreference solo para TECNICO
-  if (globalRole === "TECNICO" && shiftPreference !== undefined && shiftPreference !== null) {
-    if (!["M", "T"].includes(shiftPreference)) {
-      return NextResponse.json({ error: "shiftPreference inválido: solo M, T o null" }, { status: 400 });
-    }
+  if (globalRole === "TECNICO" && shiftPreference !== undefined && !isValidShiftPreference(shiftPreference)) {
+    return NextResponse.json({ error: "shiftPreference inválido. Valores: M, T, J o null" }, { status: 400 });
   }
 
   // Comprobar email único

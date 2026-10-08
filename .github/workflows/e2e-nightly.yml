@@ -14,9 +14,20 @@ jobs:
     name: E2E suite completa (142 tests)
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: file:./test.db
+      # Ruta absoluta (no "file:./test.db"): el servidor "next start" en
+      # background y el proceso aparte que siembra/resiembra la BD podrían
+      # resolver una ruta relativa de forma distinta según su cwd — ver CP-171.
+      DATABASE_URL: file:${{ github.workspace }}/prisma/test.db
       NEXTAUTH_SECRET: ci-test-secret
       NEXTAUTH_URL: http://localhost:3000
+      # Credenciales de los usuarios sembrados — ver e2e-smoke.yml para el
+      # detalle de por qué son necesarias (causa real de CP-171).
+      ADMIN_EMAIL: admin@cuadrantes.local
+      ADMIN_PASSWORD: Admin1234!
+      TECH_EMAIL: tecnico1@cuadrantes.local
+      TECH_PASSWORD: Tecnico1234!
+      VIEWER_EMAIL: viewer@cuadrantes.local
+      VIEWER_PASSWORD: Viewer1234!
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
@@ -34,19 +45,37 @@ jobs:
         run: npx playwright install --with-deps
 
       - name: Seed test database
-        run: npm run db:push && npm run db:seed
+        # migrate deploy (no db:push) para que la BD quede con historial de
+        # migraciones: el globalSetup de Playwright vuelve a correr `migrate
+        # deploy` sobre esta misma BD (ya no la borra, ver CP-171) y sin
+        # historial Prisma lo rechaza con P3005 "schema not empty".
+        run: npx prisma migrate deploy && npm run db:seed
 
       - name: Build application
         run: npm run build
 
+      - name: Prepare standalone server
+        # `next start` con `output: standalone` es una combinación que el
+        # propio Next.js marca como no soportada — replica el patrón ya
+        # usado en Dockerfile (ver e2e-smoke.yml para el detalle, CP-171).
+        run: |
+          cp -r public .next/standalone/
+          mkdir -p .next/standalone/.next
+          cp -r .next/static .next/standalone/.next/
+          cp -r prisma .next/standalone/
+          mkdir -p .next/standalone/node_modules
+          cp -r node_modules/.prisma .next/standalone/node_modules/
+
       - name: Start application
-        run: npm run start &
+        # Salida redirigida a fichero: una vez termina este step, Actions deja
+        # de capturar el stdout del proceso en background (ver CP-171).
+        run: node .next/standalone/server.js > /tmp/next-server.log 2>&1 &
 
       - name: Wait for app
         run: npx wait-on http://127.0.0.1:3000 --timeout 120000
 
       - name: Run full E2E suite
-        run: npx playwright test --reporter=line,html,json=playwright-results.json
+        run: npx playwright test --config=playwright.ci.config.ts --reporter=line,html,json=playwright-results.json
 
       - name: Upload Playwright HTML report
         if: always()
@@ -55,6 +84,14 @@ jobs:
           name: playwright-nightly-report
           path: playwright-report
           retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload Next.js server log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-server-log
+          path: /tmp/next-server.log
           if-no-files-found: ignore
 
       - name: Create issue on failure

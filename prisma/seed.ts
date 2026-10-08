@@ -39,24 +39,8 @@ async function main() {
   });
   console.log("✓ ADMIN:", admin.email);
 
-  // ─── Técnico ejemplo (TECNICO con Employee) ────────────────────────────────
+  // ─── 7 Técnicos (TECNICO con Employee) ─────────────────────────────────────
   const techPassword = await bcrypt.hash("Tecnico1234!", 12);
-  const techUser = await prisma.user.upsert({
-    where: { email: "tecnico@cuadrantes.local" },
-    update: { password: techPassword, role: "TECNICO" },
-    create: {
-      email: "tecnico@cuadrantes.local",
-      password: techPassword,
-      role: "TECNICO",
-      employee: {
-        create: { name: "Técnico Ejemplo", rotationOrder: 1, shiftPreference: "M", active: true },
-      },
-    },
-    include: { employee: true },
-  });
-  console.log("✓ TECNICO:", techUser.email, "| Employee:", techUser.employee?.name);
-
-  // ─── 7 Técnicos adicionales (TECNICO con Employee) ─────────────────────────
   const employees: { id: string }[] = [];
 
   for (let i = 1; i <= 7; i++) {
