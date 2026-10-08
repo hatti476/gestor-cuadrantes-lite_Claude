@@ -20,6 +20,14 @@ jobs:
       DATABASE_URL: file:${{ github.workspace }}/prisma/test.db
       NEXTAUTH_SECRET: ci-test-secret
       NEXTAUTH_URL: http://localhost:3000
+      # Credenciales de los usuarios sembrados — ver e2e-smoke.yml para el
+      # detalle de por qué son necesarias (causa real de CP-171).
+      ADMIN_EMAIL: admin@cuadrantes.local
+      ADMIN_PASSWORD: Admin1234!
+      TECH_EMAIL: tecnico1@cuadrantes.local
+      TECH_PASSWORD: Tecnico1234!
+      VIEWER_EMAIL: viewer@cuadrantes.local
+      VIEWER_PASSWORD: Viewer1234!
     steps:
       - name: Checkout main
         uses: actions/checkout@v4

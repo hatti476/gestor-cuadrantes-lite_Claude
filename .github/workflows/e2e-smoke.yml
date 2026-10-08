@@ -15,6 +15,18 @@ jobs:
       DATABASE_URL: file:${{ github.workspace }}/prisma/test.db
       NEXTAUTH_SECRET: ci-test-secret
       NEXTAUTH_URL: http://localhost:3000
+      # Credenciales de los usuarios sembrados (ver prisma/seed.ts / global-setup.ts).
+      # tests/e2e/config.ts las lee con `process.env.X ?? ""`: sin esto, en CI
+      # el login se intenta con email/password vacíos y falla en silencio
+      # ("Usuario encontrado: ninguno") — causa real de CP-171, no un problema
+      # de arranque del servidor. Localmente vienen de .env.test (gitignored,
+      # no existe en el runner de CI).
+      ADMIN_EMAIL: admin@cuadrantes.local
+      ADMIN_PASSWORD: Admin1234!
+      TECH_EMAIL: tecnico1@cuadrantes.local
+      TECH_PASSWORD: Tecnico1234!
+      VIEWER_EMAIL: viewer@cuadrantes.local
+      VIEWER_PASSWORD: Viewer1234!
     steps:
       - name: Checkout
         uses: actions/checkout@v4

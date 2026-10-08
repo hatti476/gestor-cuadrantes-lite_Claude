@@ -73,7 +73,7 @@ test("CP-04 — Login técnico correcto muestra badge TECNICO @smoke", async ({ 
 // ===========================================================================
 // CP-05 — Vista del cuadrante: grid con empleados y 31 columnas
 // ===========================================================================
-test("CP-05 — Vista del cuadrante muestra grid de 8 empleados y 31 días @smoke", async ({ page }) => {
+test("CP-05 — Vista del cuadrante muestra grid de 7 empleados y 31 días @smoke", async ({ page }) => {
   try {
     await login(page, ADMIN.email, ADMIN.password);
     await expect(page).toHaveURL("/");
