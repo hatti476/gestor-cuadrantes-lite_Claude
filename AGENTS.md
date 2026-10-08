@@ -46,7 +46,8 @@ Protocolo obligatorio al inicio de cada tarea:
     lib/                   — Utilidades y lógica compartida
     prisma/                — Esquema y migraciones de BD
     .opencode/
-        mcp.json           — Configuración del servidor MCP
+        mcp.json           — Configuración del servidor MCP (OpenCode)
+    .mcp.json              — Misma configuración de codebase-memory, para Claude Code (SPEC-007)
     .memory/               — Base de datos SQLite local (no en Git)
 
 ---
