@@ -8,7 +8,10 @@ Formato inspirado en Keep a Changelog y versionado semántico.
 
 ### Fixed
 - **CI E2E**: `e2e-smoke.yml` y `e2e-nightly.yml` fijados a `runs-on: ubuntu-24.04`. `ubuntu-latest` pasó a Ubuntu 26.04, que Playwright 1.59.1 no soporta (`Playwright does not support chromium on ubuntu26.04-x64`), y el job fallaba al instalar navegadores sin ejecutar ningún test.
-- **Vista multi-mes sin acceso desde la UI**: nuevo botón "Vista ampliada" (`btn-multi-month`) en la barra del cuadrante, visible para todos los roles, que abre `/multi-month` con el mes que se está viendo y `span=3`. Tests E2E CP-173 (@smoke), CP-174, CP-175.
+- **Vista multi-mes sin acceso desde la UI**: repuesto el botón "↔ Vista ampliada" (`btn-expanded-view`) que el refactor `f46b1bb` eliminó al quitar `projectId`. Visible para todos los roles, abre `/multi-month` con el mes que se está viendo y `span=3`. Vuelven a pasar CP-150/151/152.
+- **Vista multi-mes rota para TECNICO y VIEWER**: mostraba "Error al cargar empleados" porque `GET /api/employees` es solo ADMIN. Ahora los empleados salen de las asignaciones (filtradas por publicación en el servidor), como en la vista mensual; sin meses publicados se muestra un aviso específico.
+- **Centrado de la vista multi-mes**: con span par se muestra un mes más hacia delante (6 meses en mayo → marzo..agosto), se respeta el `span` de la URL y el scroll horizontal inicial deja centrado el mes que se estaba viendo. Lógica extraída a `lib/schedules/multi-month.ts` con tests unitarios.
+- Tests E2E CP-173 (@smoke), CP-174, CP-175 (@smoke, uno por rol), CP-176.
 
 ### Changed
 - `.gitignore`: añadidos `/.next-dev/`, `dev.log` y `cookies.txt`.
