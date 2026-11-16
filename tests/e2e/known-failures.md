@@ -21,7 +21,7 @@ El histórico de fallos del ciclo anterior (pre-`baseline sprint-01`) está arch
 | CP-172 | 10 tests E2E fallan (`admin-users.spec.ts`, `multi-month.spec.ts`, `sprint-19.spec.ts`, `sprint-24.spec.ts`) | Sprint 1 (post-refactor) | Confirmado en CI real tras corregir CP-171 (run 37751532946, 2026-10-08): con el login arreglado, 24/37 pasan y exactamente estos 10 fallan — mismo patrón ya detectado en local. Apunta a condiciones de carrera por estado compartido: varios specs llaman a `generateScheduleAndWait` o mutan la lista de usuarios contra la misma BD/servidor, incluso con `workers:1` (serializar no fue suficiente, descarta la hipótesis de que `workers:2` era la causa). `sprint-24.spec.ts` conserva títulos de la era multi-proyecto ("proyecto activo") que SPEC-005 no limpió. Pendiente de investigación — fuera de scope de SPEC-007/SPEC-008. |
 
 **Total pre-existentes**: 3
-**Última verificación**: Sprint 3 (2026-10-08) — CI real (PR #32, run 37751532946): CP-171 confirmado corregido (login funciona, 24/37 pasan); CP-172 reconfirmado activo (10/37 fallan, los mismos de siempre).
+**Última verificación**: Sprint 4 (2026-11-16) — CI real (PR #76, run 43889457645, runner `ubuntu-24.04`): 25/38 pasan (incluye CP-173 nuevo), CP-172 sigue activo (los mismos 10 fallos), 3 no se ejecutan.
 **Método de verificación**: Ejecución directa `npm run test:unit`, `npm run test:e2e`, `npm run ci:check`, y runs reales de `e2e-smoke.yml` en GitHub Actions
 
 ---

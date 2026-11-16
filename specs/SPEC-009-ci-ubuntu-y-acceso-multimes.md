@@ -6,7 +6,7 @@
 |-------|-------|
 | ID | SPEC-009 |
 | Tipo | bug / chore |
-| Estado | in-progress |
+| Estado | done |
 | Prioridad | alta |
 | Agentes asignados | @orchestrator, @qa, @frontend, @devlead |
 | Fecha de creación | 2026-11-16 |
@@ -55,7 +55,7 @@ para consultar varios meses seguidos sin tener que conocer la URL.
 ## Criterios de aceptación
 
 - [x] AC-01: `e2e-smoke.yml` y `e2e-nightly.yml` usan `runs-on: ubuntu-24.04`.
-- [ ] AC-02: El job "E2E smoke suite" pasa el paso "Install Playwright browsers" en CI real.
+- [x] AC-02: El job "E2E smoke suite" pasa el paso "Install Playwright browsers" en CI real.
 - [x] AC-03: La barra de herramientas del cuadrante (`/`) muestra un botón
   `data-testid="btn-multi-month"` con el texto "Vista ampliada", visible para ADMIN,
   TECNICO y VIEWER, y oculto al imprimir (`print:hidden`).
@@ -110,3 +110,4 @@ para consultar varios meses seguidos sin tener que conocer la URL.
 | Fecha | Autor | Cambio |
 |-------|-------|--------|
 | 2026-11-16 | @orchestrator | Creación de la spec tras revisar el fallo de CI de PR #37 y el stash pendiente. |
+| 2026-11-16 | @qa | AC-02 verificado en CI real (PR #76, run 43889457645): instalación de Playwright OK en ubuntu-24.04; 25 pasan, 10 fallan (CP-172, mismos ficheros), 3 no se ejecutan. CP-173 pasa en CI. |
