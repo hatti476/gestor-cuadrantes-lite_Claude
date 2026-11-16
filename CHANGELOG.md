@@ -4,6 +4,15 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
+## [Unreleased] — Sprint 4 (SPEC-009)
+
+### Fixed
+- **CI E2E**: `e2e-smoke.yml` y `e2e-nightly.yml` fijados a `runs-on: ubuntu-24.04`. `ubuntu-latest` pasó a Ubuntu 26.04, que Playwright 1.59.1 no soporta (`Playwright does not support chromium on ubuntu26.04-x64`), y el job fallaba al instalar navegadores sin ejecutar ningún test.
+- **Vista multi-mes sin acceso desde la UI**: nuevo botón "Vista ampliada" (`btn-multi-month`) en la barra del cuadrante, visible para todos los roles, que abre `/multi-month` con el mes que se está viendo y `span=3`. Tests E2E CP-173 (@smoke), CP-174, CP-175.
+
+### Changed
+- `.gitignore`: añadidos `/.next-dev/`, `dev.log` y `cookies.txt`.
+
 ## [2.7.0] - 2026-09-07 ✅
 
 ### Changed — Refactor multi-proyecto → single-tenant (Sprint 1)

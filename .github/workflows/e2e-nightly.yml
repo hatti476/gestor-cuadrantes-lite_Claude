@@ -12,7 +12,7 @@ permissions:
 jobs:
   e2e-full:
     name: E2E suite completa (142 tests)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       # Ruta absoluta (no "file:./test.db"): el servidor "next start" en
       # background y el proceso aparte que siembra/resiembra la BD podrían

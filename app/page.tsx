@@ -646,6 +646,13 @@ export default function HomePage() {
           >
             Imprimir
           </button>
+          <button
+            data-testid="btn-multi-month"
+            onClick={() => router.push(`/multi-month?year=${year}&month=${month}&span=3`)}
+            className="text-xs px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-colors print:hidden"
+          >
+            Vista ampliada
+          </button>
           {isAdmin && (
             <button
               data-testid="btn-holidays"
