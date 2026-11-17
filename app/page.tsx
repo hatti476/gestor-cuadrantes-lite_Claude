@@ -8,7 +8,8 @@ import { Header } from "@/components/layout/header";
 import { ShiftEditor } from "@/components/schedule/shift-editor";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleAssignment, ScheduleEmployee, MonthStatus, computeMonthStatus } from "@/lib/schedules/types";
-import { calculateExtraPay, countShifts, EXTRA_PAY_RATES } from "@/lib/schedules/business-logic";
+import { calculateExtraPay, countShifts, EXTRA_PAY_RATES, getExtraPayColumnsForMonth } from "@/lib/schedules/business-logic";
+import { buildScheduleCsv } from "@/lib/schedules/csv-export";
 import { PrepPanel, MonthStatusBadge, PrepStep } from "@/components/schedule/prep-panel";
 import { employeesFromAssignments } from "@/lib/schedules/multi-month";
 import { useToast } from "@/components/ui/toast-provider";
@@ -19,15 +20,6 @@ const MONTH_NAMES = [
 ];
 
 const COUNTER_SHIFTS: ShiftType[] = ["M", "T", "N", "MF", "TF", "NF", "J", "D", "V", "B"];
-const EXTRA_PAY_SHIFTS: Array<"MF" | "TF" | "N" | "NF" | "MN" | "TN" | "NN"> = [
-  "MF",
-  "TF",
-  "N",
-  "NF",
-  "MN",
-  "TN",
-  "NN",
-];
 
 const euroFormatter = new Intl.NumberFormat("es-ES", {
   style: "currency",
@@ -109,9 +101,7 @@ function ExtraPayTable({
   assignments: ScheduleAssignment[];
   month: number;
 }) {
-  const columns = month === 12 || month === 1
-    ? EXTRA_PAY_SHIFTS
-    : (EXTRA_PAY_SHIFTS.filter((shift) => shift !== "MN" && shift !== "TN" && shift !== "NN") as Array<"MF" | "TF" | "N" | "NF">);
+  const columns = getExtraPayColumnsForMonth(month);
 
   return (
     <div className="mt-2 w-fit overflow-x-auto rounded-lg border border-gray-200 shadow-sm" data-testid="extra-pay-legend">
@@ -185,9 +175,7 @@ function ExtraPayTable({
 
 
 function RatesLegend({ month }: { month: number }) {
-  const shifts = month === 12 || month === 1
-    ? EXTRA_PAY_SHIFTS
-    : EXTRA_PAY_SHIFTS.filter((s) => s !== "MN" && s !== "TN" && s !== "NN");
+  const shifts = getExtraPayColumnsForMonth(month);
   return (
     <div
       className="mt-2 rounded-lg border border-gray-200 shadow-sm bg-white px-4 py-3"
@@ -541,25 +529,8 @@ export default function HomePage() {
       showToast("No hay datos que exportar", "info");
       return;
     }
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-    // Cabecera
-    const header = ["Empleado", ...days.map((d) => String(d))].join(",");
-
-    // Filas
-    const rows = employees.map((emp) => {
-      const cells = days.map((day) => {
-        const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        const a = assignments.find(
-          (x) => x.employeeId === emp.id && x.date.slice(0, 10) === dateStr
-        );
-        return a ? a.shiftType : "";
-      });
-      return [emp.name, ...cells].join(",");
-    });
-
-    const csv = [header, ...rows].join("\n");
+    const csv = buildScheduleCsv({ year, month, employees, assignments });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");

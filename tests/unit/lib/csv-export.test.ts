@@ -57,11 +57,15 @@ describe("buildScheduleCsv (SPEC-012 AC-16/17/18)", () => {
     expect(header).toContain("NN");
   });
 
-  it("el total de paga extra usa punto decimal, nunca coma (no debe romper el CSV)", () => {
+  it("el total de paga extra (último campo de cada fila) usa punto decimal, nunca coma", () => {
     const assignments: ScheduleAssignment[] = [assignment("emp-1", "2026-05-02", "MF")];
     const csv = buildScheduleCsv({ year: 2026, month: 5, employees, assignments });
+    const rows = csv.split("\n").slice(1);
+    const totalFields = rows.map((row) => row.split(",").pop());
 
-    expect(csv).not.toMatch(/\d,\d{1,2}(?!\d)/); // nada tipo "39,60"
+    totalFields.forEach((field) => {
+      expect(field).toMatch(/^\d+(\.\d+)?$/); // nunca "39,60" ni "39,60 €"
+    });
     expect(csv).not.toContain("€");
   });
 

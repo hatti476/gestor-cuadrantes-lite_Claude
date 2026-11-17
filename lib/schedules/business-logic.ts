@@ -54,6 +54,15 @@ export const EXTRA_PAY_RATES: Record<string, number> = {
   NN: 151.8,
 };
 
+export const EXTRA_PAY_SHIFTS = ["MF", "TF", "N", "NF", "MN", "TN", "NN"] as const;
+export type ExtraPayShift = (typeof EXTRA_PAY_SHIFTS)[number];
+
+/** Los turnos especiales de Navidad (MN/TN/NN) solo aplican en diciembre y enero */
+export function getExtraPayColumnsForMonth(month: number): ExtraPayShift[] {
+  if (month === 12 || month === 1) return [...EXTRA_PAY_SHIFTS];
+  return EXTRA_PAY_SHIFTS.filter((s) => s !== "MN" && s !== "TN" && s !== "NN");
+}
+
 export function calculateExtraPay(shiftCounts: Record<string, number>): number {
   return Object.entries(EXTRA_PAY_RATES).reduce(
     (total, [shift, rate]) => total + (shiftCounts[shift] ?? 0) * rate,
