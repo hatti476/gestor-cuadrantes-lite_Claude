@@ -12,12 +12,16 @@ interface ScheduleGridProps {
   assignments: ScheduleAssignment[];
   /** Días festivos del mes: mapa de "YYYY-MM-DD" → descripción */
   holidayDates?: Map<string, string>;
-  /** Si se provee, las celdas son clicables (modo edición ADMIN) */
-  onCellClick?: (employeeId: string, date: string, currentShift?: string) => void;
-  /** Celdas bloqueadas por preparación manual: Set de "employeeId|YYYY-MM-DD" */
+  /**
+   * Si se provee, las celdas aceptan pintado (modo edición ADMIN): clic
+   * único o clic-y-arrastre (mousedown + mouseenter con botón pulsado)
+   * aplican el turno seleccionado en la paleta sobre cada celda recorrida.
+   */
+  onCellPaint?: (employeeId: string, date: string, currentShift?: string) => void;
+  /** Se llama una vez al soltar el botón del ratón, al terminar un pintado */
+  onPaintEnd?: () => void;
+  /** Celdas bloqueadas por preparación manual (V/D/B): Set de "employeeId|YYYY-MM-DD" */
   lockedCells?: Set<string>;
-  /** Permite clicks sobre celdas bloqueadas en flujos controlados como PrepPanel */
-  allowLockedCellClick?: boolean;
   /** User.id del usuario autenticado — resalta su fila en el grid */
   currentUserId?: string | null;
 }
@@ -30,13 +34,29 @@ export function ScheduleGrid({
   employees,
   assignments,
   holidayDates = new Map(),
-  onCellClick,
+  onCellPaint,
+  onPaintEnd,
   lockedCells = new Set(),
-  allowLockedCellClick = false,
   currentUserId,
 }: ScheduleGridProps) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  // Pintado con arrastre: true mientras el botón del ratón está pulsado desde
+  // un mousedown sobre una celda pintable.
+  const paintingRef = useRef(false);
+
+  useEffect(() => {
+    if (!onCellPaint) return;
+    function handleMouseUp() {
+      if (paintingRef.current) {
+        paintingRef.current = false;
+        onPaintEnd?.();
+      }
+    }
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, [onCellPaint, onPaintEnd]);
 
   // Popover de festivo: qué día está abierto y en qué posición
   const [popup, setPopup] = useState<{ dateStr: string; x: number; y: number } | null>(null);
@@ -151,17 +171,32 @@ export function ScheduleGrid({
                   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                   const isHolidayCell = holidayDates.has(dateStr);
                   const isLocked = lockedCells.has(`${emp.id}|${dateStr}`);
-                  const clickable = !!onCellClick && (!isLocked || allowLockedCellClick);
+                  const paintable = !!onCellPaint;
 
                   return (
                     <td
                       key={day}
                       data-testid={`cell-${emp.id}-${dateStr}`}
-                      onClick={clickable ? () => onCellClick(emp.id, dateStr, cell?.shiftType) : undefined}
+                      onMouseDown={
+                        paintable
+                          ? (e) => {
+                              e.preventDefault();
+                              paintingRef.current = true;
+                              onCellPaint(emp.id, dateStr, cell?.shiftType);
+                            }
+                          : undefined
+                      }
+                      onMouseEnter={
+                        paintable
+                          ? () => {
+                              if (paintingRef.current) onCellPaint(emp.id, dateStr, cell?.shiftType);
+                            }
+                          : undefined
+                      }
                       data-locked={isLocked ? "true" : undefined}
-                      className={`w-8 min-w-8 max-w-8 h-8 p-0.5 border-r border-b border-gray-200 relative ${
+                      className={`w-8 min-w-8 max-w-8 h-8 p-0.5 border-r border-b border-gray-200 relative select-none ${
                         isHolidayCell ? "bg-red-50" : isWeekend ? "bg-blue-100" : ""
-                      } ${clickable ? "cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset" : ""} ${
+                      } ${paintable ? "cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset" : ""} ${
                         isLocked ? "ring-2 ring-inset ring-dashed ring-amber-400" : ""
                       }`}
                     >
