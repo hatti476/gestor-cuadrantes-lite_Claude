@@ -9,6 +9,9 @@ import {
   removeHolidayRule,
   validateShiftTransition,
   calculateExtraPay,
+  EXTRA_PAY_RATES,
+  isWeekendOrHoliday,
+  validateRestOnlyShift,
 } from "@/lib/schedules/business-logic";
 
 describe("isValidShiftType", () => {
@@ -73,33 +76,100 @@ describe("countShifts", () => {
   });
 });
 
-describe("calculateExtraPay", () => {
+describe("EXTRA_PAY_RATES (SPEC-012 AC-19: subida +20%)", () => {
+  it("refleja las tarifas vigentes desde Sprint-06", () => {
+    expect(EXTRA_PAY_RATES).toEqual({
+      MF: 39.6,
+      TF: 39.6,
+      N: 46.2,
+      NF: 59.4,
+      MN: 151.8,
+      TN: 151.8,
+      NN: 151.8,
+    });
+  });
+});
+
+describe("calculateExtraPay (SPEC-012 AC-19/21: tarifas +20%)", () => {
   it("empleado sin turnos extra devuelve 0 €", () => {
     expect(calculateExtraPay({ M: 10, T: 8, D: 4 })).toBe(0);
   });
 
-  it("calcula solo turnos MF a 33 €", () => {
-    expect(calculateExtraPay({ MF: 3 })).toBe(99);
+  it("calcula solo turnos MF a 39,6 €", () => {
+    expect(calculateExtraPay({ MF: 3 })).toBeCloseTo(118.8, 2);
   });
 
-  it("calcula solo turnos N a 38,5 €", () => {
-    expect(calculateExtraPay({ N: 4 })).toBe(154);
+  it("calcula solo turnos N a 46,2 €", () => {
+    expect(calculateExtraPay({ N: 4 })).toBeCloseTo(184.8, 2);
   });
 
   it("calcula combinación de MF, TF, N y NF", () => {
-    expect(calculateExtraPay({ MF: 2, TF: 1, N: 7, NF: 1 })).toBe(418);
+    expect(calculateExtraPay({ MF: 2, TF: 1, N: 7, NF: 1 })).toBeCloseTo(501.6, 2);
   });
 
   it("mantiene decimales correctamente", () => {
-    expect(calculateExtraPay({ N: 1, NF: 1 })).toBe(88);
+    expect(calculateExtraPay({ N: 1, NF: 1 })).toBeCloseTo(105.6, 2);
   });
 
-  it("calcula turnos especiales de Navidad a 126,5 €", () => {
-    expect(calculateExtraPay({ MN: 1, TN: 1, NN: 1 })).toBe(379.5);
+  it("calcula turnos especiales de Navidad a 151,8 €", () => {
+    expect(calculateExtraPay({ MN: 1, TN: 1, NN: 1 })).toBeCloseTo(455.4, 2);
   });
 
   it("calcula complementos ordinarios y navideños juntos", () => {
-    expect(calculateExtraPay({ MF: 1, TF: 1, N: 1, NF: 1, MN: 1 })).toBe(280.5);
+    expect(calculateExtraPay({ MF: 1, TF: 1, N: 1, NF: 1, MN: 1 })).toBeCloseTo(336.6, 2);
+  });
+});
+
+describe("isWeekendOrHoliday (SPEC-012 AC-12/14/15)", () => {
+  it("sábado es weekend", () => {
+    expect(isWeekendOrHoliday(new Date("2026-05-16"), false)).toBe(true);
+  });
+
+  it("domingo es weekend", () => {
+    expect(isWeekendOrHoliday(new Date("2026-05-17"), false)).toBe(true);
+  });
+
+  it("festivo entre semana cuenta como weekend/festivo", () => {
+    expect(isWeekendOrHoliday(new Date("2026-05-01"), true)).toBe(true);
+  });
+
+  it("día de semana no festivo no cuenta", () => {
+    expect(isWeekendOrHoliday(new Date("2026-05-15"), false)).toBe(false);
+  });
+});
+
+describe("validateRestOnlyShift (SPEC-012 AC-12/13/14/15)", () => {
+  it("rechaza V en sábado", () => {
+    const result = validateRestOnlyShift("V", new Date("2026-05-16"), false);
+    expect(result.valid).toBe(false);
+    expect(result.error).toMatch(/descanso/i);
+  });
+
+  it("rechaza B en domingo", () => {
+    const result = validateRestOnlyShift("B", new Date("2026-05-17"), false);
+    expect(result.valid).toBe(false);
+  });
+
+  it("rechaza V en festivo entre semana", () => {
+    const result = validateRestOnlyShift("V", new Date("2026-05-01"), true);
+    expect(result.valid).toBe(false);
+  });
+
+  it("permite D en sábado", () => {
+    expect(validateRestOnlyShift("D", new Date("2026-05-16"), false).valid).toBe(true);
+  });
+
+  it("permite V en día de semana no festivo", () => {
+    expect(validateRestOnlyShift("V", new Date("2026-05-15"), false).valid).toBe(true);
+  });
+
+  it("permite B en día de semana no festivo", () => {
+    expect(validateRestOnlyShift("B", new Date("2026-05-15"), false).valid).toBe(true);
+  });
+
+  it("no afecta a turnos M/T/N/J en festivo o fin de semana", () => {
+    expect(validateRestOnlyShift("M", new Date("2026-05-16"), false).valid).toBe(true);
+    expect(validateRestOnlyShift("N", new Date("2026-05-01"), true).valid).toBe(true);
   });
 });
 
