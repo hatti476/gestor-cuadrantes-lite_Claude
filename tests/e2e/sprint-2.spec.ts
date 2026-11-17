@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { USERS, ROUTES } from "./config";
-import { deleteUserByEmail, login, openShiftEditorFromEditableCell, screenshotOnFail, waitForGridOrUnpublished } from "./helpers";
+import { deleteUserByEmail, login, paintCellWithPalette, screenshotOnFail, waitForGridOrUnpublished } from "./helpers";
 import { loginAs as loginAsRole } from "./helpers/auth-utils";
-import { waitForModalClose, waitForScheduleGrid, waitForToast } from "./helpers/wait-utils";
+import { waitForScheduleGrid } from "./helpers/wait-utils";
 
 const { admin: ADMIN, tech: TECH } = USERS;
 
@@ -68,20 +68,13 @@ test("CP-14 — Admin puede asignar un turno @smoke", async ({ page }) => {
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
     await page.waitForLoadState("networkidle");
 
-    // Abrir ShiftEditor desde una celda realmente editable.
-    await openShiftEditorFromEditableCell(page);
-    await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
+    // Seleccionar "J" en la paleta y pintar una celda editable.
+    const cellTestId = await paintCellWithPalette(page, "J");
 
-    // Seleccionar un turno válido.
-    const shiftBtnJ = page.locator('[data-testid="shift-btn-J"]');
-    if (await shiftBtnJ.isVisible({ timeout: 1_000 }).catch(() => false)) {
-      await shiftBtnJ.click();
-    } else {
-      await page.locator('[data-testid="shift-btn-M"]').click();
-    }
-
-    // El modal debe cerrarse
-    await expect(page.locator('[data-testid="shift-editor"]')).not.toBeVisible({ timeout: 5_000 });
+    // La celda debe mostrar el turno pintado.
+    await expect(
+      page.locator(`[data-testid="${cellTestId}"]`).locator('[data-testid="shift-cell-J"]')
+    ).toBeVisible({ timeout: 5_000 });
   } catch (e) {
     await screenshotOnFail(page, "CP-14");
     throw e;
@@ -125,34 +118,18 @@ test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
       .locator("[data-testid^='shift-cell-']")
       .getAttribute("data-testid")
       .catch(() => null);
-    await targetCell.click();
 
-    // Debe aparecer el modal
-    await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
-
-    // Seleccionar un turno diferente al actual para forzar cambio real.
-    const editor = page.locator('[data-testid="shift-editor"]');
+    // Seleccionar en la paleta un turno distinto al actual para forzar cambio real.
     const useMorningTarget = shiftBefore === "shift-cell-T" || shiftBefore === "shift-cell-TF";
-    const targetShiftButton = useMorningTarget
-      ? page.locator('[data-testid="shift-btn-M"]')
-      : page.locator('[data-testid="shift-btn-T"]');
-    const expectedPersistedShiftTypes = useMorningTarget ? ["M", "MF"] : ["T", "TF"];
-    const expectedShiftCellTestIds = useMorningTarget
-      ? ["shift-cell-M", "shift-cell-MF"]
-      : ["shift-cell-T", "shift-cell-TF"];
+    const targetShift = useMorningTarget ? "M" : "T";
+    const expectedPersistedShiftTypes = [targetShift];
+    const expectedShiftCellTestIds = [`shift-cell-${targetShift}`];
 
-    await expect(targetShiftButton).toBeVisible({ timeout: 5_000 });
-    await expect(targetShiftButton).toBeEnabled({ timeout: 5_000 });
-    await targetShiftButton.click();
+    await page.locator(`[data-testid="palette-swatch-${targetShift}"]`).click();
+    await targetCell.click();
+    await page.waitForTimeout(600);
 
-    // Si aparece advertencia ET, confirmar para completar el cambio de turno.
-    const etWarningConfirm = page.locator('[data-testid="btn-confirm-et-warning"]');
-    if (await etWarningConfirm.isVisible({ timeout: 1_000 }).catch(() => false)) {
-      await etWarningConfirm.click();
-    }
-    await waitForToast(page, "", { timeout: 8_000 });
-
-    // Verificar persistencia por API (más robusto en paralelo que esperar cierre del modal).
+    // Verificar persistencia por API (más robusto en paralelo que esperar la UI).
     const [yearStr, monthStr] = date.split("-");
     const persistedResp = await page.request.get(
       `/api/schedules?year=${Number.parseInt(yearStr, 10)}&month=${Number.parseInt(monthStr, 10)}`
@@ -177,12 +154,6 @@ test("CP-15 — Admin puede cambiar un turno existente", async ({ page }) => {
     if (shiftBefore) {
       expect(shiftAfter).not.toBe(shiftBefore);
     }
-
-    // Cerrar modal si permanece abierto para no contaminar casos siguientes
-    if (await editor.isVisible().catch(() => false)) {
-      await page.keyboard.press("Escape");
-      await waitForModalClose(page);
-    }
   } catch (e) {
     await screenshotOnFail(page, "CP-15");
     throw e;
@@ -197,28 +168,17 @@ test("CP-16 — Admin puede eliminar un turno", async ({ page }) => {
     await page.waitForLoadState("networkidle");
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
-    // Buscar una celda editable (evita fragilidad por celdas bloqueadas)
-    const editableCell = page.locator('td[data-testid^="cell-"]:not([data-locked="true"])').first();
-    await expect(editableCell).toBeVisible({ timeout: 8_000 });
-    const targetCellTestId = await editableCell.getAttribute("data-testid");
-    expect(targetCellTestId).toBeTruthy();
+    // Asignar un turno con la paleta para asegurarnos de que hay algo que borrar
+    const targetCellTestId = await paintCellWithPalette(page, "J");
+    const targetCell = page.locator(`[data-testid="${targetCellTestId}"]`);
+    await expect(targetCell.locator('[data-testid="shift-cell-J"]')).toBeVisible({ timeout: 5_000 });
 
-    // Primero asignar un turno para asegurarnos de que hay algo que borrar
-    let targetCell = page.locator(`[data-testid="${targetCellTestId}"]`);
+    // Seleccionar "borrar" en la paleta y pintar la misma celda
+    await page.locator('[data-testid="palette-swatch-borrar"]').click();
     await targetCell.click();
-    await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
-    await page.locator('[data-testid="shift-btn-J"]').click();
-    await expect(page.locator('[data-testid="shift-editor"]')).not.toBeVisible({ timeout: 5_000 });
+    await page.waitForTimeout(600);
 
-    // Reabrir la misma celda (ahora tiene turno J) y limpiar
-    targetCell = page.locator(`[data-testid="${targetCellTestId}"]`);
-    await targetCell.click();
-    const editor = page.locator('[data-testid="shift-editor"]');
-    const editorVisible = await editor.isVisible({ timeout: 5_000 }).catch(() => false);
-    expect(editorVisible).toBe(true);
-    await expect(editor).toBeVisible({ timeout: 5_000 });
-    await editor.getByText(/Limpiar celda/i).click();
-    await expect(editor).not.toBeVisible({ timeout: 5_000 });
+    await expect(targetCell.locator('[data-testid^="shift-cell-"]')).toHaveCount(0);
   } catch (e) {
     await screenshotOnFail(page, "CP-16");
     throw e;

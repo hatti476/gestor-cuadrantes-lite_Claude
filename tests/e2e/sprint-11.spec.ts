@@ -56,12 +56,12 @@ test("CP-80 — marcar vacaciones bloquea celda con icono lock", async ({ page }
     await page.waitForLoadState("networkidle");
     page.on("dialog", (dialog) => dialog.accept());
 
-    // Abrir panel de preparación y hacer clic en "Vacaciones"
+    // Seleccionar "V" en la paleta de edición
     const prepPanel = page.locator('[data-testid="prep-panel"]');
     await expect(prepPanel).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
 
-    await page.click('[data-testid="prep-step-vacaciones"]');
+    await page.click('[data-testid="palette-swatch-V"]');
 
     // Hacer clic en la primera celda del grid
     const firstCell = page.locator('[data-testid^="cell-"]').first();
@@ -102,7 +102,7 @@ test("CP-81 — guardar preparación cambia badge a En preparación", async ({ p
     await expect(badge).toContainText(/Sin generar/i, { timeout: 5_000 });
 
     // Marcar una vacación (crea V manual → monthStatus pasa a "preparation")
-    await page.click('[data-testid="prep-step-vacaciones"]');
+    await page.click('[data-testid="palette-swatch-V"]');
     // Para junio necesitamos project activo; usar el selector general de celdas
     // En junio no hay empleados si no hay cuadrante, pero si hay empleados registrados
     // con el proyecto, las celdas vacías sí aparecen en el grid
@@ -114,11 +114,7 @@ test("CP-81 — guardar preparación cambia badge a En preparación", async ({ p
       await page.waitForTimeout(800);
     }
 
-    // Abrir el paso "Generar" para acceder a btn-save-preparation
-    await page.click('[data-testid="prep-step-generar"]');
-    await page.waitForTimeout(300);
-
-    // btn-save-preparation debe estar HABILITADO (monthStatus != "generated")
+    // btn-save-preparation ya está siempre visible (sin pasos que abrir) — SPEC-012
     const btnSave = page.locator('[data-testid="btn-save-preparation"]');
     await expect(btnSave).toBeVisible({ timeout: 5_000 });
     await expect(btnSave).not.toBeDisabled();
@@ -153,7 +149,7 @@ test("CP-82 — generar cuadrante preserva celdas V bloqueadas", async ({ page }
     await expect(prepPanel).toBeVisible({ timeout: 10_000 });
 
     // Marcar una vacación
-    await page.click('[data-testid="prep-step-vacaciones"]');
+    await page.click('[data-testid="palette-swatch-V"]');
     const firstCell = page.locator('[data-testid^="cell-"]').first();
     await firstCell.click();
     await page.waitForTimeout(800);
@@ -163,9 +159,7 @@ test("CP-82 — generar cuadrante preserva celdas V bloqueadas", async ({ page }
     await expect(lockedBefore).toBeVisible({ timeout: 5_000 });
     const lockedId = await lockedBefore.getAttribute("data-testid");
 
-    // Generar cuadrante (abrir paso generar primero)
-    await page.click('[data-testid="prep-step-generar"]');
-    await page.waitForTimeout(200);
+    // Generar cuadrante
     await page.click('[data-testid="btn-generate"]');
 
     // Puede aparecer confirmación
@@ -199,10 +193,6 @@ test("CP-83 — confirmación de regeneración aparece si ya hay datos", async (
     const prepPanel = page.locator('[data-testid="prep-panel"]');
     await expect(prepPanel).toBeVisible({ timeout: 10_000 });
 
-    // Abrir el paso "Generar"
-    await page.click('[data-testid="prep-step-generar"]');
-    await page.waitForTimeout(300);
-
     // Generar una primera vez (puede pedir confirmación si ya está generado)
     await page.click('[data-testid="btn-generate"]');
     const confirmFirst = page.locator('[data-testid="confirm-generate-modal"]');
@@ -212,7 +202,6 @@ test("CP-83 — confirmación de regeneración aparece si ya hay datos", async (
     await page.waitForTimeout(2_500);
 
     // Generar por segunda vez — ahora SÍ debe aparecer confirmación
-    // El paso "generar" ya está abierto, hacer clic directo
     await page.click('[data-testid="btn-generate"]');
     const confirmModal = page.locator('[data-testid="confirm-generate-modal"]');
     await expect(confirmModal).toBeVisible({ timeout: 5_000 });
@@ -241,9 +230,6 @@ test("CP-84 — eliminar festivo revierte turnos festivos a su tipo original", a
     // Primero generar cuadrante para tener turnos
     const prepPanel = page.locator('[data-testid="prep-panel"]');
     await expect(prepPanel).toBeVisible({ timeout: 10_000 });
-    // Abrir paso "Generar"
-    await page.click('[data-testid="prep-step-generar"]');
-    await page.waitForTimeout(300);
     await page.click('[data-testid="btn-generate"]');
     const confirmModal = page.locator('[data-testid="confirm-generate-modal"]');
     if (await confirmModal.isVisible({ timeout: 2_000 }).catch(() => false)) {

@@ -131,16 +131,13 @@ export async function createDisposableTecnico(
   return { ...tech, userId: user.id, employeeId: user.employee.id };
 }
 
-/** Abre el paso de generacion cuando el boton esta oculto. */
+/**
+ * Espera a que el boton "Generar cuadrante" este visible. Desde SPEC-012 el
+ * panel de preparacion ya no tiene pasos clicables: el boton esta siempre
+ * visible, no hace falta abrir ningun paso para revelarlo.
+ */
 export async function openGenerateStep(page: Page): Promise<void> {
-  const generateButton = page.locator('[data-testid="btn-generate"]');
-  if (await generateButton.isVisible({ timeout: 500 }).catch(() => false)) return;
-
-  const generateStep = page.locator('[data-testid="prep-step-generar"]');
-  if (await generateStep.isVisible({ timeout: 2_000 }).catch(() => false)) {
-    await generateStep.click();
-  }
-  await expect(generateButton).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator('[data-testid="btn-generate"]')).toBeVisible({ timeout: 5_000 });
 }
 
 /** Genera el mes actual, confirmando regeneracion cuando sea necesario. */
@@ -169,12 +166,13 @@ export async function generateScheduleAndWait(page: Page): Promise<void> {
 }
 
 /**
- * Abre ShiftEditor haciendo clic en una celda editable del cuadrante.
- * Reintenta en varias celdas para evitar clicks flaky en celdas bloqueadas/no interactivas.
+ * Selecciona `tool` en la paleta de edicion (SPEC-012) y lo pinta haciendo
+ * clic sobre la primera celda editable que encuentra. Reintenta en varias
+ * celdas para evitar clicks flaky en celdas bloqueadas/no interactivas.
+ * Devuelve el data-testid de la celda pintada (p. ej. "cell-emp-1-2026-05-10").
  */
-export async function openShiftEditorFromEditableCell(page: Page): Promise<void> {
-  const editor = page.locator('[data-testid="shift-editor"]');
-  if (await editor.isVisible({ timeout: 500 }).catch(() => false)) return;
+export async function paintCellWithPalette(page: Page, tool: string): Promise<string> {
+  await page.locator(`[data-testid="palette-swatch-${tool}"]`).click();
 
   const cells = page.locator(
     'td[data-testid^="cell-"]:not([data-locked="true"]):not(:has([data-testid="shift-cell-V"])):not(:has([data-testid="shift-cell-B"]))'
@@ -185,10 +183,13 @@ export async function openShiftEditorFromEditableCell(page: Page): Promise<void>
   for (let i = 0; i < limit; i++) {
     const cell = cells.nth(i);
     if (!(await cell.isVisible().catch(() => false))) continue;
+    const testId = await cell.getAttribute("data-testid");
     await cell.scrollIntoViewIfNeeded().catch(() => undefined);
     await cell.click({ timeout: 5_000 }).catch(() => undefined);
-    if (await editor.isVisible({ timeout: 1_500 }).catch(() => false)) return;
+    if (await cell.locator(`[data-testid="shift-cell-${tool}"]`).isVisible({ timeout: 1_500 }).catch(() => false)) {
+      return testId ?? "";
+    }
   }
 
-  throw new Error("No se pudo abrir ShiftEditor desde celdas editables");
+  throw new Error(`No se pudo pintar el turno ${tool} en ninguna celda editable`);
 }

@@ -24,9 +24,6 @@ async function navigateMonths(page: Parameters<typeof loginAsAdmin>[0], n: numbe
 /** Generate the schedule for the current month and wait for the grid to reload with assignments */
 async function generateAndWait(page: Parameters<typeof loginAsAdmin>[0]) {
   const generateButton = page.locator('[data-testid="btn-generate"]');
-  if (!(await generateButton.isVisible({ timeout: 500 }).catch(() => false))) {
-    await page.locator('[data-testid="prep-step-generar"]').click();
-  }
   await expect(generateButton).toBeVisible({ timeout: 5_000 });
 
   const generateRes = page.waitForResponse(
@@ -61,16 +58,15 @@ test("CP-67 — Generar cuadrante respeta turnos manuales previos", async ({ pag
     await generateAndWait(page);
     await expect(page.locator("table").first()).toBeVisible({ timeout: 5_000 });
 
-    // Asignar turno "V" manualmente al primer empleado en el día 4
+    // Asignar turno "V" manualmente al primer empleado en el día 4 (martes, no festivo)
     const cellTarget = page.locator("table").first().locator("tbody tr").first().locator("td").nth(4);
-    await cellTarget.click();
-    await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
+    await page.locator('[data-testid="palette-swatch-V"]').click();
     const saveRes = page.waitForResponse(
       (r) => r.url().includes("/api/schedules") && r.status() === 201
     );
-    await page.locator('[data-testid="shift-btn-V"]').click();
+    await cellTarget.click();
     await saveRes;
-    await expect(page.locator('[data-testid="shift-editor"]')).not.toBeVisible({ timeout: 5_000 });
+    await expect(cellTarget.locator('[data-testid="shift-cell-V"]')).toBeVisible({ timeout: 5_000 });
 
     // Regenerar el cuadrante
     await generateAndWait(page);
@@ -104,15 +100,15 @@ test("CP-68 — Generar cuadrante respeta vacaciones introducidas", async ({ pag
     const targetCellTestId = await cellTarget.getAttribute("data-testid");
     expect(targetCellTestId).toBeTruthy();
     await expect(cellTarget).toBeVisible({ timeout: 5_000 });
-    await cellTarget.click();
-    await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
+
+    await page.locator('[data-testid="palette-swatch-B"]').click();
     const saveResPromise = page.waitForResponse(
       (r) => r.url().includes("/api/schedules") && r.status() === 201
     );
-    await page.locator('[data-testid="shift-btn-B"]').click();
+    await cellTarget.click();
     const saveRes = await saveResPromise;
-    const savedAssignment = await saveRes.json() as { employeeId: string; date: string; shiftType: string };
-    await expect(page.locator('[data-testid="shift-editor"]')).not.toBeVisible({ timeout: 5_000 });
+    const savedAssignment = (await saveRes.json()) as { employeeId: string; date: string; shiftType: string };
+    await expect(cellTarget.locator('[data-testid="shift-cell-B"]')).toBeVisible({ timeout: 5_000 });
 
     // Regenerar y esperar que la toast de "Cuadrante generado" aparezca.
     await generateAndWait(page);
