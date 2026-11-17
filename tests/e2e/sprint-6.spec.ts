@@ -9,7 +9,7 @@
 
 import { test, expect } from "@playwright/test";
 import { USERS } from "./config";
-import { login, screenshotOnFail } from "./helpers";
+import { deleteUserByEmail, login, screenshotOnFail } from "./helpers";
 
 const { admin: ADMIN, tech: TECH } = USERS;
 
@@ -58,22 +58,23 @@ test("CP-45 — ADMIN crea empleado con rol TECNICO", async ({ page }) => {
 
   try {
     await login(page, ADMIN.email, ADMIN.password);
-    await page.goto("/employees");
+    await page.goto("/admin");
     await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
-    await page.locator("button").filter({ hasText: /Nuevo (empleado|usuario)|Añadir|Crear/i }).first().click();
-    const nameInput = page.locator("input#emp-name, input[placeholder='Nombre completo']").first();
-    const emailInput = page.locator("input#emp-email, input[type='email']").first();
-    const passwordInput = page.locator("input#emp-password, input[type='password']").first();
-    const roleSelect = page.locator("select#emp-role, [data-testid='select-global-role']").first();
+    await page.getByRole("button", { name: /Nuevo usuario/i }).click();
+    // El campo Nombre solo aparece con rol TECNICO: elegir el rol primero
+    const roleSelect = page.locator("[data-testid='select-global-role']");
+    await roleSelect.selectOption("TECNICO");
+    await expect(roleSelect).toHaveValue("TECNICO");
+
+    const nameInput = page.locator("input[placeholder='Nombre completo']");
+    const emailInput = page.locator("input[type='email']");
+    const passwordInput = page.locator("input[type='password']").first();
     await expect(nameInput).toBeVisible({ timeout: 5_000 });
 
     await nameInput.fill(name);
     await emailInput.fill(email);
     await passwordInput.fill("Sprint6User1!");
-
-    await roleSelect.selectOption("TECNICO");
-    await expect(roleSelect).toHaveValue("TECNICO");
 
     await page.locator('button[type="submit"]').click();
 
@@ -81,6 +82,8 @@ test("CP-45 — ADMIN crea empleado con rol TECNICO", async ({ page }) => {
   } catch (e) {
     await screenshotOnFail(page, "CP-45");
     throw e;
+  } finally {
+    await deleteUserByEmail(page, email);
   }
 });
 

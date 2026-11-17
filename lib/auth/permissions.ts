@@ -19,7 +19,8 @@ type ExtendedSession = Session & {
   user?: {
     id: string;
     email: string;
-    role: Role;
+    /** undefined si la revalidación ha deshabilitado la sesión (SPEC-011) */
+    role?: Role;
   };
 };
 
@@ -28,10 +29,26 @@ function getRole(session: Session | null): Role | undefined {
 }
 
 /**
+ * Verifica si un rol (p. ej. el `role` del token JWT en proxy.ts) es ADMIN
+ */
+export function isAdminRole(role: unknown): boolean {
+  return role === "ADMIN";
+}
+
+/**
+ * Cuenta deshabilitada: solo un TECNICO cuyo empleado está desactivado. Un ex-TECNICO
+ * cambiado a ADMIN/VIEWER conserva su Employee inactivo (por el historial) y sigue
+ * pudiendo entrar. Lo usan el login y la revalidación de sesión.
+ */
+export function isAccountDisabled(role: string, employee: { active: boolean } | null): boolean {
+  return role === "TECNICO" && employee !== null && !employee.active;
+}
+
+/**
  * Verifica si el usuario es ADMIN
  */
 export function isAdmin(session: Session | null): boolean {
-  return getRole(session) === "ADMIN";
+  return isAdminRole(getRole(session));
 }
 
 /**

@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       userId: true,
       user: { select: { id: true, email: true, role: true } },
     },
-    orderBy: { rotationOrder: "asc" },
+    orderBy: [{ rotationOrder: "asc" }, { id: "asc" }],
   });
 
   return NextResponse.json(employees);
@@ -61,7 +61,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
   }
 
-  const { name, email, password, role } = validation.data!;
+  const { name, password, role } = validation.data!;
+  // En minúsculas, como /api/admin/users: el login busca el email normalizado
+  const email = validation.data!.email.toLowerCase();
 
   // Validar que el rol sea TECNICO (solo TECNICO tiene Employee)
   if (role !== "TECNICO") {

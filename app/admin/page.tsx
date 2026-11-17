@@ -100,7 +100,7 @@ function DeleteModal({ user, onClose, onConfirm }: { user: AdminUser; onClose: (
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl p-6 w-80 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+      <div data-testid="delete-user-modal" className="bg-white rounded-xl shadow-xl p-6 w-80 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-gray-800">Eliminar usuario</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg" disabled={deleting}>×</button>
@@ -123,6 +123,7 @@ function DeleteModal({ user, onClose, onConfirm }: { user: AdminUser; onClose: (
           </button>
           <button
             type="button"
+            data-testid="btn-confirm-delete-user"
             onClick={handleConfirm}
             disabled={deleting}
             className="text-sm px-4 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
@@ -290,6 +291,100 @@ function UserModal({
   );
 }
 
+interface HistoryLog {
+  id: string;
+  date: string;
+  oldShift: string | null;
+  newShift: string;
+  changedBy: string;
+  changedAt: string;
+}
+
+// Historial de cambios de turno de un empleado (antes en /employees, inaccesible — SPEC-010 H-02)
+function HistoryModal({ user, onClose }: { user: AdminUser; onClose: () => void }) {
+  const [logs, setLogs] = useState<HistoryLog[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const employeeId = user.employee?.id;
+
+  // La API pagina (20 por página): cada página se añade a las ya cargadas
+  useEffect(() => {
+    if (!employeeId) return;
+    let cancelled = false;
+    fetch(`/api/employees/${employeeId}/history?page=${page}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Error cargando historial");
+        const body: { data: HistoryLog[]; pagination: { total: number } } = await res.json();
+        if (cancelled) return;
+        setLogs((prev) => (page === 1 ? body.data : [...prev, ...body.data]));
+        setTotal(body.pagination.total);
+      })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Error"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [employeeId, page]);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div data-testid="history-modal" className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <h3 className="text-base font-semibold text-gray-800">Historial — {user.employee?.name ?? user.email}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none" aria-label="Cerrar">×</button>
+        </div>
+        <div className="overflow-auto flex-1 p-4">
+          {error ? (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">{error}</p>
+          ) : loading && logs.length === 0 ? (
+            <p className="text-center text-gray-400 py-8">Cargando historial...</p>
+          ) : logs.length === 0 ? (
+            <p className="text-center text-gray-400 py-8">Sin cambios registrados.</p>
+          ) : (
+            <table data-testid="history-table" className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-600 border-b border-gray-200">Fecha turno</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-600 border-b border-gray-200">Anterior</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-600 border-b border-gray-200">Nuevo</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-600 border-b border-gray-200">Modificado por</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-600 border-b border-gray-200">Fecha cambio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log) => (
+                  <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="px-3 py-2 text-gray-700">{log.date.slice(0, 10)}</td>
+                    <td className="px-3 py-2 text-gray-500">{log.oldShift ?? "—"}</td>
+                    <td className="px-3 py-2 font-medium text-gray-800">{log.newShift}</td>
+                    <td className="px-3 py-2 text-gray-600">{log.changedBy}</td>
+                    <td className="px-3 py-2 text-gray-500">{new Date(log.changedAt).toLocaleString("es-ES")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        {logs.length > 0 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 text-xs text-gray-500">
+            <span data-testid="history-count">Mostrando {logs.length} de {total}</span>
+            {logs.length < total && (
+              <button
+                data-testid="btn-history-more"
+                onClick={() => { setLoading(true); setPage((p) => p + 1); }}
+                disabled={loading}
+                className="px-3 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {loading ? "Cargando..." : "Cargar más"}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function UsersTab() {
   const { data: session } = useSession();
   const { showToast } = useToast();
@@ -301,6 +396,8 @@ function UsersTab() {
   const [editingUser, setEditingUser] = useState<AdminUser | null | "new">(null);
   const [passwordUser, setPasswordUser] = useState<AdminUser | null>(null);
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
+  const [historyUser, setHistoryUser] = useState<AdminUser | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -330,6 +427,26 @@ function UsersTab() {
       showToast(err instanceof Error ? err.message : "Error", "error");
     }
   }
+
+  async function handleMoveRotation(user: AdminUser, direction: "up" | "down") {
+    setMovingId(user.id);
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/rotation`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ direction }),
+      });
+      if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? "Error moviendo en la rotación");
+      await loadUsers();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Error", "error");
+    } finally { setMovingId(null); }
+  }
+
+  // Posición 1..n en la rotación de noches (empleados activos por rotationOrder y,
+  // en empate, por id): el mismo orden que usa la generación del cuadrante.
+  const rotation = users
+    .filter((u) => u.employee?.active)
+    .sort((a, b) => a.employee!.rotationOrder - b.employee!.rotationOrder || (a.employee!.id < b.employee!.id ? -1 : 1));
+  const rotationPos = new Map(rotation.map((u, i) => [u.id, i + 1]));
 
   const filtered = users.filter((u) => {
     const nm = u.employee?.name ?? "";
@@ -374,12 +491,13 @@ function UsersTab() {
                 <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200">Email</th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200">Rol global</th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200">Estado</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-600 border-b border-gray-200" title="Orden en que se reparten los bloques de noches">Rotación noches</th>
                 <th className="px-4 py-3 border-b border-gray-200" />
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-12 text-center text-gray-400">No hay usuarios que coincidan.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-400">No hay usuarios que coincidan.</td></tr>
               ) : filtered.map((u) => {
                 const badge = GLOBAL_ROLE_BADGES[u.role] ?? { label: u.role, cls: "bg-gray-100 text-gray-600" };
                 const isActive = u.employee?.active !== false;
@@ -395,8 +513,38 @@ function UsersTab() {
                         </span>
                       ) : <span className="text-xs text-gray-400">—</span>}
                     </td>
+                    <td className="px-4 py-3">
+                      {rotationPos.has(u.id) ? (
+                        <div className="flex items-center gap-1" data-testid={`rotation-${u.id}`}>
+                          <span className="w-6 text-center font-mono text-gray-700" data-testid={`rotation-pos-${u.id}`}>{rotationPos.get(u.id)}</span>
+                          <button
+                            data-testid={`btn-rotation-up-${u.id}`}
+                            onClick={() => handleMoveRotation(u, "up")}
+                            disabled={movingId !== null || rotationPos.get(u.id) === 1}
+                            className="text-xs w-6 h-6 border border-gray-200 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-30"
+                            aria-label={`Subir a ${u.employee?.name} en la rotación`}
+                          >↑</button>
+                          <button
+                            data-testid={`btn-rotation-down-${u.id}`}
+                            onClick={() => handleMoveRotation(u, "down")}
+                            disabled={movingId !== null || rotationPos.get(u.id) === rotation.length}
+                            className="text-xs w-6 h-6 border border-gray-200 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-30"
+                            aria-label={`Bajar a ${u.employee?.name} en la rotación`}
+                          >↓</button>
+                        </div>
+                      ) : <span className="text-xs text-gray-400">—</span>}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {u.employee && (
+                          <button
+                            data-testid={`btn-history-user-${u.id}`}
+                            onClick={() => setHistoryUser(u)}
+                            className="text-xs px-3 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50"
+                          >
+                            Historial
+                          </button>
+                        )}
                         <button
                           data-testid={`btn-password-user-${u.id}`}
                           onClick={() => setPasswordUser(u)}
@@ -427,6 +575,7 @@ function UsersTab() {
         <UserModal user={editingUser === "new" ? null : editingUser} onClose={() => setEditingUser(null)} onSaved={() => { void loadUsers(); }} />
       )}
       {passwordUser && <PasswordModal user={passwordUser} onClose={() => setPasswordUser(null)} />}
+      {historyUser && <HistoryModal user={historyUser} onClose={() => setHistoryUser(null)} />}
       {deleteUser && (
         <DeleteModal
           user={deleteUser}

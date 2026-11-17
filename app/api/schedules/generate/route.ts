@@ -39,7 +39,8 @@ export async function POST(req: NextRequest) {
   const employees = await prisma.employee.findMany({
     where: { active: true },
     select: { id: true, rotationOrder: true, shiftPreference: true },
-    orderBy: { rotationOrder: "asc" },
+    // Desempate por id: mismo orden que /admin y que el endpoint de rotación
+    orderBy: [{ rotationOrder: "asc" }, { id: "asc" }],
   });
 
   if (employees.length === 0) {

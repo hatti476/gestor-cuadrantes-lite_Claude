@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { getMonthRange } from "@/lib/schedules/business-logic";
-import { canEditSchedule } from "@/lib/auth/permissions";
+import { canEditSchedule, getSessionRole } from "@/lib/auth/permissions";
 
 // POST /api/schedules/snapshot
 // Body: { month, year }
@@ -63,6 +63,10 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+  // Sesión deshabilitada por la revalidación (SPEC-011) → sin rol → sin acceso
+  if (!getSessionRole(session)) {
+    return NextResponse.json({ error: "Prohibido" }, { status: 403 });
   }
 
   const { searchParams } = new URL(req.url);

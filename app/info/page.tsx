@@ -13,8 +13,10 @@ const ADMIN_ONLY_SECTIONS = [
     icon: "👥",
     items: [
       "Accede a «Administración» desde la barra de navegación para gestionar cuentas de usuario.",
-      "Crea cuentas ADMIN, TECNICO o VIEWER desde la pestaña «Usuarios».",
+      "Crea cuentas ADMIN, TECNICO o VIEWER con «+ Nuevo usuario».",
       "Solo los usuarios con rol TECNICO tienen registro de empleado asociado (1:1).",
+      "La columna «Rotación noches» fija el orden en que se reparten los bloques de noches; cámbialo con ↑/↓.",
+      "«Historial» muestra los cambios manuales de turno de cada técnico.",
       "Desactiva una cuenta pulsando «Desactivar» — el usuario no podrá iniciar sesión pero sus datos se conservan.",
     ],
   },

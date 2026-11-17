@@ -2,191 +2,136 @@
  * tests/e2e/sprint-10.spec.ts
  * Sprint 10 — Soft-delete, shiftPreference, TECNICO edición, rotación nocturna, contadores
  *
- * CP-71 — shiftPreference se guarda y muestra badge en el listado de empleados
- * CP-72 — Desactivar empleado hace soft-delete; el historial persiste
- * CP-73 — Empleado inactivo no aparece en el selector de generación (API activos)
+ * CP-71 — shiftPreference se guarda y persiste (TECNICO desechable)
+ * CP-72 — Desactivar empleado hace soft-delete, conserva historial y bloquea el login
+ * CP-73 — Empleado inactivo no aparece en la API de empleados activos
  * CP-75 — TECH (TECNICO) no puede editar celdas del cuadrante
  * CP-77 — Tabla de contadores aparece debajo del grid con datos coherentes
  * CP-78 — Tabla de contadores: estilo visual consistente con el grid (bordes redondeados, badges de turno)
  * CP-78 — Tabla de contadores: estilo visual consistente con el grid (bordes redondeados, badges de turno)
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect, Page } from "@playwright/test";
 import { USERS, ROUTES } from "./config";
-import { generateScheduleAndWait, loginAsAdmin, screenshotOnFail } from "./helpers";
+import {
+  createDisposableTecnico,
+  deleteUserByEmail,
+  generateScheduleAndWait,
+  loginAsAdmin,
+  screenshotOnFail,
+  waitForGridOrUnpublished,
+} from "./helpers";
 import { loginAs as loginAsRole } from "./helpers/auth-utils";
 import { waitForGenerationComplete, waitForScheduleGrid } from "./helpers/wait-utils";
 
+// CP-71/72/73 trabajan sobre un TECNICO desechable: modificar los sembrados
+// (tecnico1 es el usuario TECNICO de los demás specs) rompía otros tests de la
+// misma ejecución, porque la BD solo se resiembra al empezar (SPEC-010).
+
+async function openUserEditor(page: Page, email: string): Promise<void> {
+  await page.goto("/admin");
+  await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+  await page.getByPlaceholder("Buscar por nombre o email…").fill(email);
+  const row = page.locator("table tbody tr").filter({ hasText: email });
+  await expect(row).toHaveCount(1);
+  await row.getByRole("button", { name: /^Editar$/ }).click();
+}
+
+async function deactivateFromEditor(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Desactivar usuario" }).click();
+  const patchRes = page.waitForResponse(
+    (r) => r.url().includes("/api/admin/users/") && r.request().method() === "PATCH"
+  );
+  await page.getByRole("button", { name: /^Sí$/ }).click();
+  expect((await patchRes).status()).toBe(200);
+}
+
 // ===========================================================================
-// CP-71 — shiftPreference se guarda y muestra badge
+// CP-71 — shiftPreference se guarda y persiste
 // ===========================================================================
-test("CP-71 — shiftPreference se guarda y muestra badge en el listado", async ({ page }) => {
+test("CP-71 — shiftPreference se guarda y persiste al reabrir la edición", async ({ page }) => {
   test.setTimeout(60_000);
+  await loginAsAdmin(page);
+  // Inactivo desde el principio: no entra en la rotación de otros specs
+  const tech = await createDisposableTecnico(page, { inactive: true });
   try {
-    await loginAsAdmin(page);
-    await page.goto(ROUTES.employees);
-    await page.waitForLoadState("networkidle");
-
-    // Esperar tabla de empleados
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
-
-    // Abrir edición de un técnico activo (evita filas incompletas como PM sin nombre)
-    const targetEmail = "tecnico2@cuadrantes.local";
-    const userRow = page.locator("table tbody tr").filter({ hasText: targetEmail }).first();
-    await expect(userRow).toBeVisible({ timeout: 8_000 });
-    await userRow.getByRole("button", { name: /Editar/i }).click();
-
-    // Esperar que aparezca el selector de preferencia de turno
-    const prefSelect = page.locator('[data-testid="select-shift-preference"], select:has(option[value="J"])').first();
-    await expect(prefSelect).toBeVisible({ timeout: 5_000 });
-
-    // Seleccionar "Solo mañanas"
+    await openUserEditor(page, tech.email);
+    const prefSelect = page.locator('select:has(option[value="J"])');
+    await expect(prefSelect).toHaveValue("");
     await prefSelect.selectOption("M");
-    await expect(prefSelect).toHaveValue("M");
 
-    // Guardar
     const saveRes = page.waitForResponse(
-      (r) =>
-        r.url().includes("/api/admin/users/") &&
-        r.request().method() === "PATCH"
+      (r) => r.url().includes("/api/admin/users/") && r.request().method() === "PATCH"
     );
-    await page.getByRole("button", { name: /^Guardar$/ }).last().click();
+    await page.getByRole("button", { name: /^Guardar$/ }).click();
     expect((await saveRes).status()).toBe(200);
-    await page.waitForTimeout(500);
 
-    // Verificar persistencia reabriendo edición del mismo usuario
-    const sameUserRow = page.locator("table tbody tr").filter({ hasText: targetEmail }).first();
-    await sameUserRow.getByRole("button", { name: /Editar/i }).click();
-    const persistedPref = page
-      .locator('[data-testid="select-shift-preference"], select:has(option[value="J"])')
-      .first();
-    await expect(persistedPref).toBeVisible({ timeout: 5_000 });
-    // En la UI actual algunos usuarios pueden normalizar la preferencia a "J" tras guardar.
-    // Validamos que la preferencia persiste con un valor explícito no vacío.
-    const persistedValue = await persistedPref.inputValue();
-    expect(["M", "T", "J"]).toContain(persistedValue);
+    await openUserEditor(page, tech.email);
+    await expect(page.locator('select:has(option[value="J"])')).toHaveValue("M");
   } catch (e) {
     await screenshotOnFail(page, "CP-71");
     throw e;
+  } finally {
+    await deleteUserByEmail(page, tech.email);
   }
 });
 
 // ===========================================================================
-// CP-72 — Desactivar empleado hace soft-delete; historial persiste
+// CP-72 — Desactivar empleado hace soft-delete; historial persiste; no puede entrar
 // ===========================================================================
-test("CP-72 — Desactivar empleado hace soft-delete y persiste historial", async ({ page }) => {
+test("CP-72 — Desactivar empleado hace soft-delete, conserva historial y bloquea el login", async ({ page }) => {
   test.setTimeout(60_000);
+  await loginAsAdmin(page);
+  const tech = await createDisposableTecnico(page);
   try {
-    await loginAsAdmin(page);
-    await page.goto(ROUTES.employees);
-    await page.waitForLoadState("networkidle");
+    await openUserEditor(page, tech.email);
+    await deactivateFromEditor(page);
 
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    const row = page.locator("table tbody tr").filter({ hasText: tech.email });
+    await expect(row.getByText("Inactivo")).toBeVisible({ timeout: 5_000 });
 
-    const legacyDeactivateBtn = page.locator('[data-testid^="btn-deactivate-"]').first();
-    if (await legacyDeactivateBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await legacyDeactivateBtn.click();
-      const confirmBtn = page.locator('[data-testid="btn-confirm-deactivate"]');
-      await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
-      const deleteRes = page.waitForResponse(
-        (r) => r.url().includes("/api/employees/") && r.request().method() === "DELETE"
-      );
-      await confirmBtn.click();
-      const resp = await deleteRes;
-      expect(resp.status()).toBe(200);
-    } else {
-      const userRow = page.locator("table tbody tr").filter({ hasText: /Activo|Inactivo/ }).first();
-      await expect(userRow).toBeVisible({ timeout: 8_000 });
-      await userRow.getByRole("button", { name: /Editar/i }).click();
-      const toggleBtn = page.getByRole("button", { name: /Desactivar usuario|Reactivar usuario/i }).first();
-      await expect(toggleBtn).toBeVisible({ timeout: 5_000 });
-      await toggleBtn.click();
-      const confirmBtn = page.getByRole("button", { name: /^Sí$/ }).first();
-      const patchRes = page.waitForResponse(
-        (r) => r.url().includes("/api/admin/users/") && r.request().method() === "PATCH"
-      );
-      await confirmBtn.click();
-      const resp = await patchRes;
-      expect(resp.status()).toBe(200);
-    }
+    // Soft-delete: el empleado y su historial siguen accesibles
+    const history = await page.request.get(`/api/employees/${tech.employeeId}/history`);
+    expect(history.status()).toBe(200);
 
-    // El empleado debe aparecer ahora con badge "Inactivo"
-    await page.waitForTimeout(500);
-    const inactiveBadge = page.locator("table tbody").locator("text=Inactivo").first();
-    await expect(inactiveBadge).toBeVisible({ timeout: 5_000 });
-
-    // En UI legacy también puede aparecer botón de reactivación
-    const reactivateBtn = page.locator('[data-testid^="btn-reactivate-"]').first();
-    if (await reactivateBtn.count()) {
-      await expect(reactivateBtn).toBeVisible({ timeout: 5_000 });
-    }
+    // H-12: un empleado desactivado no puede iniciar sesión
+    await page.context().clearCookies();
+    await page.goto(ROUTES.login);
+    await page.getByLabel("Email").fill(tech.email);
+    await page.getByLabel("Contraseña").fill(tech.password);
+    await page.getByRole("button", { name: "Entrar" }).click();
+    await expect(page.getByText("Email o contraseña incorrectos")).toBeVisible({ timeout: 10_000 });
   } catch (e) {
     await screenshotOnFail(page, "CP-72");
     throw e;
+  } finally {
+    await page.context().clearCookies();
+    await loginAsAdmin(page);
+    await deleteUserByEmail(page, tech.email);
   }
 });
 
 // ===========================================================================
-// CP-73 — Empleado inactivo no aparece en el grid (API de activos)
+// CP-73 — Empleado inactivo no aparece en la API de activos
 // ===========================================================================
-test("CP-73 — Empleado inactivo no aparece en el grid del cuadrante", async ({ page }) => {
+test("CP-73 — Empleado inactivo no aparece en la lista de empleados activos", async ({ page }) => {
   test.setTimeout(60_000);
+  await loginAsAdmin(page);
+  const tech = await createDisposableTecnico(page);
   try {
-    await loginAsAdmin(page);
-    await page.goto(ROUTES.employees);
-    await page.waitForLoadState("networkidle");
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    const names = async (): Promise<string[]> =>
+      ((await (await page.request.get("/api/employees")).json()) as { name: string }[]).map((e) => e.name);
+    expect(await names()).toContain(tech.name);
 
-    // Obtener un empleado activo objetivo desde API
-    const activeBefore = await page.evaluate(async () => {
-      const res = await fetch("/api/employees", { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json() as Promise<Array<{ id: string; name: string; user?: { email?: string } }>>;
-    });
-    expect(activeBefore.length).toBeGreaterThan(0);
-    const target = activeBefore[0];
+    await openUserEditor(page, tech.email);
+    await deactivateFromEditor(page);
 
-    const legacyDeactivateBtn = page.locator('[data-testid^="btn-deactivate-"]').first();
-    if (await legacyDeactivateBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await legacyDeactivateBtn.click();
-      const confirmBtn = page.locator('[data-testid="btn-confirm-deactivate"]');
-      await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
-      const deleteRes = page.waitForResponse(
-        (r) => r.url().includes("/api/employees/") && r.request().method() === "DELETE"
-      );
-      await confirmBtn.click();
-      await deleteRes;
-    } else {
-      // En la UI de administración, buscar al usuario objetivo y desactivarlo desde "Editar"
-      if (target.user?.email) {
-        await page.getByPlaceholder("Buscar por nombre o email…").fill(target.user.email);
-      }
-      const targetRow = page.locator("table tbody tr").filter({ hasText: target.name }).first();
-      await expect(targetRow).toBeVisible({ timeout: 8_000 });
-      await targetRow.getByRole("button", { name: /Editar/i }).click();
-      const toggleBtn = page.getByRole("button", { name: /Desactivar usuario|Reactivar usuario/i }).first();
-      await expect(toggleBtn).toBeVisible({ timeout: 5_000 });
-      await toggleBtn.click();
-      const patchRes = page.waitForResponse(
-        (r) => r.url().includes("/api/admin/users/") && r.request().method() === "PATCH"
-      );
-      await page.getByRole("button", { name: /^Sí$/ }).first().click();
-      await patchRes;
-    }
-    await page.waitForTimeout(500);
-
-    // Verificar que la API de empleados (sin includeInactive) no devuelve el empleado
-    const activeEmps = await page.evaluate(async () => {
-      const res = await fetch("/api/employees", { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    });
-    const empNames = (activeEmps as Array<{ name: string }>).map((e) => e.name);
-    const found = empNames.some((n) => n === target.name);
-    expect(found).toBe(false);
+    expect(await names()).not.toContain(tech.name);
   } catch (e) {
     await screenshotOnFail(page, "CP-73");
     throw e;
+  } finally {
+    await deleteUserByEmail(page, tech.email);
   }
 });
 
@@ -204,7 +149,11 @@ test("CP-75 — TECH (TECNICO) no puede editar celdas del cuadrante", async ({ p
     await page.waitForURL(ROUTES.home, { timeout: 10_000 });
     await page.waitForLoadState("networkidle");
 
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    // Mes sin publicar: el TECNICO no ve grid, así que no hay nada que editar
+    if ((await waitForGridOrUnpublished(page)) === "unpublished") {
+      await expect(page.locator('[data-testid="shift-editor"]')).toHaveCount(0);
+      return;
+    }
 
     // Comprobar que las celdas NO tienen cursor-pointer (no son editables)
     const firstCell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
