@@ -11,6 +11,7 @@ import {
   canManageHolidays,
   canViewHolidays,
   canViewSchedules,
+  isAccountDisabled,
 } from "@/lib/auth/permissions";
 
 const createMockSession = (role: Role): Session => ({
@@ -169,5 +170,22 @@ describe("Funciones obsoletas eliminadas", () => {
     // @ts-expect-error - type should not exist
     const _membership: import("@/lib/auth/permissions").ProjectMembership = { projectId: "", role: "" as never };
     expect(_membership).toBeDefined(); // This line should cause TS error if type exists
+  });
+});
+
+describe("isAccountDisabled (SPEC-010 H-12 / SPEC-011)", () => {
+  it("solo un TECNICO con empleado inactivo está deshabilitado", () => {
+    expect(isAccountDisabled("TECNICO", { active: false })).toBe(true);
+    expect(isAccountDisabled("TECNICO", { active: true })).toBe(false);
+  });
+
+  it("ADMIN/VIEWER con Employee inactivo (ex-TECNICO) no está deshabilitado", () => {
+    expect(isAccountDisabled("ADMIN", { active: false })).toBe(false);
+    expect(isAccountDisabled("VIEWER", { active: false })).toBe(false);
+  });
+
+  it("sin registro de empleado no está deshabilitado", () => {
+    expect(isAccountDisabled("TECNICO", null)).toBe(false);
+    expect(isAccountDisabled("VIEWER", null)).toBe(false);
   });
 });

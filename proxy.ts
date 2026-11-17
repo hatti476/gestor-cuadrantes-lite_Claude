@@ -4,7 +4,9 @@ import { isAdminRole } from "@/lib/auth/permissions";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const token = await getToken({ req: request });
+  const rawToken = await getToken({ req: request });
+  // Revalidación (SPEC-011): un usuario borrado o desactivado cuenta como sin sesión
+  const token = rawToken && !(rawToken as { disabled?: boolean }).disabled ? rawToken : null;
 
   // Compatibilidad: /employees y /employees/* → /admin (la gestión de empleados,
   // rotación e historial vive en /admin; /admin/* no existe — SPEC-010 H-02/H-03)

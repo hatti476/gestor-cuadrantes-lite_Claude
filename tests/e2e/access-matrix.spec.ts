@@ -29,6 +29,7 @@ const RULES: Rule[] = [
   { method: "DELETE", path: "/api/schedules?year=2026&month=5", expect: READ_ONLY_DENIED },
   { method: "POST", path: "/api/schedules/generate", expect: READ_ONLY_DENIED },
   { method: "PATCH", path: "/api/schedules/publish", expect: READ_ONLY_DENIED },
+  { method: "GET", path: "/api/schedules/snapshot?year=2026&month=5", expect: { ADMIN: 200, TECNICO: 200, VIEWER: 200 } },
   { method: "POST", path: "/api/schedules/snapshot", expect: READ_ONLY_DENIED },
   { method: "POST", path: "/api/schedules/snapshot/restore", expect: READ_ONLY_DENIED },
   // Empleados

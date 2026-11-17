@@ -4,6 +4,19 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
+## [Unreleased] — Sprint 5b (SPEC-011, revalidación de sesión)
+
+### Security
+- **El rol se revalida en cada petición** (SPEC-010 H-13): antes quedaba fijado en el JWT al iniciar sesión, y un usuario degradado, desactivado o borrado conservaba sus permisos hasta 30 días. Ahora el callback `jwt` relee de BD el rol y el estado en cada `getServerSession` (todas las API) y en cada consulta de sesión del cliente. Sesión deshabilitada → sin rol → 403 en las API y `proxy.ts` redirige a `/login`. Ante un error de BD se deniega.
+- `GET /api/schedules/snapshot` exige un rol válido (antes bastaba con tener sesión).
+
+### Fixed
+- **Ascender a un TECNICO lo dejaba sin acceso**: al cambiar de rol, su Employee pasa a inactivo para conservar el historial, y el login (SPEC-010 H-12) lo trataba como desactivado. El estado del empleado solo cuenta ya para usuarios TECNICO (`isAccountDisabled`).
+
+### Tests
+- Unit: `lib/auth/session-claims.ts`, callbacks de NextAuth, `isAccountDisabled`, caso deshabilitado en `proxy.ts`.
+- E2E: CP-183 (@smoke, técnico desactivado con sesión abierta), CP-184 (cambio de rol sin volver a entrar), CP-185 (técnico ascendido a ADMIN conserva el acceso).
+
 ## [Unreleased] — Sprint 5 (SPEC-010, auditoría de permisos)
 
 ### Fixed

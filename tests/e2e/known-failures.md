@@ -20,7 +20,7 @@ El histórico de fallos del ciclo anterior (pre-`baseline sprint-01`) está arch
 | CP-165 | ci:check: 9 ESLint errors (react-hooks/set-state-in-effect, @typescript-eslint/no-explicit-any) + 6 warnings | Sprint 0 (baseline) | Código pre-existente no cumple reglas actuales de lint |
 
 **Total pre-existentes**: 2
-**Última verificación**: Sprint 5 (2026-11-17) — local con `.next-test` limpia: suite completa 111/111 (1 skip: CP-46 obsoleto), @smoke incluido. Unit 474/474.
+**Última verificación**: Sprint 5b (2026-11-17) — local con `.next-test` limpia: suite completa 114/114 (1 skip: CP-46 obsoleto), @smoke incluido. Unit 493/493.
 **Método de verificación**: Ejecución directa `npm run test:unit`, `npm run test:e2e`, `npm run ci:check`, y runs reales de `e2e-smoke.yml` en GitHub Actions
 
 ---

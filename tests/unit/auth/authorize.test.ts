@@ -44,6 +44,11 @@ describe("authorizeCredentials", () => {
     expect(await authorizeCredentials(CREDS)).toBeNull();
   });
 
+  it("ex-TECNICO cambiado a ADMIN/VIEWER (Employee inactivo por el cambio de rol) → puede entrar", async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({ id: "u3", email: "ex@x", password: "h", role: "ADMIN", employee: { active: false } });
+    expect(await authorizeCredentials({ email: "ex@x", password: "p" })).toEqual({ id: "u3", email: "ex@x", role: "ADMIN" });
+  });
+
   it("ADMIN/VIEWER sin registro de empleado → acceso normal", async () => {
     mockPrisma.user.findUnique.mockResolvedValue({ id: "u2", email: "viewer@x", password: "h", role: "VIEWER", employee: null });
     expect(await authorizeCredentials({ email: "viewer@x", password: "p" })).toEqual({ id: "u2", email: "viewer@x", role: "VIEWER" });

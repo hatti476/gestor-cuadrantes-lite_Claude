@@ -9,8 +9,8 @@ import { proxy } from "@/proxy";
 
 const BASE = "http://localhost:3000";
 
-async function run(path: string, role: string | null): Promise<Response> {
-  getToken.mockResolvedValue(role ? { role } : null);
+async function run(path: string, role: string | null, extra: Record<string, unknown> = {}): Promise<Response> {
+  getToken.mockResolvedValue(role ? { role, ...extra } : null);
   return proxy(new NextRequest(`${BASE}${path}`));
 }
 
@@ -51,5 +51,16 @@ describe("proxy.ts — resto de rutas", () => {
 
   test.each(["TECNICO", "VIEWER"])("%s accede a / sin redirect", async (role) => {
     expect(redirectTarget(await run("/", role))).toBeNull();
+  });
+});
+
+describe("proxy.ts — token deshabilitado por revalidación (SPEC-011)", () => {
+  test("usuario desactivado o borrado con cookie aún válida → /login", async () => {
+    getToken.mockResolvedValue({ disabled: true });
+    expect(redirectTarget(await proxy(new NextRequest(`${BASE}/`)))).toBe("/login");
+  });
+
+  test("ADMIN degradado a disabled ya no entra en /admin", async () => {
+    expect(redirectTarget(await run("/admin", "ADMIN", { disabled: true }))).toBe("/");
   });
 });
