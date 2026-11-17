@@ -19,7 +19,8 @@ type ExtendedSession = Session & {
   user?: {
     id: string;
     email: string;
-    role: Role;
+    /** undefined si la revalidación ha deshabilitado la sesión (SPEC-011) */
+    role?: Role;
   };
 };
 
@@ -32,6 +33,15 @@ function getRole(session: Session | null): Role | undefined {
  */
 export function isAdminRole(role: unknown): boolean {
   return role === "ADMIN";
+}
+
+/**
+ * Cuenta deshabilitada: solo un TECNICO cuyo empleado está desactivado. Un ex-TECNICO
+ * cambiado a ADMIN/VIEWER conserva su Employee inactivo (por el historial) y sigue
+ * pudiendo entrar. Lo usan el login y la revalidación de sesión.
+ */
+export function isAccountDisabled(role: string, employee: { active: boolean } | null): boolean {
+  return role === "TECNICO" && employee !== null && !employee.active;
 }
 
 /**

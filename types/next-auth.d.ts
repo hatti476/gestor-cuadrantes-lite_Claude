@@ -15,14 +15,18 @@ declare module "next-auth" {
     user: {
       id: string;
       email: string;
-      role: Role;
+      /** undefined si la sesión ha sido deshabilitada (SPEC-011) */
+      role?: Role;
     };
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
-    id: string;
-    role: Role;
+    id?: string;
+    /** Sin rol si la revalidación lo deshabilita (SPEC-011) */
+    role?: Role;
+    /** true si el usuario ya no existe o está desactivado (SPEC-011) */
+    disabled?: boolean;
   }
 }

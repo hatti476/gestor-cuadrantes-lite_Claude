@@ -5,7 +5,7 @@
 
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import type { Role } from "@/lib/auth/permissions";
+import { isAccountDisabled, type Role } from "@/lib/auth/permissions";
 
 export interface AuthorizedUser {
   id: string;
@@ -36,7 +36,7 @@ export async function authorizeCredentials(
     if (!passwordMatch) return null;
 
     // Un empleado desactivado conserva sus datos pero no puede entrar (SPEC-010 H-12)
-    if (user.employee && !user.employee.active) {
+    if (isAccountDisabled(user.role, user.employee)) {
       console.log("[auth] Empleado desactivado:", user.email);
       return null;
     }
