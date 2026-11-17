@@ -1,22 +1,23 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useRef, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Header } from "@/components/layout/header";
 import { ShiftCell } from "@/components/schedule/shift-cell";
 import { ShiftType } from "@/lib/constants/shift-colors";
 import type { ScheduleAssignment, ScheduleEmployee } from "@/lib/schedules/types";
+import {
+  SPAN_OPTIONS,
+  employeesFromAssignments,
+  getMonthPeriods,
+  parseSpan,
+} from "@/lib/schedules/multi-month";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function addMonths(year: number, month: number, delta: number): { year: number; month: number } {
-  let m = month + delta;
-  let y = year;
-  while (m > 12) { m -= 12; y++; }
-  while (m < 1)  { m += 12; y--; }
-  return { year: y, month: m };
-}
+/** Ancho de la columna fija "Empleado" (sticky) — se descuenta al centrar el scroll. */
+const NAME_COL_WIDTH = 140;
 
 const MONTH_NAMES_ES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -69,7 +70,8 @@ function MultiMonthView() {
   const [holidayDates, setHolidayDates] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [span, setSpan] = useState(3);
+  const [span, setSpan] = useState(() => parseSpan(searchParams.get("span")));
+  const gridRef = useRef<HTMLDivElement>(null);
 
   // Auth guard: cualquier rol autenticado puede ver (read-only)
   useEffect(() => {
@@ -81,11 +83,7 @@ function MultiMonthView() {
     setLoading(true);
     setError(null);
     try {
-      const offset = Math.floor(span / 2);
-      const periods: Array<{ year: number; month: number }> = [];
-      for (let d = -offset; d < span - offset; d++) {
-        periods.push(addMonths(yearParam, monthParam, d));
-      }
+      const periods = getMonthPeriods(yearParam, monthParam, span);
 
       // Fetch holidays for all years that appear in the view
       const years = [...new Set(periods.map((p) => p.year))];
@@ -98,16 +96,8 @@ function MultiMonthView() {
         ...years.map((y) => fetch(`/api/holidays?year=${y}`)),
       ]);
 
-      if (!empRes.ok) throw new Error("Error al cargar empleados");
-
       const schedRes = restRes.slice(0, periods.length);
       const holidayRes = restRes.slice(periods.length);
-
-      const apiEmployees: (ScheduleEmployee & { userId?: string })[] = await empRes.json();
-      const sorted = apiEmployees
-        .sort((a, b) => a.rotationOrder - b.rotationOrder)
-        .map((e) => ({ ...e, userId: e.userId ?? null }));
-      setEmployees(sorted);
 
       const data: MonthData[] = [];
       for (let i = 0; i < periods.length; i++) {
@@ -118,6 +108,19 @@ function MultiMonthView() {
         data.push({ ...periods[i], assignments });
       }
       setMonthsData(data);
+
+      // /api/employees es solo ADMIN: TECNICO/VIEWER obtienen los empleados de las
+      // asignaciones (ya filtradas por publicación en el servidor), como en app/page.tsx.
+      if (empRes.ok) {
+        const apiEmployees: (ScheduleEmployee & { userId?: string })[] = await empRes.json();
+        setEmployees(
+          apiEmployees
+            .sort((a, b) => a.rotationOrder - b.rotationOrder)
+            .map((e) => ({ ...e, userId: e.userId ?? null }))
+        );
+      } else {
+        setEmployees(employeesFromAssignments(data.flatMap((md) => md.assignments)));
+      }
 
       // Build holiday set: "YYYY-MM-DD"
       const hDates = new Set<string>();
@@ -142,6 +145,21 @@ function MultiMonthView() {
     };
     runLoad();
   }, [load]);
+
+  // Al terminar de cargar, centrar el scroll horizontal en el mes visible
+  // (el que se estaba viendo en la vista mensual), descontando la columna fija.
+  useEffect(() => {
+    if (loading || error) return;
+    const container = gridRef.current;
+    const header = container?.querySelector<HTMLElement>(
+      `[data-testid="month-header-${yearParam}-${monthParam}"]`
+    );
+    if (!container || !header) return;
+    const visibleDaysWidth = container.clientWidth - NAME_COL_WIDTH;
+    const target =
+      header.offsetLeft + header.offsetWidth / 2 - NAME_COL_WIDTH - visibleDaysWidth / 2;
+    container.scrollLeft = Math.max(0, target);
+  }, [loading, error, monthsData, yearParam, monthParam]);
 
   if (status === "loading" || status === "unauthenticated") return null;
 
@@ -186,7 +204,7 @@ function MultiMonthView() {
               onChange={(e) => setSpan(Number(e.target.value))}
               className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
             >
-              {[2, 3, 4, 6].map((n) => (
+              {SPAN_OPTIONS.map((n) => (
                 <option key={n} value={n}>{n} meses</option>
               ))}
             </select>
@@ -215,7 +233,11 @@ function MultiMonthView() {
 
         {/* Grid */}
         {!loading && !error && (
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-x-auto">
+          <div
+            ref={gridRef}
+            data-testid="multi-month-grid"
+            className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-x-auto"
+          >
             <table className="border-collapse text-xs" style={{ tableLayout: "fixed" }}>
               <thead>
                 {/* Month header row */}
@@ -227,6 +249,7 @@ function MultiMonthView() {
                   {monthsData.map((md) => (
                     <th
                       key={`${md.year}-${md.month}`}
+                      data-testid={`month-header-${md.year}-${md.month}`}
                       colSpan={daysInMonth(md.year, md.month)}
                       className="border-b border-r border-gray-200 bg-indigo-50 text-indigo-700 font-semibold text-center py-1.5 px-2 text-xs"
                     >
@@ -336,10 +359,14 @@ function MultiMonthView() {
                 {employees.length === 0 && !loading && (
                   <tr>
                     <td
+                      data-testid="multi-month-empty"
                       colSpan={columns.length + 1}
                       className="text-center py-10 text-gray-400 text-sm"
                     >
-                      Sin empleados en el sistema.
+                      {/* Sin acceso a /api/employees, la lista sale de meses publicados */}
+                      {session?.user?.role === "ADMIN"
+                        ? "Sin empleados en el sistema."
+                        : "Ningún mes de este rango está publicado todavía."}
                     </td>
                   </tr>
                 )}
