@@ -15,8 +15,10 @@ for pid in $(pgrep -f "next (dev|start)|next-server" 2>/dev/null || true); do
   cwd_real="$(readlink -f "$cwd_link" 2>/dev/null || true)"
   [ -n "$cwd_real" ] || continue
 
+  # "$PROJECT_ROOT/"* y no "$PROJECT_ROOT"*: un proyecto hermano con el mismo
+  # prefijo (App_cuadrantes_LITE vs App_cuadrantes_LITE_Claude) no debe coincidir
   case "$cwd_real" in
-    "$PROJECT_ROOT"*)
+    "$PROJECT_ROOT"|"$PROJECT_ROOT/"*)
       cmd="$(ps -p "$pid" -o cmd= 2>/dev/null || true)"
       echo "Matando PID $pid ($cmd) — cwd: $cwd_real"
       kill "$pid" 2>/dev/null || true
