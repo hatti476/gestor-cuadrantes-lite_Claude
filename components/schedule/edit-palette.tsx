@@ -5,7 +5,7 @@ import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 /** Turno a aplicar, o "borrar" para vaciar la celda */
 export type PaletteTool = ShiftType | "borrar";
 
-const PALETTE_SHIFTS: ShiftType[] = ["M", "T", "N", "J", "D", "V", "B"];
+const PALETTE_SHIFTS: ShiftType[] = ["M", "T", "N", "J", "D", "V", "B", "MF", "TF", "NF", "MN", "TN", "NN"];
 
 interface EditPaletteProps {
   selected: PaletteTool | null;

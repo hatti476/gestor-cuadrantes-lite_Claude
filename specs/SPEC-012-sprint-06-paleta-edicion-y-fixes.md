@@ -41,8 +41,10 @@ hallazgos para el siguiente sprint. Se agrupan en una spec porque varios tocan e
 - Sesión de pruebas manuales del DM del 2026-11-17 sobre `main` (`cf92a9a`), con la app
   levantada vía `docker-compose.yml` + datos de `prisma/seed.ts`.
 - Decisión del DM sobre el punto 1 (entre 3 opciones presentadas): **paleta de pintar
-  única** — un selector de turno siempre visible en modo edición ADMIN (M/T/N/J/D/V/B +
-  borrar), donde clic o clic-y-arrastre sobre las celdas aplica el turno seleccionado.
+  única** — un selector de turno siempre visible en modo edición ADMIN (los 13 tipos de
+  `VALID_SHIFT_TYPES`: M/T/N/J/D/V/B + variantes de finde MF/TF/NF + variantes de Navidad
+  MN/TN/NN, más "borrar"), donde clic o clic-y-arrastre sobre las celdas aplica el turno
+  seleccionado.
   Sustituye tanto los 3 pasos de preparación del panel (Vacaciones/Libres/Bajas) como el
   modal `ShiftEditor` para el modo de edición normal.
 - Investigación de código confirma 3 problemas concretos detrás del punto 1:
@@ -88,7 +90,8 @@ hallazgos para el siguiente sprint. Se agrupan en una spec porque varios tocan e
 
 ### 1. Paleta de edición unificada con arrastre
 Como **ADMIN preparando o editando el cuadrante**,
-quiero **un único selector de turno (M/T/N/J/D/V/B/borrar) que pueda aplicar con clic o
+quiero **un único selector con todos los tipos de turno (incluidas las variantes de finde
+y Navidad) que pueda aplicar con clic o
 arrastrando sobre varias celdas**,
 para **marcar turnos, vacaciones, libres y bajas de forma rápida y consistente, sin un
 modal por celda ni mecanismos distintos según la fase de preparación**.
@@ -125,10 +128,12 @@ para **poder leerla igual que en pantalla**.
 ## Criterios de aceptación
 
 ### 1. Paleta de edición unificada con arrastre
-- [ ] AC-01: Existe una única paleta de turnos (M/T/N/J/D/V/B + "borrar") siempre visible
-  para el ADMIN en la vista del cuadrante, sustituyendo los 3 pasos de preparación
-  (Vacaciones/Libres/Bajas) del panel y el modal `ShiftEditor` para asignar/cambiar
-  turnos.
+- [x] AC-01: Existe una única paleta con los 13 tipos de turno de `VALID_SHIFT_TYPES`
+  (M/T/N/J/D/V/B/MF/TF/NF/MN/TN/NN) + "borrar" siempre visible para el ADMIN en la vista
+  del cuadrante, sustituyendo los 3 pasos de preparación (Vacaciones/Libres/Bajas) del
+  panel y el modal `ShiftEditor` para asignar/cambiar turnos. Se mantienen las 6 variantes
+  de finde/Navidad (antes seleccionables en el modal `SHIFT_OPTIONS`) para no perder la
+  capacidad de forzar manualmente un turno festivo.
 - [ ] AC-02: Clic en una celda con un turno de la paleta seleccionado aplica ese turno
   directamente (sin modal).
 - [ ] AC-03: Clic y arrastre (mousedown + mouseenter con botón pulsado + mouseup) sobre
@@ -270,7 +275,7 @@ referenciarlas aquí.
 ## Casos de test sugeridos
 
 - Unitario: paleta — seleccionar turno + "pintar" celda única asigna correctamente (por
-  tipo: M/T/N/J/D/V/B/borrar).
+  tipo: cualquiera de los 13 + borrar).
 - Unitario: paleta — arrastre sobre rango de celdas aplica el turno a todas menos las
   que el usuario no recorrió.
 - Unitario: celda con V/D/B bloqueada sigue siendo editable con la paleta fuera de
