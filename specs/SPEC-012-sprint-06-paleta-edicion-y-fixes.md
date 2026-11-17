@@ -146,6 +146,13 @@ para **poder leerla igual que en pantalla**.
   contadores de V/D/B/festivos y las acciones "Guardar preparación"/"Generar cuadrante".
 - [ ] AC-08: No afecta a TECNICO/VIEWER — siguen sin poder editar (`canEdit` sigue
   gobernando la visibilidad de la paleta).
+- [ ] AC-08b: El aviso de descanso insuficiente entre turnos (hoy en el modal, basado en
+  `validateShiftTransition`) no se pierde con la paleta: tras pintar (clic o arrastre), las
+  celdas cuyo turno deja menos de 12h de descanso respecto al turno adyacente quedan
+  marcadas con un indicador visual (icono ⚠, mismo patrón que el 🔒 de celda bloqueada,
+  con `title` describiendo el conflicto) y se muestra un toast resumen si el pintado afectó
+  a una o más celdas con conflicto ("N turno(s) con descanso insuficiente — revísalos").
+  No bloquea el pintado (ya no hay modal de confirmación por celda).
 
 ### 2. Sin error al cerrar sesión
 - [ ] AC-09: Al pulsar "Cerrar sesión", no se lanza ningún fetch a `/api/schedules`,
@@ -240,6 +247,10 @@ referenciarlas aquí.
   confirmar con @devlead si se elimina o se conserva para algún caso residual).
   Riesgo de regresión: **alto** — toca el flujo de edición principal usado por todos los
   tests E2E existentes de preparación/generación.
+  Decisión (AC-08b): el aviso de `validateShiftTransition` pasa de modal bloqueante a
+  indicador no bloqueante por celda (⚠ + `title`) más un toast resumen tras pintar. Evita
+  que el arrastre masivo se interrumpa con un diálogo por cada celda conflictiva, sin
+  eliminar la información para el ADMIN.
 - **Punto 2**: fix mínimo sugerido — en `loadSchedule`, añadir guarda para
   `sessionStatus === "unauthenticated"` (no solo `"loading"`) antes de hacer fetch.
   Riesgo de regresión: bajo.
