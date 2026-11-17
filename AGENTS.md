@@ -89,6 +89,9 @@ Hooks deterministas:
 - PRE-TASK: ejecutar suite de tests existente y anotar baseline
 - POST-TASK: ejecutar suite completa y comparar contra baseline
 - PRE-MERGE: ejecutar @smoke y verificar 0 regresiones
+- POST-SPRINT: ejecutar `npm run dev:stop` para detener servidores de
+  desarrollo/pruebas (`next dev`, `next-server`, `next start`) de este
+  proyecto que hayan quedado en ejecución (puertos 3000, 3001, 3002...)
 
 ---
 
@@ -150,6 +153,10 @@ Responsabilidad:
     6. @security revisa antes del merge
 
     7. @qa ejecuta suite completa — si verde: merge a main
+
+    8. Cierre de sprint: `npm run dev:stop` para liberar puertos y matar
+       servidores de desarrollo/pruebas que hayan quedado colgados antes
+       de empezar el siguiente sprint
 
 ---
 

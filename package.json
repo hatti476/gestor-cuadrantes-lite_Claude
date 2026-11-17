@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:clean": "rm -rf .next && prisma generate && next dev",
+    "dev:stop": "bash scripts/stop-dev-servers.sh",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
