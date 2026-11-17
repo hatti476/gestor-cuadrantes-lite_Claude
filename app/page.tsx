@@ -235,11 +235,13 @@ export default function HomePage() {
   // ---------------------------------------------------------------------------
   // Carga datos del mes
   // ---------------------------------------------------------------------------
-  const loadSchedule = useCallback(async () => {
+  const loadSchedule = useCallback(async (opts: { silent?: boolean } = {}) => {
     // Esperar a la sesión; si ya no hay sesión (p. ej. justo tras cerrar sesión,
     // mientras se redirige a /login) no hay nada que cargar — SPEC-012 AC-09/10/11
     if (sessionStatus === "loading" || sessionStatus === "unauthenticated") return;
-    setLoading(true);
+    // silent=true: recarga en segundo plano tras pintar con la paleta — el grid
+    // no debe ocultarse ni parpadear en cada clic/arrastre (SPEC-012, punto 1)
+    if (!opts.silent) setLoading(true);
     try {
       // /api/employees es solo ADMIN: TECNICO/VIEWER usan los empleados de las asignaciones
       const [scheduleRes, holidayRes, employeeRes] = await Promise.all([
@@ -284,7 +286,7 @@ export default function HomePage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!opts.silent) setLoading(false);
     }
   }, [year, month, isAdmin, sessionStatus]);
 
@@ -344,10 +346,11 @@ export default function HomePage() {
     });
   }
 
-  // Al soltar el ratón tras pintar (clic único o fin de arrastre): recargar
-  // para reconciliar ids reales, monthStatus y celdas bloqueadas.
+  // Al soltar el ratón tras pintar (clic único o fin de arrastre): recargar en
+  // segundo plano para reconciliar ids reales, monthStatus y celdas bloqueadas
+  // sin ocultar el grid (ver loadSchedule({ silent: true })).
   function handlePaintEnd() {
-    void loadSchedule();
+    void loadSchedule({ silent: true });
   }
 
   // ---------------------------------------------------------------------------
