@@ -4,7 +4,33 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
-## [Unreleased] — Sprint 4 (SPEC-009)
+## [Unreleased] — Sprint 5 (SPEC-010, auditoría de permisos)
+
+### Fixed
+- **`/admin` inaccesible para ADMIN** (H-01): `proxy.ts` seguía exigiendo el rol `SUPER_ADMIN`, eliminado en el refactor single-tenant, y redirigía al ADMIN a `/`. Ahora usa `isAdminRole` de `lib/auth/permissions.ts`. Test unitario de `proxy.ts` por rol.
+- **Fila propia sin resaltar para TECNICO** (H-08): `GET /api/schedules` no devolvía `userId` del empleado, y el fallback de la vista mensual y multi-mes no podía identificar la fila del usuario.
+- **Petición inútil a `/api/employees`** (H-06): la vista mensual solo la pide si el usuario es ADMIN, y espera a que la sesión esté cargada.
+- **Orden de rotación de noches no editable** (H-09): se editaba con `Project.nightRotationOrder`, eliminado en el refactor, y `Employee.rotationOrder` no tenía API ni pantalla. Nuevo `POST /api/admin/users/[id]/rotation` (solo ADMIN) y columna «Rotación noches» con ↑/↓ en `/admin`; renumera los empleados activos 1..n.
+- **Historial de cambios inaccesible** (H-02/H-03): vivía en `/employees`, que redirige a `/admin` desde la v1.7. Ahora hay un botón «Historial» por técnico en `/admin`. Eliminados `app/employees/`, `components/employees/` y el enlace «Empleados» del header; `/employees/*` redirige a `/admin` (antes `/employees/<id>/history` daba 404).
+- **Aviso de mes vacío** (CP-13): «Sin turnos asignados este mes» no aparecía nunca para ADMIN porque se condicionaba a que no hubiera empleados.
+- `/info`: la guía de ADMIN ya no menciona la pestaña «Usuarios» (no existe) y explica la rotación y el historial.
+- **Empleados desactivados podían iniciar sesión** (H-12): `authorize` ahora los rechaza. El email del login se busca en minúsculas, como lo guarda el alta.
+- **El alta de usuarios devolvía el hash de la contraseña** (H-11): `POST /api/admin/users` responde solo con id, email, rol y empleado.
+- Rotación: el endpoint lee y escribe en la misma transacción y desempata por `id`, igual que la generación y `/api/employees`, para que la posición que ve el ADMIN sea la que usa el motor. El historial de `/admin` carga más allá de los 20 primeros cambios.
+
+### Tests
+- Nueva matriz de accesos por rol (`tests/e2e/access-matrix.spec.ts`, CP-177/178/179 @smoke): todos los endpoints de `/api` para ADMIN, TECNICO, VIEWER y sin sesión, y las páginas restringidas.
+- `admin-users.spec.ts` reescrito: cada test crea y borra su propio usuario (antes borraba "el primer usuario" de la BD compartida). Selector inválido de AC-21 corregido.
+- `sprint-19.spec.ts`: eliminada la espera a la pestaña `admin-tab-users` (ya no existe); CP-139/CP-140 esperan al grid o al aviso de no publicado en vez de usar `isVisible({ timeout })`, que no espera.
+- CP-172 cerrado: los 10 fallos eran 3 bugs reales del refactor (SPEC-009 y SPEC-010), no condiciones de carrera.
+- CP-71/72/73 usan un TECNICO desechable: antes desactivaban o modificaban técnicos sembrados (CP-73 desactivaba al usuario TECNICO del resto de specs). CP-72 comprueba además que el desactivado no puede entrar.
+- 8 tests no-@smoke que fallaban también en `main` sin estar registrados, alineados con la versión LITE (CP-13, 17, 21, 40, 41, 45, 75, 97). CP-21/CP-45 borran el técnico que crean: un TECNICO extra en la BD compartida entraba en la rotación y rompía CP-154.
+- Nuevos: CP-180/181/182 (rotación, historial y redirects en `/admin`), unit tests de `lib/employees/rotation.ts` y del endpoint de rotación.
+
+### Docs
+- README, `.github/context.md` y versión de `package.json` (1.5.0 → 2.7.0) alineados con la versión LITE.
+
+## Sprint 4 (SPEC-009)
 
 ### Fixed
 - **CI E2E**: `e2e-smoke.yml` y `e2e-nightly.yml` fijados a `runs-on: ubuntu-24.04`. `ubuntu-latest` pasó a Ubuntu 26.04, que Playwright 1.59.1 no soporta (`Playwright does not support chromium on ubuntu26.04-x64`), y el job fallaba al instalar navegadores sin ejecutar ningún test.

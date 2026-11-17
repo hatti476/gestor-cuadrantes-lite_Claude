@@ -10,6 +10,14 @@ import bcrypt from "bcryptjs";
 // GET /api/admin/users — lista todos los usuarios con sus empleados
 // Solo ADMIN
 // ---------------------------------------------------------------------------
+// Campos devueltos al crear un usuario: nunca el hash de la contraseña (SPEC-010 H-11)
+const CREATED_USER_SELECT = {
+  id: true,
+  email: true,
+  role: true,
+  employee: { select: { id: true, name: true, rotationOrder: true, shiftPreference: true, active: true } },
+} as const;
+
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -112,7 +120,7 @@ export async function POST(req: NextRequest) {
           },
         },
       },
-      include: { employee: true },
+      select: CREATED_USER_SELECT,
     });
     return NextResponse.json(user, { status: 201 });
   } else {
@@ -123,6 +131,7 @@ export async function POST(req: NextRequest) {
         password: hashedPassword,
         role: globalRole,
       },
+      select: CREATED_USER_SELECT,
     });
     return NextResponse.json(user, { status: 201 });
   }

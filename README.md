@@ -6,12 +6,11 @@ Aplicacion web para gestionar cuadrantes mensuales de turnos de un equipo de sop
 
 | Campo | Valor |
 |-------|-------|
-| Version funcional | 2.0 |
-| Sprint actual | Sprint 21 - planificado (day-loop) |
-| Ultimo sprint cerrado | Sprint 20 - refactor modular de generate.ts |
-| Tests unitarios | 374/374 |
-| Tests E2E declarados | CP-01..CP-141 (142 tests definidos) |
-| Bugs abiertos conocidos | 0 |
+| Version funcional | 2.7 (LITE, single-tenant) |
+| Ciclo actual | Ciclo 2 — Sprint 5 (SPEC-010, auditoria de permisos) |
+| Ultimo sprint cerrado | Sprint 4 — SPEC-009 (CI ubuntu-24.04, vista multi-mes) |
+| Especificaciones | `specs/` (SDD, ver `AGENTS.md`) |
+| Fallos conocidos | `tests/e2e/known-failures.md` |
 
 ## Stack
 
@@ -19,7 +18,7 @@ Aplicacion web para gestionar cuadrantes mensuales de turnos de un equipo de sop
 - React 19
 - Tailwind CSS 4
 - Prisma 5.22
-- SQLite en desarrollo y PostgreSQL en produccion
+- SQLite (el `schema.prisma` actual solo declara `provider = "sqlite"`)
 - NextAuth.js con CredentialsProvider y JWT
 - Vitest para unit tests
 - Playwright para E2E
@@ -27,12 +26,15 @@ Aplicacion web para gestionar cuadrantes mensuales de turnos de un equipo de sop
 
 ## Funcionalidad principal
 
-- Autenticacion con roles globales `SUPER_ADMIN`, `SUPER_VIEWER` y `USER`.
-- Roles por proyecto: `PROJECT_ADMIN` y `EMPLOYEE`.
+- Un unico cuadrante global (sin proyectos) con tres roles:
+  - `ADMIN`: acceso completo (generar, editar, publicar, usuarios, festivos).
+  - `TECNICO`: solo lectura, ve los meses publicados; tiene fila propia en el cuadrante.
+  - `VIEWER`: solo lectura, ve los meses publicados.
 - Cuadrante mensual con filas por empleado y columnas por dia.
 - Generacion automatica con bloques de noches, descansos, cobertura minima y preferencias M/T/J.
 - Edicion manual de celdas, celdas bloqueadas y registro de cambios.
-- Gestion de empleados, proyectos, miembros, festivos y region CCAA.
+- Gestion de usuarios/empleados (`/admin`), festivos y region CCAA.
+- Vista ampliada multi-mes (`/multi-month`) con scroll horizontal.
 - Carga automatica de festivos publicos via nager.at.
 - Contadores de turnos, exportacion CSV e impresion/PDF desde navegador.
 - Pagina `/info` con ayuda contextual por rol.
@@ -64,15 +66,13 @@ npm run db:seed      # datos iniciales
 
 | Email | Password | Rol |
 |-------|----------|-----|
-| `admin@cuadrantes.local` | `Admin1234!` | SUPER_ADMIN |
-| `pm@cuadrantes.local` | `PM1234!` | USER + PROJECT_ADMIN |
-| `tecnico1@cuadrantes.local` | `Tecnico1234!` | USER + EMPLOYEE |
+| `admin@cuadrantes.local` | `Admin1234!` | ADMIN |
+| `tecnico1@cuadrantes.local` … `tecnico7@cuadrantes.local` | `Tecnico1234!` | TECNICO |
+| `viewer@cuadrantes.local` | `Viewer1234!` | VIEWER |
 
 ## Documentacion
 
-- Estado por sprint (Sprint 20): `docs/INFORME-ESTADO-S20-2026-05-26.md`
-- Requisitos: `docs/REQUIREMENTS.md`
+- Especificaciones vigentes (SDD): `specs/`
 - Changelog: `CHANGELOG.md`
-- Bugs: `docs/bugs/BUG-REGISTRY.md`
-- Despliegue: `docs/deployment.md`
-- Release notes: `docs/sprint-*-release-notes.md`
+- Fallos E2E conocidos: `tests/e2e/known-failures.md`
+- Historico del ciclo 1 (arquitectura multi-proyecto, ya eliminada): `docs/_archive/ciclo-1/`

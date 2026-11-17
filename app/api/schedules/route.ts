@@ -47,7 +47,8 @@ export async function GET(req: NextRequest) {
     },
     include: {
       employee: {
-        select: { id: true, name: true, rotationOrder: true },
+        // userId: necesario para resaltar la fila propia de TECNICO/VIEWER (SPEC-010 H-08)
+        select: { id: true, name: true, rotationOrder: true, userId: true },
       },
     },
     orderBy: [{ employee: { rotationOrder: "asc" } }, { date: "asc" }],

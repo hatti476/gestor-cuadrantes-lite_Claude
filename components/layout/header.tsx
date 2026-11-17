@@ -62,11 +62,6 @@ export function Header() {
             Cuadrante
           </Link>
           {canManage && (
-            <Link href="/employees" className={navClass("/employees")}>
-              Empleados
-            </Link>
-          )}
-          {canManage && (
             <Link href="/holidays" className={navClass("/holidays")}>
               Festivos
             </Link>

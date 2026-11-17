@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { USERS, ROUTES } from "./config";
-import { login, openShiftEditorFromEditableCell, screenshotOnFail } from "./helpers";
+import { deleteUserByEmail, login, openShiftEditorFromEditableCell, screenshotOnFail, waitForGridOrUnpublished } from "./helpers";
 import { loginAs as loginAsRole } from "./helpers/auth-utils";
 import { waitForModalClose, waitForScheduleGrid, waitForToast } from "./helpers/wait-utils";
 
@@ -229,7 +229,11 @@ test("CP-16 — Admin puede eliminar un turno", async ({ page }) => {
 test("CP-17 — Empleado no puede editar turnos", async ({ page }) => {
   try {
     await loginAs(page, TECH.email, TECH.password);
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
+    // Mes sin publicar: el TECNICO no ve grid, así que no hay nada que editar
+    if ((await waitForGridOrUnpublished(page)) === "unpublished") {
+      await expect(page.locator('[data-testid="shift-editor"]')).toHaveCount(0);
+      return;
+    }
 
     // Intentar clic en una celda
     const firstDayCell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
@@ -303,11 +307,15 @@ test("CP-21 — Admin puede crear un empleado", async ({ page }) => {
 
   try {
     await loginAs(page, ADMIN.email, ADMIN.password);
+    // /employees redirige a /admin (SPEC-010); el alta de empleados es un usuario TECNICO
     await page.goto(ROUTES.employees);
+    await expect(page).toHaveURL(/\/admin$/);
     await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
 
     // Pulsar botón de crear
-    await page.locator("button").filter({ hasText: /Nuevo (empleado|usuario)|Añadir|Crear/i }).first().click();
+    await page.getByRole("button", { name: /Nuevo usuario/i }).click();
+    // El campo Nombre solo aparece con rol TECNICO
+    await page.locator('[data-testid="select-global-role"]').selectOption("TECNICO");
 
     // Rellenar formulario
     const nameInput = page.locator('input#emp-name, input[placeholder="Nombre completo"]').first();
@@ -325,6 +333,8 @@ test("CP-21 — Admin puede crear un empleado", async ({ page }) => {
   } catch (e) {
     await screenshotOnFail(page, "CP-21");
     throw e;
+  } finally {
+    await deleteUserByEmail(page, newEmail);
   }
 });
 

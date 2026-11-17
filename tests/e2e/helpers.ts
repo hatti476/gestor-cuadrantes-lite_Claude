@@ -75,6 +75,62 @@ export async function screenshotOnFail(page: Page, cpId: string): Promise<void> 
   }
 }
 
+/**
+ * Espera a que la vista mensual muestre el grid o el aviso de mes no publicado
+ * (TECNICO/VIEWER solo ven meses publicados — CHANGELOG 2.3.0) y dice cuál.
+ */
+export async function waitForGridOrUnpublished(page: Page): Promise<"grid" | "unpublished"> {
+  const grid = page.locator('[data-testid="schedule-grid"]');
+  const unpublished = page.locator('[data-testid="unpublished-message"]');
+  await expect(grid.or(unpublished)).toBeVisible({ timeout: 15_000 });
+  return (await unpublished.isVisible()) ? "unpublished" : "grid";
+}
+
+/**
+ * Borra (como ADMIN, vía API) el usuario con ese email si existe. Para tests que
+ * crean empleados desde la UI: un TECNICO extra en la BD compartida entra en la
+ * rotación y cambia el resultado de los specs que generan cuadrantes.
+ */
+export async function deleteUserByEmail(page: Page, email: string): Promise<void> {
+  const res = await page.request.get("/api/admin/users");
+  if (!res.ok()) return;
+  const users: { id: string; email: string }[] = await res.json();
+  const user = users.find((u) => u.email === email);
+  if (user) await page.request.delete(`/api/admin/users/${user.id}`);
+}
+
+export interface DisposableTecnico {
+  userId: string;
+  employeeId: string;
+  email: string;
+  name: string;
+  password: string;
+}
+
+/**
+ * Crea (como ADMIN, vía API) un TECNICO desechable para tests que modifican
+ * empleados, en vez de tocar los sembrados. Borrar con deleteUserByEmail en un
+ * finally. Mientras esté activo entra en la rotación: desactivarlo cuanto antes
+ * si el test no necesita que lo esté (opción `inactive`).
+ */
+export async function createDisposableTecnico(
+  page: Page,
+  opts: { inactive?: boolean } = {}
+): Promise<DisposableTecnico> {
+  const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const tech = { email: `tecnico-tmp-${suffix}@cuadrantes.test`, name: `Técnico Tmp ${suffix}`, password: "Temporal1234!" };
+  const res = await page.request.post("/api/admin/users", {
+    data: { ...tech, globalRole: "TECNICO" },
+  });
+  expect(res.status()).toBe(201);
+  const user: { id: string; employee: { id: string } } = await res.json();
+  if (opts.inactive) {
+    const patch = await page.request.patch(`/api/admin/users/${user.id}`, { data: { active: false } });
+    expect(patch.status()).toBe(200);
+  }
+  return { ...tech, userId: user.id, employeeId: user.employee.id };
+}
+
 /** Abre el paso de generacion cuando el boton esta oculto. */
 export async function openGenerateStep(page: Page): Promise<void> {
   const generateButton = page.locator('[data-testid="btn-generate"]');
