@@ -257,8 +257,9 @@ export default function HomePage() {
   // Carga datos del mes
   // ---------------------------------------------------------------------------
   const loadSchedule = useCallback(async () => {
-    // Esperar a la sesión: el rol decide si se pide /api/employees
-    if (sessionStatus === "loading") return;
+    // Esperar a la sesión; si ya no hay sesión (p. ej. justo tras cerrar sesión,
+    // mientras se redirige a /login) no hay nada que cargar — SPEC-012 AC-09/10/11
+    if (sessionStatus === "loading" || sessionStatus === "unauthenticated") return;
     setLoading(true);
     try {
       // /api/employees es solo ADMIN: TECNICO/VIEWER usan los empleados de las asignaciones
