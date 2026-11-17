@@ -23,6 +23,7 @@
 # next.js
 /.next/
 /.next-test/
+/.next-dev/
 /out/
 
 # production
@@ -37,6 +38,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+dev.log
+cookies.txt
 
 # env files
 .env
