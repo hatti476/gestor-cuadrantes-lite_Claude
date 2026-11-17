@@ -28,10 +28,17 @@ function getRole(session: Session | null): Role | undefined {
 }
 
 /**
+ * Verifica si un rol (p. ej. el `role` del token JWT en proxy.ts) es ADMIN
+ */
+export function isAdminRole(role: unknown): boolean {
+  return role === "ADMIN";
+}
+
+/**
  * Verifica si el usuario es ADMIN
  */
 export function isAdmin(session: Session | null): boolean {
-  return getRole(session) === "ADMIN";
+  return isAdminRole(getRole(session));
 }
 
 /**

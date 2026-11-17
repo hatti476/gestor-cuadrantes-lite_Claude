@@ -6,10 +6,10 @@
  * CP-130 — TECNICO no ve "Administración" en la cabecera
  * CP-131 — TECNICO (empleado) solo ve "Cuadrante" y "Ayuda" en la cabecera
  * CP-132 — /admin redirige a "/" si el usuario no es ADMIN
- * CP-133 — ADMIN puede crear un usuario desde /admin (tab Usuarios)
+ * CP-133 — ADMIN puede crear un usuario desde /admin
  * CP-134 — ADMIN puede editar email de un usuario desde /admin
  * CP-135 — ADMIN puede desactivar un usuario desde /admin
- * CP-136 — El filtro por rol en la tab Usuarios filtra correctamente
+ * CP-136 — El filtro por rol de /admin filtra correctamente
  * CP-137 — VIEWER puede ver el cuadrante pero no tiene PrepPanel
  * CP-138 — VIEWER no puede editar celdas del cuadrante
  * CP-139 — /employees redirige a /admin (backward compatibility)
@@ -83,7 +83,7 @@ test("CP-132 — /admin redirige a '/' para no-ADMIN (PM) @smoke", async ({
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// CP-133 — ADMIN puede crear un usuario desde /admin (tab Usuarios)
+// CP-133 — ADMIN puede crear un usuario desde /admin
 // ──────────────────────────────────────────────────────────────────────────────
 test("CP-133 — ADMIN puede crear un VIEWER desde /admin @smoke", async ({
   page,
@@ -91,9 +91,8 @@ test("CP-133 — ADMIN puede crear un VIEWER desde /admin @smoke", async ({
   await loginAsAdmin(page);
   await page.goto("/admin");
 
-  // Tab Usuarios debe estar activo por defecto
-  const usersTab = page.locator('[data-testid="admin-tab-users"]');
-  await expect(usersTab).toBeVisible({ timeout: 8_000 });
+  // /admin ya no tiene pestañas (la de proyectos se eliminó en el refactor single-tenant)
+  await expect(page).toHaveURL(/\/admin$/);
 
   // Abrir modal de nuevo usuario
   await page.getByRole("button", { name: /Nuevo usuario/i }).click();
@@ -130,9 +129,7 @@ test("CP-134 — ADMIN puede editar el email del usuario creado en CP-133", asyn
 }) => {
   await loginAsAdmin(page);
   await page.goto("/admin");
-  await expect(page.locator('[data-testid="admin-tab-users"]')).toBeVisible({
-    timeout: 8_000,
-  });
+  await expect(page).toHaveURL(/\/admin$/);
 
   // Encontrar la fila del usuario creado en CP-133
   const row = page.locator("tr", {
@@ -188,9 +185,7 @@ test("CP-135 — ADMIN puede desactivar un usuario TECNICO desde /admin @smoke",
   const createPayload = (await createRes.json()) as { id: string };
   const userId = createPayload.id;
   await page.goto("/admin");
-  await expect(page.locator('[data-testid="admin-tab-users"]')).toBeVisible({
-    timeout: 8_000,
-  });
+  await expect(page).toHaveURL(/\/admin$/);
 
   const row = page.locator("tr", { hasText: tempEmail });
   await expect(row).toBeVisible({ timeout: 5_000 });
@@ -219,9 +214,7 @@ test("CP-136 — Filtro por rol ADMIN muestra solo ADMINs @smoke", async ({
 }) => {
   await loginAsAdmin(page);
   await page.goto("/admin");
-  await expect(page.locator('[data-testid="admin-tab-users"]')).toBeVisible({
-    timeout: 8_000,
-  });
+  await expect(page).toHaveURL(/\/admin$/);
 
   // Seleccionar filtro ADMIN
   const roleFilter = page.locator("select", { hasText: "Todos los roles" });
@@ -249,15 +242,11 @@ test("CP-139 — VIEWER ve el cuadrante pero no tiene PrepPanel", async ({
   await loginAsViewer(page);
   await page.goto(ROUTES.home);
 
-  // Puede ver el grid (mes publicado) o el aviso de no publicado.
+  // Puede ver el grid (mes publicado) o el aviso de no publicado. isVisible() no
+  // espera aunque reciba timeout: se espera a que aparezca cualquiera de los dos.
   const unpublishedMessage = page.locator('[data-testid="unpublished-message"]');
-  const isUnpublished = await unpublishedMessage.isVisible({ timeout: 2_000 }).catch(() => false);
-  if (!isUnpublished) {
-    const grid = page.locator('[data-testid="schedule-grid"]');
-    await expect(grid).toBeVisible({ timeout: 15_000 });
-  } else {
-    await expect(unpublishedMessage).toBeVisible();
-  }
+  const grid = page.locator('[data-testid="schedule-grid"]');
+  await expect(grid.or(unpublishedMessage)).toBeVisible({ timeout: 15_000 });
 
   // No debe haber PrepPanel
   const prepPanel = page.locator('[data-testid="prep-step-generar"]');
@@ -284,6 +273,7 @@ test("CP-140 — VIEWER no puede editar celdas (no hay ShiftEditor al hacer clic
   const unpublishedMessage = page.locator('[data-testid="unpublished-message"]');
   const grid = page.locator('[data-testid="schedule-grid"]');
   const shiftEditor = page.locator('[data-testid="shift-editor"]');
+  await expect(grid.or(unpublishedMessage)).toBeVisible({ timeout: 15_000 });
 
   const isUnpublished = await unpublishedMessage.isVisible();
   const hasGrid = await grid.isVisible();

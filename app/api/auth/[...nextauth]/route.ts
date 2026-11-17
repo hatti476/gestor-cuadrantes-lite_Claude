@@ -1,8 +1,7 @@
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/auth/permissions";
+import { authorizeCredentials } from "@/lib/auth/authorize";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -18,44 +17,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Contraseña", type: "password" },
       },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          console.log("[auth] Credenciales vacías");
-          return null;
-        }
-
-        try {
-          const user = await prisma.user.findUnique({
-            where: { email: credentials.email },
-          });
-
-          console.log("[auth] Usuario encontrado:", user?.email ?? "ninguno");
-
-          if (!user || !user.password) {
-            return null;
-          }
-
-          const passwordMatch = await bcrypt.compare(
-            credentials.password,
-            user.password
-          );
-
-          console.log("[auth] Password match:", passwordMatch);
-
-          if (!passwordMatch) {
-            return null;
-          }
-
-          return {
-            id: user.id,
-            email: user.email,
-            role: user.role as Role,
-          };
-        } catch (err) {
-          console.error("[auth] Error en authorize:", err);
-          return null;
-        }
-      },
+      authorize: authorizeCredentials,
     }),
   ],
   callbacks: {

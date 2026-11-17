@@ -10,6 +10,7 @@ import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleAssignment, ScheduleEmployee, MonthStatus, computeMonthStatus } from "@/lib/schedules/types";
 import { calculateExtraPay, countShifts, EXTRA_PAY_RATES } from "@/lib/schedules/business-logic";
 import { PrepPanel, MonthStatusBadge, PrepStep } from "@/components/schedule/prep-panel";
+import { employeesFromAssignments } from "@/lib/schedules/multi-month";
 import { useToast } from "@/components/ui/toast-provider";
 
 const MONTH_NAMES = [
@@ -213,7 +214,7 @@ function RatesLegend({ month }: { month: number }) {
 }
 
 export default function HomePage() {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
   const router = useRouter();
   const { showToast } = useToast();
@@ -256,12 +257,15 @@ export default function HomePage() {
   // Carga datos del mes
   // ---------------------------------------------------------------------------
   const loadSchedule = useCallback(async () => {
+    // Esperar a la sesión: el rol decide si se pide /api/employees
+    if (sessionStatus === "loading") return;
     setLoading(true);
     try {
+      // /api/employees es solo ADMIN: TECNICO/VIEWER usan los empleados de las asignaciones
       const [scheduleRes, holidayRes, employeeRes] = await Promise.all([
         fetch(`/api/schedules?year=${year}&month=${month}`),
         fetch(`/api/holidays?year=${year}`),
-        fetch(`/api/employees`),
+        isAdmin ? fetch(`/api/employees`) : Promise.resolve(null),
       ]);
       if (!scheduleRes.ok) throw new Error("Error cargando cuadrante");
       const responseData: { assignments: ScheduleAssignment[]; monthStatus: MonthStatus; published?: boolean } = await scheduleRes.json();
@@ -269,22 +273,14 @@ export default function HomePage() {
 
       // Cargar empleados desde la API (independientemente de si hay turnos)
       let sortedEmployees: ScheduleEmployee[] = [];
-      if (employeeRes.ok) {
+      if (employeeRes?.ok) {
         const apiEmployees: (ScheduleEmployee & { userId?: string })[] = await employeeRes.json();
         sortedEmployees = apiEmployees
           .sort((a, b) => a.rotationOrder - b.rotationOrder)
           .map((e) => ({ ...e, userId: e.userId ?? null }));
       } else {
-        // Fallback: extraer de asignaciones si la API falla
-        const empMap = new Map<string, ScheduleEmployee>();
-        data.forEach((a) => {
-          if (a.employee && !empMap.has(a.employeeId)) {
-            empMap.set(a.employeeId, a.employee);
-          }
-        });
-        sortedEmployees = Array.from(empMap.values()).sort(
-          (a, b) => a.rotationOrder - b.rotationOrder
-        );
+        // Fallback: extraer de asignaciones (roles sin acceso o si la API falla)
+        sortedEmployees = employeesFromAssignments(data);
       }
 
       setEmployees(sortedEmployees);
@@ -310,7 +306,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [year, month]);
+  }, [year, month, isAdmin, sessionStatus]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -708,7 +704,9 @@ export default function HomePage() {
                     <RatesLegend month={month} />
                   </div>
                 )}
-                {employees.length === 0 && monthStatus === "ungenerated" && (
+                {/* Pista para el ADMIN: los empleados llegan de /api/employees aunque
+                    el mes esté vacío, así que no se condiciona a employees.length */}
+                {canEdit && assignments.length === 0 && monthStatus === "ungenerated" && (
                   <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2 mt-4">
                     <span className="text-4xl">📋</span>
                     <p className="text-sm">Sin turnos asignados este mes. Usa el panel para preparar y generar.</p>

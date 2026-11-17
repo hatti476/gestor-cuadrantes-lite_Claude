@@ -96,29 +96,21 @@ test("CP-96 — filtro por mes en historial de empleado", async ({ page }) => {
 // ============================================================================
 // CP-97 — /info muestra "Preparar el cuadrante" para TECNICO, no para EMPLOYEE
 // ============================================================================
-test("CP-97 — /info muestra sección Preparar el cuadrante para TECNICO", async ({
+test("CP-97 — /info muestra 'Preparar el cuadrante' a ADMIN y no a TECNICO", async ({
   page,
 }) => {
   test.setTimeout(60_000);
+  const section = "info-section-Preparar el cuadrante (5 pasos)";
   try {
-    // Verificar que TECNICO ve la sección
-    await loginAsTech(page);
+    await loginAsAdmin(page);
     await page.goto(ROUTES.info);
-    await page.waitForSelector("[data-testid*='info-section']");
+    await expect(page.getByTestId(section)).toBeVisible();
 
-    const adminSection = page.getByTestId("info-section-Preparar el cuadrante (5 pasos)");
-    await expect(adminSection).toBeVisible();
-
-    // Verificar que EMPLOYEE NO ve esa sección
     await page.context().clearCookies();
     await loginAsTech(page);
     await page.goto(ROUTES.info);
     await page.waitForSelector("[data-testid*='info-section']");
-
-    const adminSectionForEmployee = page.getByTestId(
-      "info-section-Preparar el cuadrante (5 pasos)"
-    );
-    await expect(adminSectionForEmployee).toHaveCount(0);
+    await expect(page.getByTestId(section)).toHaveCount(0);
   } catch (err) {
     await screenshotOnFail(page, "CP-97");
     throw err;

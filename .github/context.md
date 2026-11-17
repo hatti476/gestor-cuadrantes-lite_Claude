@@ -1,5 +1,20 @@
 # Gestor de Cuadrantes — Contexto de Desarrollo
 
+## Estado actual — Ciclo 2, versión LITE (2026-11-17)
+
+| Campo | Valor |
+|-------|-------|
+| Versión | 2.7.x (single-tenant, sin proyectos) |
+| Roles | `ADMIN` (todo) · `TECNICO` y `VIEWER` (solo lectura, meses publicados) |
+| Fuente de verdad | `specs/` (SDD) y `AGENTS.md` |
+| Sprint en curso | Sprint 5 — SPEC-010 (auditoría de permisos post-refactor) |
+| Fallos conocidos | `tests/e2e/known-failures.md` |
+
+> Las secciones siguientes son **históricas (ciclo 1, multi-proyecto)**: mencionan
+> `Project`, `PROJECT_ADMIN`, `SUPER_ADMIN`, etc., que ya no existen. Ver
+> `docs/_archive/ciclo-1/`.
+
+
 ## Actualizacion Sprint 22 (2026-05-29)
 
 | Campo | Valor |
