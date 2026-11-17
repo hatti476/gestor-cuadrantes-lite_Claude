@@ -6,7 +6,7 @@
 |-------|-------|
 | ID | SPEC-012 |
 | Tipo | feature + fix |
-| Estado | ready |
+| Estado | in-progress (pendiente @devlead/@security antes de PR) |
 | Prioridad | alta |
 | Agentes asignados | @orchestrator, @qa, @backend, @frontend |
 | Fecha de creación | 2026-11-17 |
@@ -134,22 +134,22 @@ para **poder leerla igual que en pantalla**.
   panel y el modal `ShiftEditor` para asignar/cambiar turnos. Se mantienen las 6 variantes
   de finde/Navidad (antes seleccionables en el modal `SHIFT_OPTIONS`) para no perder la
   capacidad de forzar manualmente un turno festivo.
-- [ ] AC-02: Clic en una celda con un turno de la paleta seleccionado aplica ese turno
+- [x] AC-02: Clic en una celda con un turno de la paleta seleccionado aplica ese turno
   directamente (sin modal).
-- [ ] AC-03: Clic y arrastre (mousedown + mouseenter con botón pulsado + mouseup) sobre
+- [x] AC-03: Clic y arrastre (mousedown + mouseenter con botón pulsado + mouseup) sobre
   varias celdas aplica el turno seleccionado a todas las celdas recorridas.
-- [ ] AC-04: Seleccionar "borrar" y pintar sobre una celda elimina la asignación (igual
+- [x] AC-04: Seleccionar "borrar" y pintar sobre una celda elimina la asignación (igual
   que el botón "Eliminar" del modal anterior).
-- [ ] AC-05: Una celda con V, D manual o B puede volver a editarse con la paleta en
+- [x] AC-05: Una celda con V, D manual o B puede volver a editarse con la paleta en
   cualquier momento — ya no depende de estar dentro de un "paso" concreto del panel
   anterior (se elimina el concepto `allowLockedCellClick` ligado a `prepStep`).
-- [ ] AC-06: El "bloqueo" de una celda (icono 🔒, para que el generador automático no la
+- [x] AC-06: El "bloqueo" de una celda (icono 🔒, para que el generador automático no la
   sobreescriba) se sigue aplicando a V, D manual **y también a B** (fix de la
   inconsistencia actual).
-- [ ] AC-07: El panel de preparación deja de tener pasos clicables "Vacaciones"/"Días
+- [x] AC-07: El panel de preparación deja de tener pasos clicables "Vacaciones"/"Días
   libres"/"Bajas" con descripciones separadas; conserva (o integra en la paleta) los
   contadores de V/D/B/festivos y las acciones "Guardar preparación"/"Generar cuadrante".
-- [ ] AC-08: No afecta a TECNICO/VIEWER — siguen sin poder editar (`canEdit` sigue
+- [x] AC-08: No afecta a TECNICO/VIEWER — siguen sin poder editar (`canEdit` sigue
   gobernando la visibilidad de la paleta).
 - [x] AC-08b (retirado): se investigó si había que preservar el aviso de descanso
   insuficiente del modal (`ShiftEditor` → prop `getTransitionWarning`, basada en
@@ -159,40 +159,40 @@ para **poder leerla igual que en pantalla**.
   (se evita complejidad para una funcionalidad que ya no era real).
 
 ### 2. Sin error al cerrar sesión
-- [ ] AC-09: Al pulsar "Cerrar sesión", no se lanza ningún fetch a `/api/schedules`,
+- [x] AC-09: Al pulsar "Cerrar sesión", no se lanza ningún fetch a `/api/schedules`,
   `/api/holidays` ni `/api/employees` tras invalidarse la sesión.
-- [ ] AC-10: No aparece el overlay de error de Next.js ni un `console.error` en el flujo
+- [x] AC-10: No aparece el overlay de error de Next.js ni un `console.error` en el flujo
   de logout.
-- [ ] AC-11: La redirección a `/login` sigue funcionando igual que hoy.
+- [x] AC-11: La redirección a `/login` sigue funcionando igual que hoy.
 
 ### 3. Festivos y fines de semana solo como descanso
-- [ ] AC-12: La paleta/API rechaza (o ignora con aviso) asignar V o B a una fecha que sea
+- [x] AC-12: La paleta/API rechaza (o ignora con aviso) asignar V o B a una fecha que sea
   festivo (según `holidayDates`/tabla de festivos) o sábado/domingo.
-- [ ] AC-13: La validación se aplica también en servidor (`POST /api/schedules` /
+- [x] AC-13: La validación se aplica también en servidor (`POST /api/schedules` /
   `validateScheduleBody` o equivalente), no solo en el cliente.
-- [ ] AC-14: D sigue permitido (y es la única opción válida) en festivos/fines de semana.
-- [ ] AC-15: El bloqueo no afecta a M/T/N/J ni a los días de semana no festivos.
+- [x] AC-14: D sigue permitido (y es la única opción válida) en festivos/fines de semana.
+- [x] AC-15: El bloqueo no afecta a M/T/N/J ni a los días de semana no festivos.
 
 ### 4. CSV con pagas extra
-- [ ] AC-16: El CSV exportado incluye, por empleado, una columna por cada tipo de turno
+- [x] AC-16: El CSV exportado incluye, por empleado, una columna por cada tipo de turno
   con paga extra vigente ese mes (igual criterio que `ExtraPayTable`: excluye MN/TN/NN
   fuera de diciembre/enero) con el recuento de turnos.
-- [ ] AC-17: El CSV incluye una columna final "Paga extra" con el total en euros por
+- [x] AC-17: El CSV incluye una columna final "Paga extra" con el total en euros por
   empleado (mismo cálculo que `calculateExtraPay`).
-- [ ] AC-18: El formato numérico en el CSV es coherente (usar punto o coma decimal de
+- [x] AC-18: El formato numérico en el CSV es coherente (usar punto o coma decimal de
   forma consistente con el resto del fichero; documentar la elección).
 
 ### 5. Tarifas actualizadas
-- [ ] AC-19: `EXTRA_PAY_RATES` refleja: `MF: 39.6, TF: 39.6, N: 46.2, NF: 59.4, MN: 151.8,
+- [x] AC-19: `EXTRA_PAY_RATES` refleja: `MF: 39.6, TF: 39.6, N: 46.2, NF: 59.4, MN: 151.8,
   TN: 151.8, NN: 151.8`.
-- [ ] AC-20: `RatesLegend`, `ExtraPayTable` y el nuevo CSV (punto 4) muestran las tarifas
+- [x] AC-20: `RatesLegend`, `ExtraPayTable` y el nuevo CSV (punto 4) muestran las tarifas
   nuevas sin cambios adicionales de código (ya leen de `EXTRA_PAY_RATES`).
-- [ ] AC-21: Tests unitarios de `calculateExtraPay` actualizados a las tarifas nuevas.
+- [x] AC-21: Tests unitarios de `calculateExtraPay` actualizados a las tarifas nuevas.
 
 ### 6. Impresión con colores
-- [ ] AC-22: Al imprimir (o exportar a PDF desde el diálogo de impresión), las celdas de
+- [x] AC-22: Al imprimir (o exportar a PDF desde el diálogo de impresión), las celdas de
   turno conservan su color de fondo tal como se ve en pantalla.
-- [ ] AC-23: El resto de reglas de impresión existentes (ocultar header/controles) sigue
+- [x] AC-23: El resto de reglas de impresión existentes (ocultar header/controles) sigue
   funcionando igual.
 
 > Cada criterio de aceptación debe poder responderse con SÍ o NO.
@@ -302,3 +302,4 @@ referenciarlas aquí.
 |-------|-------|--------|
 | 2026-11-17 | @orchestrator | Creación de la spec a partir de pruebas manuales del DM (6 hallazgos). Diseño del punto 1 (paleta única con arrastre) confirmado por el DM entre 3 opciones presentadas. |
 | 2026-11-17 | @orchestrator | DM confirma que la tarifa "Especial Navidad" (151,8) aplica igual a MN/TN/NN. Estado → `ready`. |
+| 2026-11-17 | @backend/@frontend | Implementados los 6 puntos (rama `sprint-6-paleta-edicion-y-fixes`): tarifas +20%, regla festivo/fin de semana (cliente+servidor), fix de logout (incl. fix de parpadeo del grid al pintar, no previsto en la spec original), CSV con pagas extra, colores al imprimir, y la paleta de edición unificada con arrastre (ampliada a los 13 tipos de turno tras detectar que limitarla a 7 habría sido una regresión frente al modal `ShiftEditor`). AC-01 a AC-23 verificados: 500 tests unitarios + 119 E2E (incluye migración de `sprint-2/3/9/11.spec.ts`, que dependían del modal/pasos retirados) en verde contra la app real. Todos los AC marcados [x]. Estado → `in-progress`, pendiente de revisión @devlead/@security antes de abrir el PR. |
