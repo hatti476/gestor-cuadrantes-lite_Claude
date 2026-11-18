@@ -6,7 +6,7 @@
 |-------|-------|
 | ID | SPEC-012 |
 | Tipo | feature + fix |
-| Estado | in-progress (pendiente @devlead/@security antes de PR) |
+| Estado | done — validado manualmente por el DM, listo para PR |
 | Prioridad | alta |
 | Agentes asignados | @orchestrator, @qa, @backend, @frontend |
 | Fecha de creación | 2026-11-17 |
@@ -303,3 +303,4 @@ referenciarlas aquí.
 | 2026-11-17 | @orchestrator | Creación de la spec a partir de pruebas manuales del DM (6 hallazgos). Diseño del punto 1 (paleta única con arrastre) confirmado por el DM entre 3 opciones presentadas. |
 | 2026-11-17 | @orchestrator | DM confirma que la tarifa "Especial Navidad" (151,8) aplica igual a MN/TN/NN. Estado → `ready`. |
 | 2026-11-17 | @backend/@frontend | Implementados los 6 puntos (rama `sprint-6-paleta-edicion-y-fixes`): tarifas +20%, regla festivo/fin de semana (cliente+servidor), fix de logout (incl. fix de parpadeo del grid al pintar, no previsto en la spec original), CSV con pagas extra, colores al imprimir, y la paleta de edición unificada con arrastre (ampliada a los 13 tipos de turno tras detectar que limitarla a 7 habría sido una regresión frente al modal `ShiftEditor`). AC-01 a AC-23 verificados: 500 tests unitarios + 119 E2E (incluye migración de `sprint-2/3/9/11.spec.ts`, que dependían del modal/pasos retirados) en verde contra la app real. Todos los AC marcados [x]. Estado → `in-progress`, pendiente de revisión @devlead/@security antes de abrir el PR. |
+| 2026-11-18 | @qa | DM valida manualmente los 6 puntos sobre `npm run dev` + seed local (tras resolver una caché de Turbopack corrupta que impedía cargar la app, ajena a esta spec) y confirma que todo es correcto. Re-ejecutada la suite completa antes de cierre: 500 unit + 120 E2E (119 ejecutados, 1 skip intencional) en verde. Estado → `done`, lista para PR a `main`. |
