@@ -170,7 +170,7 @@ export function validateShiftTransition(
 }
 
 /** true si la fecha es festivo o sábado/domingo */
-export function isWeekendOrHoliday(date: Date, isHoliday: boolean): boolean {
+export function isRestOnlyDay(date: Date, isHoliday: boolean): boolean {
   const dayOfWeek = date.getUTCDay();
   return isHoliday || dayOfWeek === 0 || dayOfWeek === 6;
 }
@@ -184,7 +184,7 @@ export function validateRestOnlyShift(
   date: Date,
   isHoliday: boolean
 ): { valid: boolean; error?: string } {
-  if ((shiftType === "V" || shiftType === "B") && isWeekendOrHoliday(date, isHoliday)) {
+  if ((shiftType === "V" || shiftType === "B") && isRestOnlyDay(date, isHoliday)) {
     return {
       valid: false,
       error: "Los festivos, sábados y domingos solo pueden marcarse como descanso (D)",

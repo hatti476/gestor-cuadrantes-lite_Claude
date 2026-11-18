@@ -151,19 +151,28 @@ test("CP-75 — TECH (TECNICO) no puede editar celdas del cuadrante", async ({ p
 
     // Mes sin publicar: el TECNICO no ve grid, así que no hay nada que editar
     if ((await waitForGridOrUnpublished(page)) === "unpublished") {
-      await expect(page.locator('[data-testid="shift-editor"]')).toHaveCount(0);
+      await expect(page.locator('[data-testid="edit-palette"]')).toHaveCount(0);
       return;
     }
 
-    // Comprobar que las celdas NO tienen cursor-pointer (no son editables)
+    // No debe haber paleta de edición (solo ADMIN) ni celdas con cursor-pointer
+    await expect(page.locator('[data-testid="edit-palette"]')).toHaveCount(0);
     const firstCell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
     await expect(firstCell).toBeVisible({ timeout: 5_000 });
+    await expect(firstCell).not.toHaveClass(/cursor-pointer/);
 
-    // Hacer clic — el ShiftEditor NO debe aparecer
+    // Hacer clic — el turno de la celda (o su ausencia) no debe cambiar
+    const shiftBefore = await firstCell
+      .locator('[data-testid^="shift-cell-"]')
+      .getAttribute("data-testid")
+      .catch(() => null);
     await firstCell.click();
     await page.waitForTimeout(600);
-    const editor = page.locator('[data-testid="shift-editor"]');
-    await expect(editor).not.toBeVisible({ timeout: 2_000 });
+    const shiftAfter = await firstCell
+      .locator('[data-testid^="shift-cell-"]')
+      .getAttribute("data-testid")
+      .catch(() => null);
+    expect(shiftAfter).toBe(shiftBefore);
   } catch (e) {
     await screenshotOnFail(page, "CP-75");
     throw e;

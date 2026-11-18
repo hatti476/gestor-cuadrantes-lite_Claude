@@ -13,7 +13,7 @@ import {
   countShifts,
   EXTRA_PAY_RATES,
   getExtraPayColumnsForMonth,
-  isWeekendOrHoliday,
+  isRestOnlyDay,
 } from "@/lib/schedules/business-logic";
 import { buildScheduleCsv } from "@/lib/schedules/csv-export";
 import { PrepPanel, MonthStatusBadge } from "@/components/schedule/prep-panel";
@@ -221,6 +221,12 @@ export default function HomePage() {
 
   const [employees, setEmployees] = useState<ScheduleEmployee[]>([]);
   const [assignments, setAssignments] = useState<ScheduleAssignment[]>([]);
+  // Espejo de `assignments` para leer su valor actual desde callbacks estables
+  // (useCallback) sin que cambien de identidad en cada pintado — ver handlePaintCell.
+  const assignmentsRef = useRef<ScheduleAssignment[]>(assignments);
+  useEffect(() => {
+    assignmentsRef.current = assignments;
+  }, [assignments]);
   const [holidayDates, setHolidayDates] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [monthStatus, setMonthStatus] = useState<MonthStatus>("ungenerated");
@@ -311,31 +317,40 @@ export default function HomePage() {
   // Nº de peticiones fallidas durante el pintado en curso (clic o arrastre).
   // Se reporta de una vez en handlePaintEnd en vez de un toast por celda.
   const paintFailuresRef = useRef(0);
+  // Escrituras en vuelo del pintado en curso: handlePaintEnd espera a que
+  // terminen todas antes de recargar, para no pisar el optimistic update con
+  // una respuesta de un GET que adelantó a un POST/DELETE todavía pendiente.
+  const pendingWritesRef = useRef<Promise<unknown>[]>([]);
 
   // ---------------------------------------------------------------------------
   // Paleta de edición: pintar una celda (clic único o paso de un arrastre)
+  // Envuelto en useCallback con identidad estable durante un arrastre (lee
+  // `assignments` vía ref, no como dependencia) para que el useEffect de
+  // ScheduleGrid no re-adjunte el listener de mouseup en cada celda pintada.
   // ---------------------------------------------------------------------------
-  function handlePaintCell(employeeId: string, date: string, currentShift?: string) {
+  const handlePaintCell = useCallback((employeeId: string, date: string, currentShift?: string) => {
     if (!selectedTool) return;
 
     if (selectedTool === "borrar") {
-      const found = assignments.find((a) => a.employeeId === employeeId && a.date.slice(0, 10) === date);
+      const found = assignmentsRef.current.find((a) => a.employeeId === employeeId && a.date.slice(0, 10) === date);
       if (!found) return;
       setAssignments((prev) => prev.filter((a) => a.id !== found.id));
-      void fetch(`/api/schedules?id=${found.id}`, { method: "DELETE" })
-        .then((res) => {
-          if (!res.ok) paintFailuresRef.current += 1;
-        })
-        .catch(() => {
-          paintFailuresRef.current += 1;
-        });
+      pendingWritesRef.current.push(
+        fetch(`/api/schedules?id=${found.id}`, { method: "DELETE" })
+          .then((res) => {
+            if (!res.ok) paintFailuresRef.current += 1;
+          })
+          .catch(() => {
+            paintFailuresRef.current += 1;
+          })
+      );
       return;
     }
 
     // Festivos/sábados/domingos solo admiten descanso (D) — SPEC-012 AC-12/14
-    const isRestOnlyDay =
-      (selectedTool === "V" || selectedTool === "B") && isWeekendOrHoliday(new Date(date), holidayDates.has(date));
-    const shiftType = isRestOnlyDay ? "D" : selectedTool;
+    const forcedToRest =
+      (selectedTool === "V" || selectedTool === "B") && isRestOnlyDay(new Date(date), holidayDates.has(date));
+    const shiftType = forcedToRest ? "D" : selectedTool;
 
     if (currentShift === shiftType) return; // ya pintada con este turno
 
@@ -349,35 +364,43 @@ export default function HomePage() {
       return [...prev, { id: `tmp-${employeeId}-${date}`, employeeId, date, shiftType }];
     });
 
-    void fetch("/api/schedules", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeId, date, shiftType }),
-    })
-      .then((res) => {
-        if (!res.ok) paintFailuresRef.current += 1;
+    pendingWritesRef.current.push(
+      fetch("/api/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId, date, shiftType }),
       })
-      .catch(() => {
-        paintFailuresRef.current += 1;
-      });
-  }
+        .then((res) => {
+          if (!res.ok) paintFailuresRef.current += 1;
+        })
+        .catch(() => {
+          paintFailuresRef.current += 1;
+        })
+    );
+  }, [selectedTool, holidayDates]);
 
-  // Al soltar el ratón tras pintar (clic único o fin de arrastre): recargar en
-  // segundo plano para reconciliar ids reales, monthStatus y celdas bloqueadas
-  // sin ocultar el grid (ver loadSchedule({ silent: true })), y avisar si
-  // alguna celda no se pudo guardar (no silenciar errores).
-  function handlePaintEnd() {
-    void loadSchedule({ silent: true }).then(() => {
-      const failures = paintFailuresRef.current;
-      paintFailuresRef.current = 0;
-      if (failures > 0) {
-        showToast(
-          `${failures} turno${failures > 1 ? "s" : ""} no se ${failures > 1 ? "pudieron" : "pudo"} guardar`,
-          "error"
-        );
-      }
-    });
-  }
+  // Al soltar el ratón tras pintar (clic único o fin de arrastre): esperar a
+  // que terminen todas las escrituras en vuelo y solo entonces recargar en
+  // segundo plano para reconciliar ids reales, monthStatus y celdas
+  // bloqueadas, sin ocultar el grid (ver loadSchedule({ silent: true })).
+  // Esperar antes de recargar evita que un GET adelante a un POST/DELETE
+  // pendiente y pise el optimistic update con datos desactualizados.
+  const handlePaintEnd = useCallback(() => {
+    const writes = pendingWritesRef.current;
+    pendingWritesRef.current = [];
+    void Promise.allSettled(writes)
+      .then(() => loadSchedule({ silent: true }))
+      .then(() => {
+        const failures = paintFailuresRef.current;
+        paintFailuresRef.current = 0;
+        if (failures > 0) {
+          showToast(
+            `${failures} turno${failures > 1 ? "s" : ""} no se ${failures > 1 ? "pudieron" : "pudo"} guardar`,
+            "error"
+          );
+        }
+      });
+  }, [loadSchedule, showToast]);
 
   // ---------------------------------------------------------------------------
   // Generación automática (con confirmación si ya hay datos)

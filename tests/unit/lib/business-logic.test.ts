@@ -10,7 +10,7 @@ import {
   validateShiftTransition,
   calculateExtraPay,
   EXTRA_PAY_RATES,
-  isWeekendOrHoliday,
+  isRestOnlyDay,
   validateRestOnlyShift,
 } from "@/lib/schedules/business-logic";
 
@@ -120,21 +120,21 @@ describe("calculateExtraPay (SPEC-012 AC-19/21: tarifas +20%)", () => {
   });
 });
 
-describe("isWeekendOrHoliday (SPEC-012 AC-12/14/15)", () => {
+describe("isRestOnlyDay (SPEC-012 AC-12/14/15)", () => {
   it("sábado es weekend", () => {
-    expect(isWeekendOrHoliday(new Date("2026-05-16"), false)).toBe(true);
+    expect(isRestOnlyDay(new Date("2026-05-16"), false)).toBe(true);
   });
 
   it("domingo es weekend", () => {
-    expect(isWeekendOrHoliday(new Date("2026-05-17"), false)).toBe(true);
+    expect(isRestOnlyDay(new Date("2026-05-17"), false)).toBe(true);
   });
 
   it("festivo entre semana cuenta como weekend/festivo", () => {
-    expect(isWeekendOrHoliday(new Date("2026-05-01"), true)).toBe(true);
+    expect(isRestOnlyDay(new Date("2026-05-01"), true)).toBe(true);
   });
 
   it("día de semana no festivo no cuenta", () => {
-    expect(isWeekendOrHoliday(new Date("2026-05-15"), false)).toBe(false);
+    expect(isRestOnlyDay(new Date("2026-05-15"), false)).toBe(false);
   });
 });
 

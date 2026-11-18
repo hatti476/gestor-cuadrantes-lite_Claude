@@ -180,6 +180,7 @@ export function ScheduleGrid({
                       onMouseDown={
                         paintable
                           ? (e) => {
+                              if (e.button !== 0) return; // solo botón izquierdo (evita pintar con clic derecho/central)
                               e.preventDefault();
                               paintingRef.current = true;
                               onCellPaint(emp.id, dateStr, cell?.shiftType);
