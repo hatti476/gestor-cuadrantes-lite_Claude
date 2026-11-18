@@ -1,15 +1,22 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { ScheduleGrid } from "@/components/schedule/schedule-grid";
 import { Header } from "@/components/layout/header";
-import { ShiftEditor } from "@/components/schedule/shift-editor";
+import { EditPalette, PaletteTool } from "@/components/schedule/edit-palette";
 import { SHIFT_COLORS, ShiftType } from "@/lib/constants/shift-colors";
 import { ScheduleAssignment, ScheduleEmployee, MonthStatus, computeMonthStatus } from "@/lib/schedules/types";
-import { calculateExtraPay, countShifts, EXTRA_PAY_RATES } from "@/lib/schedules/business-logic";
-import { PrepPanel, MonthStatusBadge, PrepStep } from "@/components/schedule/prep-panel";
+import {
+  calculateExtraPay,
+  countShifts,
+  EXTRA_PAY_RATES,
+  getExtraPayColumnsForMonth,
+  isRestOnlyDay,
+} from "@/lib/schedules/business-logic";
+import { buildScheduleCsv } from "@/lib/schedules/csv-export";
+import { PrepPanel, MonthStatusBadge } from "@/components/schedule/prep-panel";
 import { employeesFromAssignments } from "@/lib/schedules/multi-month";
 import { useToast } from "@/components/ui/toast-provider";
 
@@ -19,15 +26,6 @@ const MONTH_NAMES = [
 ];
 
 const COUNTER_SHIFTS: ShiftType[] = ["M", "T", "N", "MF", "TF", "NF", "J", "D", "V", "B"];
-const EXTRA_PAY_SHIFTS: Array<"MF" | "TF" | "N" | "NF" | "MN" | "TN" | "NN"> = [
-  "MF",
-  "TF",
-  "N",
-  "NF",
-  "MN",
-  "TN",
-  "NN",
-];
 
 const euroFormatter = new Intl.NumberFormat("es-ES", {
   style: "currency",
@@ -109,9 +107,7 @@ function ExtraPayTable({
   assignments: ScheduleAssignment[];
   month: number;
 }) {
-  const columns = month === 12 || month === 1
-    ? EXTRA_PAY_SHIFTS
-    : (EXTRA_PAY_SHIFTS.filter((shift) => shift !== "MN" && shift !== "TN" && shift !== "NN") as Array<"MF" | "TF" | "N" | "NF">);
+  const columns = getExtraPayColumnsForMonth(month);
 
   return (
     <div className="mt-2 w-fit overflow-x-auto rounded-lg border border-gray-200 shadow-sm" data-testid="extra-pay-legend">
@@ -185,9 +181,7 @@ function ExtraPayTable({
 
 
 function RatesLegend({ month }: { month: number }) {
-  const shifts = month === 12 || month === 1
-    ? EXTRA_PAY_SHIFTS
-    : EXTRA_PAY_SHIFTS.filter((s) => s !== "MN" && s !== "TN" && s !== "NN");
+  const shifts = getExtraPayColumnsForMonth(month);
   return (
     <div
       className="mt-2 rounded-lg border border-gray-200 shadow-sm bg-white px-4 py-3"
@@ -227,39 +221,33 @@ export default function HomePage() {
 
   const [employees, setEmployees] = useState<ScheduleEmployee[]>([]);
   const [assignments, setAssignments] = useState<ScheduleAssignment[]>([]);
+  // Espejo de `assignments` para leer su valor actual desde callbacks estables
+  // (useCallback) sin que cambien de identidad en cada pintado — ver handlePaintCell.
+  const assignmentsRef = useRef<ScheduleAssignment[]>(assignments);
+  useEffect(() => {
+    assignmentsRef.current = assignments;
+  }, [assignments]);
   const [holidayDates, setHolidayDates] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [monthStatus, setMonthStatus] = useState<MonthStatus>("ungenerated");
   const [published, setPublished] = useState(false);
 
-  // Estado del panel de preparación
-  const [prepStep, setPrepStep] = useState<PrepStep>(null);
   const [showConfirmGenerate, setShowConfirmGenerate] = useState(false);
   const [loadingHolidays, setLoadingHolidays] = useState(false);
-  const [editingCell, setEditingCell] = useState<{
-    employeeId: string;
-    date: string;
-    currentShift?: string;
-    assignmentId?: string;
-  } | null>(null);
 
-  // Estado para toggle preparación: guarda el turno previo antes de entrar en modo prep
-  // key: "employeeId|YYYY-MM-DD" → value: shiftType anterior (o undefined si estaba vacía)
-  const [prevShiftBeforePrep, setPrevShiftBeforePrep] = useState<Map<string, string | undefined>>(new Map());
-
-  // Limpiar prevShiftBeforePrep al cambiar de mes o salir de modo prep
-  useEffect(() => {
-    // eslint-disable-next-line
-    setPrevShiftBeforePrep(() => new Map());
-  }, [year, month, prepStep]);
+  // Turno seleccionado en la paleta de edición (null = ninguno seleccionado)
+  const [selectedTool, setSelectedTool] = useState<PaletteTool | null>(null);
 
   // ---------------------------------------------------------------------------
   // Carga datos del mes
   // ---------------------------------------------------------------------------
-  const loadSchedule = useCallback(async () => {
-    // Esperar a la sesión: el rol decide si se pide /api/employees
-    if (sessionStatus === "loading") return;
-    setLoading(true);
+  const loadSchedule = useCallback(async (opts: { silent?: boolean } = {}) => {
+    // Esperar a la sesión; si ya no hay sesión (p. ej. justo tras cerrar sesión,
+    // mientras se redirige a /login) no hay nada que cargar — SPEC-012 AC-09/10/11
+    if (sessionStatus === "loading" || sessionStatus === "unauthenticated") return;
+    // silent=true: recarga en segundo plano tras pintar con la paleta — el grid
+    // no debe ocultarse ni parpadear en cada clic/arrastre (SPEC-012, punto 1)
+    if (!opts.silent) setLoading(true);
     try {
       // /api/employees es solo ADMIN: TECNICO/VIEWER usan los empleados de las asignaciones
       const [scheduleRes, holidayRes, employeeRes] = await Promise.all([
@@ -304,7 +292,7 @@ export default function HomePage() {
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!opts.silent) setLoading(false);
     }
   }, [year, month, isAdmin, sessionStatus]);
 
@@ -326,93 +314,93 @@ export default function HomePage() {
     else setMonth((m) => m + 1);
   }
 
-  // ---------------------------------------------------------------------------
-  // Clic en celda — normal o en modo prep
-  // ---------------------------------------------------------------------------
-  async function handleCellClick(employeeId: string, date: string, currentShift?: string) {
-    // Modo preparación: asigna directamente V o D sin abrir el modal
-    if (prepStep === "vacaciones" || prepStep === "libres") {
-      const shiftType = prepStep === "vacaciones" ? "V" : "D";
-      const cellKey = `${employeeId}|${date}`;
+  // Nº de peticiones fallidas durante el pintado en curso (clic o arrastre).
+  // Se reporta de una vez en handlePaintEnd en vez de un toast por celda.
+  const paintFailuresRef = useRef(0);
+  // Escrituras en vuelo del pintado en curso: handlePaintEnd espera a que
+  // terminen todas antes de recargar, para no pisar el optimistic update con
+  // una respuesta de un GET que adelantó a un POST/DELETE todavía pendiente.
+  const pendingWritesRef = useRef<Promise<unknown>[]>([]);
 
-      const found = assignments.find(
-        (a) => a.employeeId === employeeId && a.date.slice(0, 10) === date
+  // ---------------------------------------------------------------------------
+  // Paleta de edición: pintar una celda (clic único o paso de un arrastre)
+  // Envuelto en useCallback con identidad estable durante un arrastre (lee
+  // `assignments` vía ref, no como dependencia) para que el useEffect de
+  // ScheduleGrid no re-adjunte el listener de mouseup en cada celda pintada.
+  // ---------------------------------------------------------------------------
+  const handlePaintCell = useCallback((employeeId: string, date: string, currentShift?: string) => {
+    if (!selectedTool) return;
+
+    if (selectedTool === "borrar") {
+      const found = assignmentsRef.current.find((a) => a.employeeId === employeeId && a.date.slice(0, 10) === date);
+      if (!found) return;
+      setAssignments((prev) => prev.filter((a) => a.id !== found.id));
+      pendingWritesRef.current.push(
+        fetch(`/api/schedules?id=${found.id}`, { method: "DELETE" })
+          .then((res) => {
+            if (!res.ok) paintFailuresRef.current += 1;
+          })
+          .catch(() => {
+            paintFailuresRef.current += 1;
+          })
       );
-      const currentCellShift = found?.shiftType;
-
-      if (currentCellShift === shiftType) {
-        // Click 2+: la celda ya tiene el turno de prep → restaurar estado anterior
-        const prevShift = prevShiftBeforePrep.get(cellKey);
-        const restoreShift = prevShift ?? "D"; // default D si estaba vacía
-        await fetch("/api/schedules", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ employeeId, date, shiftType: restoreShift }),
-        });
-        // Limpiar el estado guardado para este cell
-        setPrevShiftBeforePrep((prev) => {
-          const next = new Map(prev);
-          next.delete(cellKey);
-          return next;
-        });
-      } else {
-        // Click 1: la celda NO tiene el turno de prep → guardar estado actual y poner prep shift
-        setPrevShiftBeforePrep((prev) => {
-          const next = new Map(prev);
-          next.set(cellKey, currentCellShift);
-          return next;
-        });
-        await fetch("/api/schedules", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ employeeId, date, shiftType }),
-        });
-      }
-      await loadSchedule();
       return;
     }
-    // Modo normal: abrir editor modal
-    const found = assignments.find(
-      (a) => a.employeeId === employeeId && a.date.slice(0, 10) === date
-    );
-    setEditingCell({ employeeId, date, currentShift, assignmentId: found?.id });
-  }
 
-  // ---------------------------------------------------------------------------
-  // Guardar turno desde el editor
-  // ---------------------------------------------------------------------------
-  async function handleSaveShift(shiftType: string) {
-    if (!editingCell) return;
-    const { employeeId, date } = editingCell;
+    // Festivos/sábados/domingos solo admiten descanso (D) — SPEC-012 AC-12/14
+    const forcedToRest =
+      (selectedTool === "V" || selectedTool === "B") && isRestOnlyDay(new Date(date), holidayDates.has(date));
+    const shiftType = forcedToRest ? "D" : selectedTool;
 
-    const res = await fetch("/api/schedules", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeId, date, shiftType }),
+    if (currentShift === shiftType) return; // ya pintada con este turno
+
+    setAssignments((prev) => {
+      const idx = prev.findIndex((a) => a.employeeId === employeeId && a.date.slice(0, 10) === date);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], shiftType };
+        return next;
+      }
+      return [...prev, { id: `tmp-${employeeId}-${date}`, employeeId, date, shiftType }];
     });
-    if (res.ok) {
-      showToast("Turno guardado", "success");
-    } else {
-      showToast("Error al guardar el turno", "error");
-    }
-    setEditingCell(null);
-    await loadSchedule();
-  }
 
-  // ---------------------------------------------------------------------------
-  // Eliminar turno desde el editor
-  // ---------------------------------------------------------------------------
-  async function handleDeleteShift() {
-    if (!editingCell?.assignmentId) return;
-    const res = await fetch(`/api/schedules?id=${editingCell.assignmentId}`, { method: "DELETE" });
-    if (res.ok) {
-      showToast("Turno eliminado", "success");
-    } else {
-      showToast("Error al eliminar el turno", "error");
-    }
-    setEditingCell(null);
-    await loadSchedule();
-  }
+    pendingWritesRef.current.push(
+      fetch("/api/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId, date, shiftType }),
+      })
+        .then((res) => {
+          if (!res.ok) paintFailuresRef.current += 1;
+        })
+        .catch(() => {
+          paintFailuresRef.current += 1;
+        })
+    );
+  }, [selectedTool, holidayDates]);
+
+  // Al soltar el ratón tras pintar (clic único o fin de arrastre): esperar a
+  // que terminen todas las escrituras en vuelo y solo entonces recargar en
+  // segundo plano para reconciliar ids reales, monthStatus y celdas
+  // bloqueadas, sin ocultar el grid (ver loadSchedule({ silent: true })).
+  // Esperar antes de recargar evita que un GET adelante a un POST/DELETE
+  // pendiente y pise el optimistic update con datos desactualizados.
+  const handlePaintEnd = useCallback(() => {
+    const writes = pendingWritesRef.current;
+    pendingWritesRef.current = [];
+    void Promise.allSettled(writes)
+      .then(() => loadSchedule({ silent: true }))
+      .then(() => {
+        const failures = paintFailuresRef.current;
+        paintFailuresRef.current = 0;
+        if (failures > 0) {
+          showToast(
+            `${failures} turno${failures > 1 ? "s" : ""} no se ${failures > 1 ? "pudieron" : "pudo"} guardar`,
+            "error"
+          );
+        }
+      });
+  }, [loadSchedule, showToast]);
 
   // ---------------------------------------------------------------------------
   // Generación automática (con confirmación si ya hay datos)
@@ -540,25 +528,8 @@ export default function HomePage() {
       showToast("No hay datos que exportar", "info");
       return;
     }
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-    // Cabecera
-    const header = ["Empleado", ...days.map((d) => String(d))].join(",");
-
-    // Filas
-    const rows = employees.map((emp) => {
-      const cells = days.map((day) => {
-        const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        const a = assignments.find(
-          (x) => x.employeeId === emp.id && x.date.slice(0, 10) === dateStr
-        );
-        return a ? a.shiftType : "";
-      });
-      return [emp.name, ...cells].join(",");
-    });
-
-    const csv = [header, ...rows].join("\n");
+    const csv = buildScheduleCsv({ year, month, employees, assignments });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -572,10 +543,11 @@ export default function HomePage() {
   // ---------------------------------------------------------------------------
   // Render helpers
   // ---------------------------------------------------------------------------
-  // Celdas bloqueadas por preparación manual (V manual o D manual)
+  // Celdas bloqueadas por preparación manual (V, D manual o B) — SPEC-012 AC-06:
+  // antes B no se marcaba como bloqueada pese a que el panel decía lo contrario.
   const lockedCells = new Set<string>(
     assignments
-      .filter((a) => (a.shiftType === "V" || (a.shiftType === "D" && a.manual)))
+      .filter((a) => a.shiftType === "V" || a.shiftType === "B" || (a.shiftType === "D" && a.manual))
       .map((a) => `${a.employeeId}|${a.date.slice(0, 10)}`)
   );
   const vacacionesCount = assignments.filter((a) => a.shiftType === "V").length;
@@ -618,14 +590,11 @@ export default function HomePage() {
               {published ? "Publicado" : "No publicado"}
             </span>
           )}
-          {canEdit && prepStep && (
-            <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-1 print:hidden">
-              Modo preparación — clic en celda para asignar {prepStep === "vacaciones" ? "V" : "D"}
-            </span>
-          )}
-          {canEdit && !prepStep && (
+          {canEdit && (
             <span data-testid="edit-mode-banner" className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded px-3 py-1 print:hidden">
-              Modo edición — clic en celda para asignar turno
+              {selectedTool
+                ? `Paleta: ${selectedTool === "borrar" ? "borrar turno" : selectedTool} — clic o arrastra sobre las celdas`
+                : "Modo edición — selecciona un turno en la paleta"}
             </span>
           )}
           <button
@@ -692,9 +661,9 @@ export default function HomePage() {
                   employees={employees}
                   assignments={assignments}
                   holidayDates={holidayDates}
-                  onCellClick={canEdit ? handleCellClick : undefined}
+                  onCellPaint={canEdit ? handlePaintCell : undefined}
+                  onPaintEnd={canEdit ? handlePaintEnd : undefined}
                   lockedCells={lockedCells}
-                  allowLockedCellClick={canEdit && prepStep !== null}
                   currentUserId={session?.user?.id ?? null}
                 />
                 {employees.length > 0 && (
@@ -716,13 +685,12 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* Panel de preparación (solo ADMIN) */}
+          {/* Paleta de edición + panel de preparación (solo ADMIN) */}
           {canEdit && !loading && (
-            <div className="w-56 flex-shrink-0 print:hidden">
+            <div className="w-56 flex-shrink-0 print:hidden space-y-4">
+              <EditPalette selected={selectedTool} onSelect={setSelectedTool} />
               <PrepPanel
                 monthStatus={monthStatus}
-                activeStep={prepStep}
-                onStepChange={setPrepStep}
                 vacacionesCount={vacacionesCount}
                 libresCount={libresCount}
                 bajasCount={bajasCount}
@@ -757,17 +725,6 @@ export default function HomePage() {
           })}
         </div>
       </main>
-
-      {/* Modal editor de turno */}
-      {editingCell && (
-        <ShiftEditor
-          date={editingCell.date}
-          currentShift={editingCell.currentShift}
-          onSave={handleSaveShift}
-          onDelete={editingCell.assignmentId ? handleDeleteShift : undefined}
-          onClose={() => setEditingCell(null)}
-        />
-      )}
 
       {/* Modal de confirmación de generación */}
       {showConfirmGenerate && (

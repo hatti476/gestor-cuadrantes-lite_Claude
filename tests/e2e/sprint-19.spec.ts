@@ -248,9 +248,9 @@ test("CP-139 — VIEWER ve el cuadrante pero no tiene PrepPanel", async ({
   const grid = page.locator('[data-testid="schedule-grid"]');
   await expect(grid.or(unpublishedMessage)).toBeVisible({ timeout: 15_000 });
 
-  // No debe haber PrepPanel
-  const prepPanel = page.locator('[data-testid="prep-step-generar"]');
-  await expect(prepPanel).not.toBeVisible();
+  // No debe haber PrepPanel ni paleta de edición (ambos solo ADMIN)
+  await expect(page.locator('[data-testid="prep-panel"]')).not.toBeVisible();
+  await expect(page.locator('[data-testid="edit-palette"]')).not.toBeVisible();
 
   // No debe haber botón de generar
   await expect(page.locator('[data-testid="btn-generate"]')).not.toBeVisible();

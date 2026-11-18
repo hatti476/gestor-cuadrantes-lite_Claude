@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
-import { validateScheduleBody, getMonthRange } from "@/lib/schedules/business-logic";
+import { validateScheduleBody, validateRestOnlyShift, getMonthRange } from "@/lib/schedules/business-logic";
 import { canViewSchedules, canEditSchedule, isAdmin } from "@/lib/auth/permissions";
 import { computeMonthStatus } from "@/lib/schedules/types";
 
@@ -81,6 +81,13 @@ export async function POST(req: NextRequest) {
   }
 
   const { employeeId, date: parsedDate, shiftType } = validation;
+
+  // SPEC-012 AC-12/13: festivos y fines de semana solo pueden marcarse como descanso
+  const holiday = await prisma.holiday.findUnique({ where: { date: parsedDate! } });
+  const restOnlyCheck = validateRestOnlyShift(shiftType!, parsedDate!, !!holiday);
+  if (!restOnlyCheck.valid) {
+    return NextResponse.json({ error: restOnlyCheck.error }, { status: 400 });
+  }
 
   // Buscar turno previo para el log
   const previous = await prisma.shiftAssignment.findFirst({

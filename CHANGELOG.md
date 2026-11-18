@@ -4,6 +4,52 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
+## [Unreleased] — Sprint 6 (SPEC-012, paleta de edición y fixes de preparación)
+
+Seis hallazgos de una sesión de pruebas manuales del DM sobre la build de Sprint 5b.
+
+### Added
+- **Paleta de edición única con arrastre**: sustituye los 3 pasos de preparación
+  (Vacaciones/Libres/Bajas) y el modal `ShiftEditor` por un único selector de turno
+  (los 13 tipos de `VALID_SHIFT_TYPES` + "borrar") siempre visible para el ADMIN. Clic o
+  clic-y-arrastre pinta directamente sobre las celdas.
+- **CSV con pagas extra**: la exportación incluye ahora, por empleado, los contadores de
+  turnos con paga extra vigentes ese mes y el total (antes solo exportaba la grid de
+  turnos).
+
+### Fixed
+- **Error de consola al cerrar sesión**: `loadSchedule` reintentaba cargar `/api/schedules`
+  justo cuando la sesión ya era inválida tras el logout, lanzando "Error cargando
+  cuadrante" al overlay de Next.js. Ahora se detiene si `sessionStatus === "unauthenticated"`.
+- **El grid parpadeaba al pintar**: la recarga tras cada pintado ocultaba toda la tabla
+  (`loading=true`); ahora es una recarga silenciosa que no desmonta el grid.
+- **Festivos/fines de semana solo admiten descanso**: no se puede marcar Vacaciones (V) ni
+  Baja (B) en sábado, domingo o festivo — solo Descanso (D). Validado en cliente y en
+  servidor (`POST /api/schedules`).
+- **Bajas (B) no se bloqueaban**: el panel decía que las bajas quedaban bloqueadas (🔒) pero
+  `lockedCells` solo incluía V y D manual.
+- **Errores de red/servidor silenciados al pintar**: `handlePaintCell` no comprobaba la
+  respuesta del fetch; ahora los fallos durante un pintado se avisan con un toast al soltar
+  el ratón.
+
+### Changed
+- **Tarifas de paga extra +20%**: `MF`/`TF` 39,6 €, `N` 46,2 €, `NF` 59,4 €,
+  `MN`/`TN`/`NN` 151,8 €.
+- **Impresión conserva los colores**: `@media print` fuerza `print-color-adjust: exact`
+  (antes el navegador podía omitir el color de fondo de las celdas).
+- Eliminados `components/schedule/shift-editor.tsx` y el concepto `allowLockedCellClick`
+  — una celda bloqueada (V/D manual/B) puede volver a editarse con la paleta en cualquier
+  momento, ya no depende de estar en un "paso" de preparación.
+
+### Tests
+- Unit: tarifas, `isWeekendOrHoliday`/`validateRestOnlyShift`, `buildScheduleCsv`, regla
+  CSS de impresión, `POST /api/schedules` con la regla festivo/finde en servidor.
+- E2E: `sprint-6.palette-y-fixes.spec.ts` (nuevo) — pintar con clic/arrastre, re-editar
+  celda bloqueada, logout sin error, CSV con pagas extra, fallo de red avisado con toast.
+- Migrados `sprint-2.spec.ts`, `sprint-3.spec.ts`, `sprint-9.spec.ts` y
+  `sprint-11.spec.ts`: dependían del modal/pasos retirados.
+- 500 tests unitarios + 119 E2E en verde contra la app real.
+
 ## [Unreleased] — Sprint 5b (SPEC-011, revalidación de sesión)
 
 ### Security

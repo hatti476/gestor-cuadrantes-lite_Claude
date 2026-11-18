@@ -2,12 +2,8 @@
 
 import { MonthStatus } from "@/lib/schedules/types";
 
-export type PrepStep = "vacaciones" | "libres" | "bajas" | "festivos" | "generar" | null;
-
 interface PrepPanelProps {
   monthStatus: MonthStatus;
-  activeStep: PrepStep;
-  onStepChange: (step: PrepStep) => void;
   vacacionesCount: number;
   libresCount: number;
   bajasCount: number;
@@ -31,14 +27,6 @@ const STATUS_BADGE: Record<MonthStatus, { label: string; className: string }> = 
   unpublished: { label: "No publicado", className: "bg-gray-100 text-gray-600 border-gray-300" },
 };
 
-const STEPS: { id: PrepStep; label: string; icon: string; description: string }[] = [
-  { id: "vacaciones", label: "Vacaciones", icon: "🏖️", description: "Haz clic en celdas para marcar días de vacaciones (V). Quedan bloqueadas." },
-  { id: "libres", label: "Días libres", icon: "📅", description: "Haz clic en celdas para marcar descansos excepcionales (D). Quedan bloqueados." },
-  { id: "bajas", label: "Bajas", icon: "🩺", description: "Haz clic en celdas para marcar bajas (B). Quedan bloqueadas." },
-  { id: "festivos", label: "Festivos", icon: "🎉", description: "Revisa y gestiona los festivos del mes." },
-  { id: "generar", label: "Generar", icon: "⚙️", description: "Guarda la preparación y genera el cuadrante automáticamente." },
-];
-
 export function MonthStatusBadge({ status }: { status: MonthStatus }) {
   const badge = STATUS_BADGE[status];
   return (
@@ -51,10 +39,15 @@ export function MonthStatusBadge({ status }: { status: MonthStatus }) {
   );
 }
 
+/**
+ * Panel de preparación del mes (SPEC-012, punto 1): ya no tiene pasos
+ * clicables — el pintado de V/D/B/turnos se hace con la paleta de edición
+ * (components/schedule/edit-palette.tsx) directamente sobre el grid. Este
+ * panel conserva los contadores informativos, la gestión de festivos y las
+ * acciones de guardar/generar.
+ */
 export function PrepPanel({
   monthStatus,
-  activeStep,
-  onStepChange,
   vacacionesCount,
   libresCount,
   bajasCount,
@@ -67,126 +60,68 @@ export function PrepPanel({
   loadingHolidays = false,
   onAutoLoadHolidays,
 }: PrepPanelProps) {
-  const stepCounts: Record<string, number> = {
-    vacaciones: vacacionesCount,
-    libres: libresCount,
-    bajas: bajasCount,
-    festivos: holidaysCount,
-  };
-
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm print:hidden" data-testid="prep-panel">
       <div className="px-4 py-3 border-b border-gray-100">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Preparación del mes</p>
       </div>
 
-      {/* Steps */}
-      <div className="p-3 space-y-1">
-        {STEPS.map((step, idx) => {
-          const isActive = activeStep === step.id;
-          const count = stepCounts[step.id ?? ""];
-          return (
-            <button
-              key={step.id}
-              data-testid={`prep-step-${step.id}`}
-              onClick={() => onStepChange(isActive ? null : step.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors text-left ${
-                isActive
-                  ? "bg-blue-50 border border-blue-200 text-blue-700"
-                  : "hover:bg-gray-50 text-gray-700 border border-transparent"
-              }`}
-            >
-              <span className="text-base w-6 text-center">{step.icon}</span>
-              <span className="flex-1 font-medium">
-                {idx + 1}. {step.label}
-              </span>
-              {count !== undefined && (
-                <span className={`text-xs rounded-full px-2 py-0.5 font-mono ${count > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-400"}`}>
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      {/* Contadores informativos */}
+      <div className="p-3 space-y-1 text-xs text-gray-600">
+        <div data-testid="prep-count-vacaciones">🏖️ <strong>{vacacionesCount}</strong> días de vacaciones</div>
+        <div data-testid="prep-count-libres">📅 <strong>{libresCount}</strong> días libres</div>
+        <div data-testid="prep-count-bajas">🩺 <strong>{bajasCount}</strong> días de baja</div>
+        <div data-testid="prep-count-festivos">🎉 <strong>{holidaysCount}</strong> festivos del mes</div>
       </div>
 
-      {/* Active step description */}
-      {activeStep && activeStep !== "generar" && (
-        <div className="mx-3 mb-3 p-2 rounded bg-blue-50 border border-blue-100 text-xs text-blue-700">
-          {STEPS.find((s) => s.id === activeStep)?.description}
-        </div>
-      )}
+      {/* Festivos */}
+      <div className="mx-3 mb-3 space-y-2 border-t border-gray-100 pt-3">
+        <p
+          data-testid="msg-auto-holidays"
+          className="text-xs text-green-700 bg-green-50 border border-green-200 rounded p-2"
+        >
+          {loadingHolidays
+            ? "Cargando festivos públicos..."
+            : "Los festivos públicos se pueden cargar automáticamente."}
+        </p>
+        <button
+          onClick={onManageHolidays}
+          className="w-full text-xs px-3 py-2 rounded border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors"
+          data-testid="btn-manage-holidays"
+          style={{ display: isAdmin ? undefined : "none" }}
+        >
+          Gestionar festivos del mes →
+        </button>
+        {onAutoLoadHolidays && (
+          <button
+            onClick={onAutoLoadHolidays}
+            className="w-full text-xs px-3 py-2 rounded border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors"
+            data-testid="btn-auto-load-holidays"
+          >
+            Cargar festivos públicos →
+          </button>
+        )}
+      </div>
 
-      {/* Festivos sub-panel */}
-      {activeStep === "festivos" && (
-        <div className="mx-3 mb-3 space-y-2">
-          <p
-            data-testid="msg-auto-holidays"
-            className="text-xs text-green-700 bg-green-50 border border-green-200 rounded p-2"
-          >
-            {loadingHolidays
-              ? "Cargando festivos públicos..."
-              : "Los festivos públicos se pueden cargar automáticamente."}
-          </p>
-          <button
-            onClick={onManageHolidays}
-            className="w-full text-xs px-3 py-2 rounded border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors"
-            data-testid="btn-manage-holidays"
-            style={{ display: isAdmin ? undefined : "none" }}
-          >
-            Gestionar festivos del mes →
-          </button>
-          {onAutoLoadHolidays && (
-            <button
-              onClick={onAutoLoadHolidays}
-              className="w-full text-xs px-3 py-2 rounded border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors"
-              data-testid="btn-auto-load-holidays"
-            >
-              Cargar festivos públicos →
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Generar step */}
-      {(activeStep === "generar" || activeStep === null) && (
-        <div className="mx-3 mb-3 space-y-2">
-          <div className="text-xs text-gray-500 space-y-1">
-            <div>🏖️ <strong>{vacacionesCount}</strong> días de vacaciones bloqueados</div>
-            <div>📅 <strong>{libresCount}</strong> días libres bloqueados</div>
-            <div>🩺 <strong>{bajasCount}</strong> días de baja bloqueados</div>
-            <div>🎉 <strong>{holidaysCount}</strong> festivos del mes</div>
-          </div>
-          <button
-            data-testid="btn-save-preparation"
-            onClick={onSavePreparation}
-            disabled={monthStatus === "generated"}
-            className="w-full text-xs px-3 py-2 rounded border border-yellow-300 bg-yellow-50 hover:bg-yellow-100 text-yellow-800 disabled:opacity-40 transition-colors"
-          >
-            Guardar preparación
-          </button>
-          <button
-            data-testid="btn-generate"
-            onClick={onGenerate}
-            disabled={generating}
-            className="w-full text-xs px-3 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors font-medium"
-          >
-            {generating ? "Generando..." : "Generar cuadrante"}
-          </button>
-        </div>
-      )}
-
-      {/* Divider + close step */}
-      {activeStep && (
-        <div className="px-3 pb-3">
-          <button
-            onClick={() => onStepChange(null)}
-            className="w-full text-xs py-1 text-gray-400 hover:text-gray-600"
-          >
-            ✕ Cerrar panel
-          </button>
-        </div>
-      )}
+      {/* Guardar / Generar */}
+      <div className="mx-3 mb-3 space-y-2 border-t border-gray-100 pt-3">
+        <button
+          data-testid="btn-save-preparation"
+          onClick={onSavePreparation}
+          disabled={monthStatus === "generated"}
+          className="w-full text-xs px-3 py-2 rounded border border-yellow-300 bg-yellow-50 hover:bg-yellow-100 text-yellow-800 disabled:opacity-40 transition-colors"
+        >
+          Guardar preparación
+        </button>
+        <button
+          data-testid="btn-generate"
+          onClick={onGenerate}
+          disabled={generating}
+          className="w-full text-xs px-3 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors font-medium"
+        >
+          {generating ? "Generando..." : "Generar cuadrante"}
+        </button>
+      </div>
     </div>
   );
 }

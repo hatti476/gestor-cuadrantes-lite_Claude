@@ -45,14 +45,23 @@ export interface ShiftCounter {
 }
 
 export const EXTRA_PAY_RATES: Record<string, number> = {
-  MF: 33,
-  TF: 33,
-  N: 38.5,
-  NF: 49.5,
-  MN: 126.5,
-  TN: 126.5,
-  NN: 126.5,
+  MF: 39.6,
+  TF: 39.6,
+  N: 46.2,
+  NF: 59.4,
+  MN: 151.8,
+  TN: 151.8,
+  NN: 151.8,
 };
+
+export const EXTRA_PAY_SHIFTS = ["MF", "TF", "N", "NF", "MN", "TN", "NN"] as const;
+export type ExtraPayShift = (typeof EXTRA_PAY_SHIFTS)[number];
+
+/** Los turnos especiales de Navidad (MN/TN/NN) solo aplican en diciembre y enero */
+export function getExtraPayColumnsForMonth(month: number): ExtraPayShift[] {
+  if (month === 12 || month === 1) return [...EXTRA_PAY_SHIFTS];
+  return EXTRA_PAY_SHIFTS.filter((s) => s !== "MN" && s !== "TN" && s !== "NN");
+}
 
 export function calculateExtraPay(shiftCounts: Record<string, number>): number {
   return Object.entries(EXTRA_PAY_RATES).reduce(
@@ -158,6 +167,30 @@ export function validateShiftTransition(
 
   const hoursGap = nextShiftStartHourFromPreviousDayStart(nextShift) - shiftEndHourFromDayStart(prevShift);
   return { valid: hoursGap >= 12, hoursGap };
+}
+
+/** true si la fecha es festivo o sábado/domingo */
+export function isRestOnlyDay(date: Date, isHoliday: boolean): boolean {
+  const dayOfWeek = date.getUTCDay();
+  return isHoliday || dayOfWeek === 0 || dayOfWeek === 6;
+}
+
+/**
+ * Vacaciones (V) y Baja (B) solo pueden marcarse en días que no sean festivo
+ * ni fin de semana — esos días ya son de descanso (D) por sí mismos.
+ */
+export function validateRestOnlyShift(
+  shiftType: string,
+  date: Date,
+  isHoliday: boolean
+): { valid: boolean; error?: string } {
+  if ((shiftType === "V" || shiftType === "B") && isRestOnlyDay(date, isHoliday)) {
+    return {
+      valid: false,
+      error: "Los festivos, sábados y domingos solo pueden marcarse como descanso (D)",
+    };
+  }
+  return { valid: true };
 }
 
 /** Valida el body de un POST /api/schedules */

@@ -2,7 +2,6 @@ import { test, expect } from "@playwright/test";
 import {
   generateScheduleAndWait,
   loginAsAdmin,
-  openShiftEditorFromEditableCell,
   screenshotOnFail,
 } from "./helpers";
 
@@ -84,24 +83,18 @@ test("CP-24 — Cambio de contraseña valida requisitos", async ({ page }) => {
   }
 });
 
-// ─── CP-25 — Turnos MF/TF/NF en el selector ──────────────────────────────────
-test("CP-25 — Turnos MF/TF/NF disponibles en el selector", async ({ page }) => {
+// ─── CP-25 — Turnos MF/TF/NF en la paleta ────────────────────────────────────
+test("CP-25 — Turnos MF/TF/NF disponibles en la paleta", async ({ page }) => {
   try {
     await loginAsAdmin(page);
     await expect(page.locator("table").first()).toBeVisible({ timeout: 10_000 });
     await page.waitForLoadState("networkidle");
 
-    // Abrir ShiftEditor desde una celda editable para evitar celdas bloqueadas.
-    await openShiftEditorFromEditableCell(page);
-    await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
-
-    // Verificar presencia de los 3 tipos especiales
-    await expect(page.locator('[data-testid="shift-btn-MF"]')).toBeVisible();
-    await expect(page.locator('[data-testid="shift-btn-TF"]')).toBeVisible();
-    await expect(page.locator('[data-testid="shift-btn-NF"]')).toBeVisible();
-
-    // Cerrar modal
-    await page.keyboard.press("Escape");
+    // Desde SPEC-012 ya no hay modal: la paleta de edición está siempre
+    // visible con los 13 tipos de turno, incluidos los 3 especiales de finde.
+    await expect(page.locator('[data-testid="palette-swatch-MF"]')).toBeVisible();
+    await expect(page.locator('[data-testid="palette-swatch-TF"]')).toBeVisible();
+    await expect(page.locator('[data-testid="palette-swatch-NF"]')).toBeVisible();
   } catch (e) {
     await screenshotOnFail(page, "CP-25");
     throw e;
@@ -152,12 +145,11 @@ test("CP-27 — La generación respeta los turnos manuales", async ({ page }) =>
     await expect(page.locator("table").first()).toBeVisible({ timeout: 8_000 });
     await page.waitForTimeout(500);
 
-    // Asignar manualmente turno V (vacaciones) en día 1 del primer empleado
+    // Asignar manualmente turno V (vacaciones) en día 1 del primer empleado (martes, no festivo)
     const targetCell = page.locator("table").first().locator("tbody tr").first().locator("td").nth(1);
+    await page.locator('[data-testid="palette-swatch-V"]').click();
     await targetCell.click();
-    await expect(page.locator('[data-testid="shift-editor"]')).toBeVisible({ timeout: 5_000 });
-    await page.locator('[data-testid="shift-btn-V"]').click();
-    await expect(page.locator('[data-testid="shift-editor"]')).not.toBeVisible({ timeout: 5_000 });
+    await expect(targetCell.locator('[data-testid="shift-cell-V"]')).toBeVisible({ timeout: 5_000 });
     await page.waitForTimeout(500);
 
     // Generar de nuevo
