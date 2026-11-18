@@ -68,12 +68,12 @@ teórico de descansos, mes a mes y en el conjunto del año**.
 ## Criterios de aceptación
 
 ### Cálculo (lógica de negocio)
-- [ ] AC-01: Existe una función pura que calcula los días laborables de un mes dado
+- [x] AC-01: Existe una función pura que calcula los días laborables de un mes dado
   (año + mes + fechas festivas), excluyendo sábados, domingos y festivos.
-- [ ] AC-02: Existe una función pura que calcula las "jornadas ocupadas" de un empleado en
+- [x] AC-02: Existe una función pura que calcula las "jornadas ocupadas" de un empleado en
   un mes a partir de su lista de turnos asignados: cuenta todo excepto `D` (incluye
   M/T/N/J/V/B/MF/TF/NF/MN/TN/NN).
-- [ ] AC-03: La diferencia mensual de un empleado es `jornadas ocupadas − días
+- [x] AC-03: La diferencia mensual de un empleado es `jornadas ocupadas − días
   laborables` del mes (puede ser negativa, positiva o cero).
 
 ### Vista mensual
@@ -209,3 +209,4 @@ Captura del Excel manual actual del DM, que esta spec busca reproducir dentro de
 | Fecha | Autor | Cambio |
 |-------|-------|--------|
 | 2026-11-18 | @orchestrator | Creación de la spec a partir de una petición del DM (captura de su Excel manual de referencia). DM confirma qué turnos cuentan como "jornada ocupada" (todo excepto D) y que el acumulado es por año natural. Estado → `ready`, candidata a Sprint-07 junto a SPEC-013 (orden a decidir por @orchestrator al arrancar el sprint). |
+| 2026-11-18 | @qa + @backend | AC-01/02/03 completados en rama `sprint-7-deps-y-balance-jornadas` (commit `c479765`): `countLaborableDays` y `countOccupiedDays` en `lib/schedules/business-logic.ts`, con tests TDD que cubren festivo en fin de semana (no resta doble), festivo en día laborable, y festivo local añadido a mano por el ADMIN combinado con festivo nacional. Suite unitaria completa en verde (512 passed). Pendiente: AC-04/05/06 (vista mensual), AC-07/08/09/10 (endpoint acumulado anual), AC-11 (CSV). |
