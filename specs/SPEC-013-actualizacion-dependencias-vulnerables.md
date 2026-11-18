@@ -6,7 +6,7 @@
 |-------|-------|
 | ID | SPEC-013 |
 | Tipo | chore |
-| Estado | draft |
+| Estado | ready |
 | Prioridad | alta (next-auth/next son críticos) |
 | Agentes asignados | @orchestrator, @devlead, @security, @backend |
 | Fecha de creación | 2026-11-18 |
@@ -76,3 +76,4 @@ librería de autenticación de la app.
 | Fecha | Autor | Cambio |
 |-------|-------|--------|
 | 2026-11-18 | @security | Creación del draft a partir de `npm audit` durante la revisión de SPEC-012. Pendiente de que el DM la priorice para Sprint-07. |
+| 2026-11-18 | @orchestrator | DM confirma Sprint-07 como destino, junto a SPEC-014. Versiones en `package.json` verificadas sin cambios desde la creación del draft. Estado → `ready`. |
