@@ -36,10 +36,10 @@ librería de autenticación de la app.
 ## Criterios de aceptación
 
 ### Parte A — `npm audit fix` (sin --force, bajo riesgo)
-- [ ] AC-01: Aplicar `npm audit fix` para `@auth/core`, `next-auth`, `nanoid`, `uuid`,
+- [x] AC-01: Aplicar `npm audit fix` para `@auth/core`, `next-auth`, `nanoid`, `uuid`,
   `source-map-js`, `baseline-browser-mapping`.
-- [ ] AC-02: Suite completa (`npm run test:all`) sigue en verde tras el fix.
-- [ ] AC-03: Login/logout, revalidación de sesión (SPEC-011) y permisos por rol
+- [x] AC-02: Suite completa (`npm run test:all`) sigue en verde tras el fix.
+- [x] AC-03: Login/logout, revalidación de sesión (SPEC-011) y permisos por rol
   verificados manualmente — `next-auth` es la librería de autenticación.
 
 ### Parte B — `next` 16.2.6 → 16.4.6 (requiere `--force`, revisión explícita)
@@ -77,3 +77,4 @@ librería de autenticación de la app.
 |-------|-------|--------|
 | 2026-11-18 | @security | Creación del draft a partir de `npm audit` durante la revisión de SPEC-012. Pendiente de que el DM la priorice para Sprint-07. |
 | 2026-11-18 | @orchestrator | DM confirma Sprint-07 como destino, junto a SPEC-014. Versiones en `package.json` verificadas sin cambios desde la creación del draft. Estado → `ready`. |
+| 2026-11-18 | @backend + @security | Parte A completada en rama `sprint-7-deps-y-balance-jornadas` (commit `b4e8cc7`): `npm audit fix` sin `--force` resuelve 7/10 vulnerabilidades de producción. Suite completa idéntica al baseline (120 passed, 1 skipped) y verificación manual de login/logout/sesión/permisos contra `next-auth` en servidor real, ambas en verde. Quedan 3 vulnerabilidades (next, postcss, sharp transitivas) para la Parte B, pendiente de decisión del DM sobre el bump `--force`. |
