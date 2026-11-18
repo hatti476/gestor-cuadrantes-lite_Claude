@@ -88,15 +88,15 @@ teórico de descansos, mes a mes y en el conjunto del año**.
   otros contadores de la app.
 
 ### Acumulado anual
-- [ ] AC-07: Existe un endpoint (o extensión de uno existente) que, dado un año, devuelve
+- [x] AC-07: Existe un endpoint (o extensión de uno existente) que, dado un año, devuelve
   por empleado la suma de diferencias mensuales de **enero hasta el último mes con
   `Schedule.published = true`** de ese año (los meses futuros/no publicados no cuentan —
   no tienen asignaciones reales y no deben penalizar el acumulado).
 - [ ] AC-08: La vista del cuadrante muestra, junto a la diferencia mensual, el acumulado
   del año natural en curso para cada empleado.
-- [ ] AC-09: El acumulado de un año no incluye nada de meses de otro año (año natural,
+- [x] AC-09: El acumulado de un año no incluye nada de meses de otro año (año natural,
   confirmado por el DM).
-- [ ] AC-10: Si no hay ningún mes publicado aún en el año, el acumulado se muestra como 0
+- [x] AC-10: Si no hay ningún mes publicado aún en el año, el acumulado se muestra como 0
   (o un estado "sin datos"), no como error.
 
 ### CSV
@@ -210,3 +210,4 @@ Captura del Excel manual actual del DM, que esta spec busca reproducir dentro de
 |-------|-------|--------|
 | 2026-11-18 | @orchestrator | Creación de la spec a partir de una petición del DM (captura de su Excel manual de referencia). DM confirma qué turnos cuentan como "jornada ocupada" (todo excepto D) y que el acumulado es por año natural. Estado → `ready`, candidata a Sprint-07 junto a SPEC-013 (orden a decidir por @orchestrator al arrancar el sprint). |
 | 2026-11-18 | @qa + @backend | AC-01/02/03 completados en rama `sprint-7-deps-y-balance-jornadas` (commit `c479765`): `countLaborableDays` y `countOccupiedDays` en `lib/schedules/business-logic.ts`, con tests TDD que cubren festivo en fin de semana (no resta doble), festivo en día laborable, y festivo local añadido a mano por el ADMIN combinado con festivo nacional. Suite unitaria completa en verde (512 passed). Pendiente: AC-04/05/06 (vista mensual), AC-07/08/09/10 (endpoint acumulado anual), AC-11 (CSV). |
+| 2026-11-18 | @qa + @backend | AC-07/09/10 completados (commit `247d36b`): `GET /api/schedules/annual-balance?year=YYYY`, N+1-safe (una query de holidays y una de shiftAssignment para todo el año), sin restricción por rol porque solo agrega meses ya publicados. Tests TDD + suite completa (unit 518 passed, e2e 120 passed) sin regresiones. AC-08 (mostrarlo en la vista del cuadrante) queda pendiente para el trabajo de @frontend. |
