@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { ScheduleGrid } from "@/components/schedule/schedule-grid";
@@ -308,6 +308,10 @@ export default function HomePage() {
     else setMonth((m) => m + 1);
   }
 
+  // Nº de peticiones fallidas durante el pintado en curso (clic o arrastre).
+  // Se reporta de una vez en handlePaintEnd en vez de un toast por celda.
+  const paintFailuresRef = useRef(0);
+
   // ---------------------------------------------------------------------------
   // Paleta de edición: pintar una celda (clic único o paso de un arrastre)
   // ---------------------------------------------------------------------------
@@ -318,7 +322,13 @@ export default function HomePage() {
       const found = assignments.find((a) => a.employeeId === employeeId && a.date.slice(0, 10) === date);
       if (!found) return;
       setAssignments((prev) => prev.filter((a) => a.id !== found.id));
-      void fetch(`/api/schedules?id=${found.id}`, { method: "DELETE" });
+      void fetch(`/api/schedules?id=${found.id}`, { method: "DELETE" })
+        .then((res) => {
+          if (!res.ok) paintFailuresRef.current += 1;
+        })
+        .catch(() => {
+          paintFailuresRef.current += 1;
+        });
       return;
     }
 
@@ -343,14 +353,30 @@ export default function HomePage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ employeeId, date, shiftType }),
-    });
+    })
+      .then((res) => {
+        if (!res.ok) paintFailuresRef.current += 1;
+      })
+      .catch(() => {
+        paintFailuresRef.current += 1;
+      });
   }
 
   // Al soltar el ratón tras pintar (clic único o fin de arrastre): recargar en
   // segundo plano para reconciliar ids reales, monthStatus y celdas bloqueadas
-  // sin ocultar el grid (ver loadSchedule({ silent: true })).
+  // sin ocultar el grid (ver loadSchedule({ silent: true })), y avisar si
+  // alguna celda no se pudo guardar (no silenciar errores).
   function handlePaintEnd() {
-    void loadSchedule({ silent: true });
+    void loadSchedule({ silent: true }).then(() => {
+      const failures = paintFailuresRef.current;
+      paintFailuresRef.current = 0;
+      if (failures > 0) {
+        showToast(
+          `${failures} turno${failures > 1 ? "s" : ""} no se ${failures > 1 ? "pudieron" : "pudo"} guardar`,
+          "error"
+        );
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------

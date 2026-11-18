@@ -165,6 +165,35 @@ test("CP-N05 — el CSV exportado incluye la columna Paga extra", async ({ page 
   }
 });
 
+test("CP-N06 — un fallo de red al pintar se avisa con un toast, no se silencia", async ({ page }) => {
+  test.setTimeout(60_000);
+  try {
+    await loginAsAdmin(page);
+    await page.goto(ROUTES.home);
+    await page.waitForLoadState("networkidle");
+
+    // Forzar que el POST de guardado falle (simula un error de red/servidor)
+    await page.route("**/api/schedules", (route) => {
+      if (route.request().method() === "POST") {
+        return route.fulfill({ status: 500, body: "{}" });
+      }
+      return route.continue();
+    });
+
+    await page.click('[data-testid="palette-swatch-J"]');
+    const row = page.locator('[data-testid="schedule-grid"] tbody tr').first();
+    const cell = row.locator("td").nth(22); // 2026-05-22, viernes
+    await cell.click();
+
+    await expect(page.locator('[data-testid="toast"]').filter({ hasText: /no se pudo guardar/i })).toBeVisible({
+      timeout: 5_000,
+    });
+  } catch (e) {
+    await screenshotOnFail(page, "CP-N06");
+    throw e;
+  }
+});
+
 /**
  * AC-22/23 (colores al imprimir) no se verifican aquí: Playwright no renderiza
  * el motor de impresión del navegador real. Cubierto por tests/unit/print-colors.test.ts
