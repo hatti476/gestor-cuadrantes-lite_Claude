@@ -50,12 +50,6 @@ function CountersTable({
 }) {
   return (
     <div className="mt-2 w-fit overflow-x-auto rounded-lg border border-gray-200 shadow-sm" data-testid="counters-table">
-      <div
-        className="px-3 py-1.5 text-xs text-gray-500 border-b border-gray-200 bg-gray-50"
-        data-testid="laborable-days"
-      >
-        Días laborables del mes: <span className="font-semibold text-gray-700">{laborableDays}</span>
-      </div>
       <table className="border-collapse text-xs min-w-max">
         <thead>
           <tr className="bg-gray-50">

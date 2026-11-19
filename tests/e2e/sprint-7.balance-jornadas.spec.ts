@@ -2,14 +2,16 @@
  * tests/e2e/sprint-7.balance-jornadas.spec.ts
  * Sprint-07 (SPEC-014) — Balance jornadas trabajadas vs. días laborables.
  *
- * CP-186 — La vista del cuadrante muestra los días laborables del mes una sola
- *          vez, y las columnas "Dif. mes" / "Acum. año" por empleado.
+ * CP-186 — La vista del cuadrante muestra las columnas "Dif. mes" / "Acum.
+ *          año" por empleado en CountersTable.
  * CP-187 — Un valor negativo de "Dif. mes" o "Acum. año" se distingue
  *          visualmente de uno positivo o cero.
  * CP-188 — El CSV exportado incluye Laborables/Diferencia mes/Diferencia
  *          acumulada año, coherentes con lo mostrado en pantalla (AC-11).
- * CP-189 — El título del mes muestra los días laborables, coherente con el
- *          badge de CountersTable (petición del DM durante pruebas manuales).
+ * CP-189 — Los días laborables del mes se muestran en una píldora junto al
+ *          título del mes (petición del DM durante pruebas manuales; la
+ *          barra duplicada sobre CountersTable se quitó por desalinear
+ *          ExtraPayTable — ver AC-05).
  */
 
 import { test, expect } from "@playwright/test";
@@ -17,17 +19,12 @@ import fs from "fs";
 import { ROUTES } from "./config";
 import { loginAsAdmin, screenshotOnFail } from "./helpers";
 
-test("CP-186 — laborables del mes y columnas Dif. mes / Acum. año visibles en CountersTable @smoke", async ({ page }) => {
+test("CP-186 — columnas Dif. mes / Acum. año visibles en CountersTable @smoke", async ({ page }) => {
   test.setTimeout(60_000);
   try {
     await loginAsAdmin(page);
     await page.goto(ROUTES.home);
     await page.waitForLoadState("networkidle");
-
-    // AC-05: días laborables del mes, mostrados una sola vez (no por fila)
-    const laborableBadge = page.locator('[data-testid="laborable-days"]');
-    await expect(laborableBadge).toBeVisible();
-    await expect(laborableBadge).toHaveCount(1);
 
     const countersTable = page.locator('[data-testid="counters-table"]');
     const firstRow = countersTable.locator("tbody tr").first();
@@ -110,7 +107,7 @@ test("CP-188 — el CSV exportado incluye el balance de jornadas, coherente con 
   }
 });
 
-test("CP-189 — el título del mes muestra los días laborables, coherente con CountersTable", async ({ page }) => {
+test("CP-189 — la píldora de días laborables se muestra una sola vez junto al título del mes", async ({ page }) => {
   test.setTimeout(60_000);
   try {
     await loginAsAdmin(page);
@@ -120,15 +117,10 @@ test("CP-189 — el título del mes muestra los días laborables, coherente con 
     const titleBadge = page.locator('[data-testid="laborable-days-month-title"]');
     await expect(titleBadge).toBeVisible();
     await expect(titleBadge).toHaveCount(1);
+    await expect(titleBadge).toContainText("días laborables");
 
     const titleText = (await titleBadge.textContent()) ?? "";
-    const titleCount = titleText.match(/\d+/)?.[0];
-    expect(titleCount).toBeTruthy();
-
-    const countersBadgeText = (await page.locator('[data-testid="laborable-days"]').textContent()) ?? "";
-    const countersCount = countersBadgeText.match(/\d+/)?.[0];
-
-    expect(titleCount).toBe(countersCount);
+    expect(titleText.match(/\d+/)?.[0]).toBeTruthy();
   } catch (e) {
     await screenshotOnFail(page, "CP-189");
     throw e;
