@@ -581,7 +581,14 @@ export default function HomePage() {
       return;
     }
 
-    const csv = buildScheduleCsv({ year, month, employees, assignments });
+    const csv = buildScheduleCsv({
+      year,
+      month,
+      employees,
+      assignments,
+      holidayDates: new Set(holidayDates.keys()),
+      annualBalance,
+    });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");

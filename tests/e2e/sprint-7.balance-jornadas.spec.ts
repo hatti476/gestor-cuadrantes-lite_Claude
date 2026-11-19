@@ -6,9 +6,12 @@
  *          vez, y las columnas "Dif. mes" / "Acum. año" por empleado.
  * CP-187 — Un valor negativo de "Dif. mes" o "Acum. año" se distingue
  *          visualmente de uno positivo o cero.
+ * CP-188 — El CSV exportado incluye Laborables/Diferencia mes/Diferencia
+ *          acumulada año, coherentes con lo mostrado en pantalla (AC-11).
  */
 
 import { test, expect } from "@playwright/test";
+import fs from "fs";
 import { ROUTES } from "./config";
 import { loginAsAdmin, screenshotOnFail } from "./helpers";
 
@@ -66,6 +69,41 @@ test("CP-187 — una diferencia negativa se distingue visualmente de una positiv
     }
   } catch (e) {
     await screenshotOnFail(page, "CP-187");
+    throw e;
+  }
+});
+
+test("CP-188 — el CSV exportado incluye el balance de jornadas, coherente con la pantalla (AC-11)", async ({ page }) => {
+  test.setTimeout(60_000);
+  try {
+    await loginAsAdmin(page);
+    await page.goto(ROUTES.home);
+    await page.waitForLoadState("networkidle");
+
+    const countersTable = page.locator('[data-testid="counters-table"]');
+    const firstRow = countersTable.locator("tbody tr").first();
+    const employeeId = await firstRow.getAttribute("data-employee-id");
+    const employeeName = (await firstRow.locator("td").first().textContent())?.trim();
+    const onScreenMonthDiff = (await page.locator(`[data-testid="month-diff-${employeeId}"]`).textContent())?.trim();
+
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.click('[data-testid="btn-export-csv"]'),
+    ]);
+    const filePath = await download.path();
+    expect(filePath).toBeTruthy();
+    const content = fs.readFileSync(filePath as string, "utf-8");
+    const [header, ...rows] = content.split("\n");
+    const columns = header.split(",");
+
+    expect(columns.slice(-3)).toEqual(["Laborables", "Diferencia mes", "Diferencia acumulada año"]);
+
+    const empRow = rows.find((r) => r.startsWith(employeeName!));
+    expect(empRow).toBeDefined();
+    const monthDiffCsv = empRow!.split(",").at(-2);
+    expect(monthDiffCsv).toBe(onScreenMonthDiff);
+  } catch (e) {
+    await screenshotOnFail(page, "CP-188");
     throw e;
   }
 });
