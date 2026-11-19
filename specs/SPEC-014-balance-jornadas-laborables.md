@@ -6,7 +6,7 @@
 |-------|-------|
 | ID | SPEC-014 |
 | Tipo | feature |
-| Estado | in-progress |
+| Estado | done — validado manualmente por el DM, listo para PR |
 | Prioridad | media |
 | Agentes asignados | @orchestrator, @qa, @backend, @frontend |
 | Fecha de creación | 2026-11-18 |
@@ -214,3 +214,4 @@ Captura del Excel manual actual del DM, que esta spec busca reproducir dentro de
 | 2026-11-19 | @qa + @frontend | AC-04/05/06/08 completados (commit `d996ff3`): `CountersTable` en `app/page.tsx` añade el badge de laborables y las columnas "Dif. mes"/"Acum. año" con `balanceColorClass` (nueva función pura) para distinguir negativo de positivo/cero. Nuevo spec E2E `sprint-7.balance-jornadas.spec.ts` (CP-186/187). Durante el proceso se detectó y arregló una regresión de layout en CP-154 (sprint-24.spec.ts): las columnas nuevas ensanchaban `CountersTable` lo bastante para romper el `flex-wrap` que mantiene `ExtraPayTable` a la derecha. Suite completa en verde: 521 unit + 122 e2e. Solo queda AC-11 (columnas en el CSV). |
 | 2026-11-19 | @qa + @backend | AC-11 completado (commit `e6c20e3`): `buildScheduleCsv` añade Laborables/Diferencia mes/Diferencia acumulada año al final de cada fila. E2E CP-188 verifica coherencia entre el CSV y lo mostrado en pantalla. Todos los AC de la spec quedan completados (521→523 unit, 122→123 e2e, ci:check limpio). Estado → `in-progress` (pendiente de validación manual del DM antes de pasar a `done`, igual criterio que SPEC-012). |
 | 2026-11-19 | @frontend | Petición directa del DM durante sus pruebas manuales (no un AC original): mostrar también los días laborables junto al título del mes en la navegación, no solo en `CountersTable` (commit `46bf54b`). `laborableDays` se calcula una sola vez en `HomePage` y se pasa como prop (antes se recalculaba dentro de `CountersTable`). E2E CP-189 verifica que ambos valores coinciden. Suite completa en verde: 523 unit + 125 e2e. |
+| 2026-11-19 | @frontend | Dos ajustes más del DM tras probar en servidor real: (1) rediseño a píldora redondeada a juego con el resto de badges, en vez de texto entre paréntesis (commit `d2ea43b`); (2) se quita la barra "Días laborables del mes" sobre `CountersTable` (commit `25c994a`) — quedaba redundante con la píldora y desalineaba `CountersTable` con `ExtraPayTable`. De paso, al validar manualmente se detectó y arregló que `tests/unit/models/user-role.test.ts` vaciaba `prisma/dev.db` por no estar aislado (commit `5614d69`). Validación manual del DM contra `npm run dev` con datos reales: todo correcto. Estado → `done`, lista para PR a `main`. |
