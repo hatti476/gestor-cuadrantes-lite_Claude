@@ -105,6 +105,11 @@ export function countOccupiedDays(shiftTypes: string[]): number {
   return shiftTypes.filter((t) => t !== "D").length;
 }
 
+/** Clase Tailwind para distinguir visualmente un balance negativo de uno positivo/cero (SPEC-014 AC-06) */
+export function balanceColorClass(value: number): "text-red-700" | "text-green-700" {
+  return value < 0 ? "text-red-700" : "text-green-700";
+}
+
 /**
  * Dado un turno base y si el día propio / el día siguiente es "especial"
  * (festivo O fin de semana), devuelve el turno resultante:

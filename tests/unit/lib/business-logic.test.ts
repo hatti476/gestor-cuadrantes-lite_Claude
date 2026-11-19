@@ -14,6 +14,7 @@ import {
   validateRestOnlyShift,
   countLaborableDays,
   countOccupiedDays,
+  balanceColorClass,
 } from "@/lib/schedules/business-logic";
 
 describe("isValidShiftType", () => {
@@ -234,6 +235,20 @@ describe("diferencia mensual = jornadas ocupadas - laborables (SPEC-014 AC-03)",
     const shifts = [...Array(21).fill("M"), ...Array(10).fill("D")]; // 31 días, 21 ocupados
     const laborable = countLaborableDays(2026, 8, new Set(["2026-08-15"])); // 21
     expect(countOccupiedDays(shifts) - laborable).toBe(0);
+  });
+});
+
+describe("balanceColorClass (SPEC-014 AC-06)", () => {
+  it("negativo → rojo", () => {
+    expect(balanceColorClass(-1)).toBe("text-red-700");
+  });
+
+  it("cero → verde", () => {
+    expect(balanceColorClass(0)).toBe("text-green-700");
+  });
+
+  it("positivo → verde", () => {
+    expect(balanceColorClass(3)).toBe("text-green-700");
   });
 });
 
