@@ -627,12 +627,6 @@ export default function HomePage() {
           </button>
           <h2 className="text-xl font-semibold text-gray-800 min-w-[200px] text-center">
             {MONTH_NAMES[month - 1]} {year}
-            <span
-              className="ml-2 text-sm font-normal text-gray-500"
-              data-testid="laborable-days-month-title"
-            >
-              ({laborableDaysThisMonth} laborables)
-            </span>
           </h2>
           <button
             data-testid="btn-next-month"
@@ -641,6 +635,13 @@ export default function HomePage() {
           >
             ›
           </button>
+          {/* SPEC-014: días laborables del mes, pill a juego con el resto de badges */}
+          <span
+            data-testid="laborable-days-month-title"
+            className="inline-flex items-center px-4 py-2 rounded-full bg-gray-100 border border-gray-200 shadow-sm text-sm font-semibold text-gray-700"
+          >
+            {laborableDaysThisMonth} días laborables
+          </span>
           {/* Badge de estado del mes */}
           {!loading && <MonthStatusBadge status={monthStatus} />}
           {canPublish && (
