@@ -6,11 +6,11 @@
 |-------|-------|
 | ID | SPEC-013 |
 | Tipo | chore |
-| Estado | ready |
+| Estado | in-progress |
 | Prioridad | alta (next-auth/next son críticos) |
 | Agentes asignados | @orchestrator, @devlead, @security, @backend |
 | Fecha de creación | 2026-11-18 |
-| Sprint | Sprint-07 (candidata) |
+| Sprint | Sprint-07 |
 
 ---
 
@@ -43,13 +43,13 @@ librería de autenticación de la app.
   verificados manualmente — `next-auth` es la librería de autenticación.
 
 ### Parte B — `next` 16.2.6 → 16.4.6 (requiere `--force`, revisión explícita)
-- [ ] AC-04: Revisar el changelog de Next.js 16.3/16.4 en busca de breaking changes
+- [x] AC-04: Revisar el changelog de Next.js 16.3/16.4 en busca de breaking changes
   (especialmente App Router, Image Optimization, Server Actions — varios advisories
   tocan justo esas áreas).
-- [ ] AC-05: Probar en especial: `/api/holidays/public` (fetch saliente a nager.at),
+- [x] AC-05: Probar en especial: `/api/holidays/public` (fetch saliente a nager.at),
   cualquier uso de `next/image`, y el flujo completo de auth tras el bump.
-- [ ] AC-06: Suite completa + smoke E2E en verde tras el bump.
-- [ ] AC-07: Decisión explícita del DM/@devlead antes de fijar la nueva versión en
+- [x] AC-06: Suite completa + smoke E2E en verde tras el bump.
+- [x] AC-07: Decisión explícita del DM/@devlead antes de fijar la nueva versión en
   `package.json` (no es un fix automático silencioso).
 
 ---
@@ -78,3 +78,4 @@ librería de autenticación de la app.
 | 2026-11-18 | @security | Creación del draft a partir de `npm audit` durante la revisión de SPEC-012. Pendiente de que el DM la priorice para Sprint-07. |
 | 2026-11-18 | @orchestrator | DM confirma Sprint-07 como destino, junto a SPEC-014. Versiones en `package.json` verificadas sin cambios desde la creación del draft. Estado → `ready`. |
 | 2026-11-18 | @backend + @security | Parte A completada en rama `sprint-7-deps-y-balance-jornadas` (commit `b4e8cc7`): `npm audit fix` sin `--force` resuelve 7/10 vulnerabilidades de producción. Suite completa idéntica al baseline (120 passed, 1 skipped) y verificación manual de login/logout/sesión/permisos contra `next-auth` en servidor real, ambas en verde. Quedan 3 vulnerabilidades (next, postcss, sharp transitivas) para la Parte B, pendiente de decisión del DM sobre el bump `--force`. |
+| 2026-11-19 | @devlead + @security + @qa | Parte B completada (commit `1e9a5d1`): `next` 16.2.6 → 16.4.6, `npm audit --omit=dev` en 0. DM pide máxima limpieza por ser candidata a producción. Validación exhaustiva: build de producción (standalone, igual que CI) 123/123 en verde en serie y con 2 workers concurrentes, sin ningún fallo. Se detectó un flake real pero exclusivo de `next dev` (arranque en frío de Turbopack sobre `proxy.ts` hace que la primera petición autenticada tras levantar el servidor aterrice una vez en `/login` sin volver a navegar) — no reproduce en producción bajo las mismas condiciones de concurrencia. Corregido en la infraestructura de tests (proyecto Playwright `warmup` + reintento en `login()`), no en código de la app. Suite completa (523 unit + 123 e2e) en verde sin depender de retries de CI. Estado → `in-progress`, pendiente de validación manual del DM antes de `done` (igual criterio que SPEC-012). Cierra SPEC-013. |
