@@ -6,11 +6,11 @@
 |-------|-------|
 | ID | SPEC-014 |
 | Tipo | feature |
-| Estado | ready |
+| Estado | in-progress |
 | Prioridad | media |
 | Agentes asignados | @orchestrator, @qa, @backend, @frontend |
 | Fecha de creación | 2026-11-18 |
-| Sprint | Sprint-07 (candidata, a priorizar junto a SPEC-013 al arrancar el sprint) |
+| Sprint | Sprint-07 |
 
 ---
 
@@ -100,7 +100,7 @@ teórico de descansos, mes a mes y en el conjunto del año**.
   (o un estado "sin datos"), no como error.
 
 ### CSV
-- [ ] AC-11: El CSV exportado (`buildScheduleCsv`) incluye, por empleado, las columnas
+- [x] AC-11: El CSV exportado (`buildScheduleCsv`) incluye, por empleado, las columnas
   "Laborables", "Diferencia mes" y "Diferencia acumulada año" al final de la fila, igual
   criterio de cálculo que en pantalla.
 
@@ -212,3 +212,4 @@ Captura del Excel manual actual del DM, que esta spec busca reproducir dentro de
 | 2026-11-18 | @qa + @backend | AC-01/02/03 completados en rama `sprint-7-deps-y-balance-jornadas` (commit `c479765`): `countLaborableDays` y `countOccupiedDays` en `lib/schedules/business-logic.ts`, con tests TDD que cubren festivo en fin de semana (no resta doble), festivo en día laborable, y festivo local añadido a mano por el ADMIN combinado con festivo nacional. Suite unitaria completa en verde (512 passed). Pendiente: AC-04/05/06 (vista mensual), AC-07/08/09/10 (endpoint acumulado anual), AC-11 (CSV). |
 | 2026-11-18 | @qa + @backend | AC-07/09/10 completados (commit `247d36b`): `GET /api/schedules/annual-balance?year=YYYY`, N+1-safe (una query de holidays y una de shiftAssignment para todo el año), sin restricción por rol porque solo agrega meses ya publicados. Tests TDD + suite completa (unit 518 passed, e2e 120 passed) sin regresiones. AC-08 (mostrarlo en la vista del cuadrante) queda pendiente para el trabajo de @frontend. |
 | 2026-11-19 | @qa + @frontend | AC-04/05/06/08 completados (commit `d996ff3`): `CountersTable` en `app/page.tsx` añade el badge de laborables y las columnas "Dif. mes"/"Acum. año" con `balanceColorClass` (nueva función pura) para distinguir negativo de positivo/cero. Nuevo spec E2E `sprint-7.balance-jornadas.spec.ts` (CP-186/187). Durante el proceso se detectó y arregló una regresión de layout en CP-154 (sprint-24.spec.ts): las columnas nuevas ensanchaban `CountersTable` lo bastante para romper el `flex-wrap` que mantiene `ExtraPayTable` a la derecha. Suite completa en verde: 521 unit + 122 e2e. Solo queda AC-11 (columnas en el CSV). |
+| 2026-11-19 | @qa + @backend | AC-11 completado (commit `e6c20e3`): `buildScheduleCsv` añade Laborables/Diferencia mes/Diferencia acumulada año al final de cada fila. E2E CP-188 verifica coherencia entre el CSV y lo mostrado en pantalla. Todos los AC de la spec quedan completados (521→523 unit, 122→123 e2e, ci:check limpio). Estado → `in-progress` (pendiente de validación manual del DM antes de pasar a `done`, igual criterio que SPEC-012). |
