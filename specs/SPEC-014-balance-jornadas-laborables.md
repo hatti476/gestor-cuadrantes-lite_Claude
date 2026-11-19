@@ -77,13 +77,13 @@ teórico de descansos, mes a mes y en el conjunto del año**.
   laborables` del mes (puede ser negativa, positiva o cero).
 
 ### Vista mensual
-- [ ] AC-04: En la vista del cuadrante de un mes, cada empleado muestra su diferencia
+- [x] AC-04: En la vista del cuadrante de un mes, cada empleado muestra su diferencia
   mensual junto a los contadores de turnos ya existentes (`CountersTable`), sin necesidad
   de ninguna petición adicional al servidor (se calcula con los datos ya cargados:
   `assignments` + `holidayDates`).
-- [ ] AC-05: Se muestra también el número de días laborables del mes (igual para todos los
+- [x] AC-05: Se muestra también el número de días laborables del mes (igual para todos los
   empleados, una sola vez, no repetido por fila).
-- [ ] AC-06: Un valor negativo (el empleado tiene menos jornadas ocupadas que laborables)
+- [x] AC-06: Un valor negativo (el empleado tiene menos jornadas ocupadas que laborables)
   y uno positivo o cero se distinguen visualmente (p. ej. color), igual que ya se hace en
   otros contadores de la app.
 
@@ -92,7 +92,7 @@ teórico de descansos, mes a mes y en el conjunto del año**.
   por empleado la suma de diferencias mensuales de **enero hasta el último mes con
   `Schedule.published = true`** de ese año (los meses futuros/no publicados no cuentan —
   no tienen asignaciones reales y no deben penalizar el acumulado).
-- [ ] AC-08: La vista del cuadrante muestra, junto a la diferencia mensual, el acumulado
+- [x] AC-08: La vista del cuadrante muestra, junto a la diferencia mensual, el acumulado
   del año natural en curso para cada empleado.
 - [x] AC-09: El acumulado de un año no incluye nada de meses de otro año (año natural,
   confirmado por el DM).
@@ -211,3 +211,4 @@ Captura del Excel manual actual del DM, que esta spec busca reproducir dentro de
 | 2026-11-18 | @orchestrator | Creación de la spec a partir de una petición del DM (captura de su Excel manual de referencia). DM confirma qué turnos cuentan como "jornada ocupada" (todo excepto D) y que el acumulado es por año natural. Estado → `ready`, candidata a Sprint-07 junto a SPEC-013 (orden a decidir por @orchestrator al arrancar el sprint). |
 | 2026-11-18 | @qa + @backend | AC-01/02/03 completados en rama `sprint-7-deps-y-balance-jornadas` (commit `c479765`): `countLaborableDays` y `countOccupiedDays` en `lib/schedules/business-logic.ts`, con tests TDD que cubren festivo en fin de semana (no resta doble), festivo en día laborable, y festivo local añadido a mano por el ADMIN combinado con festivo nacional. Suite unitaria completa en verde (512 passed). Pendiente: AC-04/05/06 (vista mensual), AC-07/08/09/10 (endpoint acumulado anual), AC-11 (CSV). |
 | 2026-11-18 | @qa + @backend | AC-07/09/10 completados (commit `247d36b`): `GET /api/schedules/annual-balance?year=YYYY`, N+1-safe (una query de holidays y una de shiftAssignment para todo el año), sin restricción por rol porque solo agrega meses ya publicados. Tests TDD + suite completa (unit 518 passed, e2e 120 passed) sin regresiones. AC-08 (mostrarlo en la vista del cuadrante) queda pendiente para el trabajo de @frontend. |
+| 2026-11-19 | @qa + @frontend | AC-04/05/06/08 completados (commit `d996ff3`): `CountersTable` en `app/page.tsx` añade el badge de laborables y las columnas "Dif. mes"/"Acum. año" con `balanceColorClass` (nueva función pura) para distinguir negativo de positivo/cero. Nuevo spec E2E `sprint-7.balance-jornadas.spec.ts` (CP-186/187). Durante el proceso se detectó y arregló una regresión de layout en CP-154 (sprint-24.spec.ts): las columnas nuevas ensanchaban `CountersTable` lo bastante para romper el `flex-wrap` que mantiene `ExtraPayTable` a la derecha. Suite completa en verde: 521 unit + 122 e2e. Solo queda AC-11 (columnas en el CSV). |
