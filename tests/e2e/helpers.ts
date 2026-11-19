@@ -9,13 +9,11 @@ import fs from "fs";
 import { USERS, ROUTES } from "./config";
 
 /**
- * Realiza el login con las credenciales indicadas y espera la redireccion a /.
+ * Un intento de login. Puede aterrizar en "/login?callbackUrl=%2F" sin volver
+ * a navegar (no es lentitud: ver `login` más abajo) — en ese caso devuelve
+ * false en vez de esperar el timeout completo.
  */
-export async function login(
-  page: Page,
-  email: string,
-  password: string
-): Promise<void> {
+async function attemptLogin(page: Page, email: string, password: string): Promise<boolean> {
   await page.goto(ROUTES.login);
 
   // CRITICO: en modo dev React tarda ~2s en hidratar. Si hacemos click antes,
@@ -37,10 +35,36 @@ export async function login(
   await page.getByLabel("Contraseña").fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
 
-  await page.waitForURL((url) => url.pathname === "/", {
-    timeout: 30_000,
-    waitUntil: "commit",
-  });
+  try {
+    await page.waitForURL((url) => url.pathname === "/", {
+      timeout: 15_000,
+      waitUntil: "commit",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Realiza el login con las credenciales indicadas y espera la redireccion a /.
+ *
+ * Bajo Turbopack (next dev), la primera petición autenticada a una ruta que
+ * aún no se compiló puede aterrizar una sola vez en "/login?callbackUrl=%2F"
+ * (el proxy no llega a ver el token recién creado) y ya no vuelve a navegar
+ * — esperar más no ayuda, hay que reintentar el login. El segundo intento,
+ * con la ruta ya compilada, siempre funciona. No ocurre contra una build de
+ * producción (`next build` + `next start`), solo en desarrollo.
+ */
+export async function login(
+  page: Page,
+  email: string,
+  password: string
+): Promise<void> {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    if (await attemptLogin(page, email, password)) return;
+  }
+  throw new Error(`login: no se consiguió iniciar sesión como ${email} tras 2 intentos`);
 }
 
 /** Login rapido como ADMIN. */
