@@ -8,6 +8,8 @@
  *          visualmente de uno positivo o cero.
  * CP-188 — El CSV exportado incluye Laborables/Diferencia mes/Diferencia
  *          acumulada año, coherentes con lo mostrado en pantalla (AC-11).
+ * CP-189 — El título del mes muestra los días laborables, coherente con el
+ *          badge de CountersTable (petición del DM durante pruebas manuales).
  */
 
 import { test, expect } from "@playwright/test";
@@ -104,6 +106,31 @@ test("CP-188 — el CSV exportado incluye el balance de jornadas, coherente con 
     expect(monthDiffCsv).toBe(onScreenMonthDiff);
   } catch (e) {
     await screenshotOnFail(page, "CP-188");
+    throw e;
+  }
+});
+
+test("CP-189 — el título del mes muestra los días laborables, coherente con CountersTable", async ({ page }) => {
+  test.setTimeout(60_000);
+  try {
+    await loginAsAdmin(page);
+    await page.goto(ROUTES.home);
+    await page.waitForLoadState("networkidle");
+
+    const titleBadge = page.locator('[data-testid="laborable-days-month-title"]');
+    await expect(titleBadge).toBeVisible();
+    await expect(titleBadge).toHaveCount(1);
+
+    const titleText = (await titleBadge.textContent()) ?? "";
+    const titleCount = titleText.match(/\d+/)?.[0];
+    expect(titleCount).toBeTruthy();
+
+    const countersBadgeText = (await page.locator('[data-testid="laborable-days"]').textContent()) ?? "";
+    const countersCount = countersBadgeText.match(/\d+/)?.[0];
+
+    expect(titleCount).toBe(countersCount);
+  } catch (e) {
+    await screenshotOnFail(page, "CP-189");
     throw e;
   }
 });

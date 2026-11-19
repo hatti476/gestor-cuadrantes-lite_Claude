@@ -40,22 +40,14 @@ const euroFormatter = new Intl.NumberFormat("es-ES", {
 function CountersTable({
   employees,
   assignments,
-  year,
-  month,
-  holidayDates,
+  laborableDays,
   annualBalance,
 }: {
   employees: ScheduleEmployee[];
   assignments: ScheduleAssignment[];
-  year: number;
-  month: number;
-  holidayDates: Map<string, string>;
+  laborableDays: number;
   annualBalance: Record<string, number>;
 }) {
-  // SPEC-014: días laborables del mes (sábado/domingo/festivo excluidos), igual
-  // para todos los empleados — se muestra una sola vez, no por fila.
-  const laborableDays = countLaborableDays(year, month, new Set(holidayDates.keys()));
-
   return (
     <div className="mt-2 w-fit overflow-x-auto rounded-lg border border-gray-200 shadow-sm" data-testid="counters-table">
       <div
@@ -613,6 +605,10 @@ export default function HomePage() {
   const libresCount = assignments.filter((a) => a.shiftType === "D" && a.manual).length;
   const bajasCount = assignments.filter((a) => a.shiftType === "B").length;
 
+  // SPEC-014: días laborables del mes mostrado (sábado/domingo/festivo excluidos
+  // — festivos nacionales y los añadidos a mano por el ADMIN, misma tabla Holiday).
+  const laborableDaysThisMonth = countLaborableDays(year, month, new Set(holidayDates.keys()));
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -631,6 +627,12 @@ export default function HomePage() {
           </button>
           <h2 className="text-xl font-semibold text-gray-800 min-w-[200px] text-center">
             {MONTH_NAMES[month - 1]} {year}
+            <span
+              className="ml-2 text-sm font-normal text-gray-500"
+              data-testid="laborable-days-month-title"
+            >
+              ({laborableDaysThisMonth} laborables)
+            </span>
           </h2>
           <button
             data-testid="btn-next-month"
@@ -730,9 +732,7 @@ export default function HomePage() {
                     <CountersTable
                       employees={employees}
                       assignments={assignments}
-                      year={year}
-                      month={month}
-                      holidayDates={holidayDates}
+                      laborableDays={laborableDaysThisMonth}
                       annualBalance={annualBalance}
                     />
                     <ExtraPayTable employees={employees} assignments={assignments} month={month} />
