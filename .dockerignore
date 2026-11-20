@@ -5,6 +5,8 @@
 !.env.example
 node_modules
 .next
+.next-test
+.next-dev
 prisma/dev.db
 prisma/test.db
 tests/screenshots

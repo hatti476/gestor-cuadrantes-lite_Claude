@@ -36,5 +36,8 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Aplica migraciones y arranca. El seed es opcional: añadir '&& node prisma/seed.js' si se necesita.
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+# Aplica migraciones y arranca. Se invoca el CLI de Prisma directamente
+# (node_modules/prisma/build/index.js) en vez de con `npx prisma`: la imagen
+# standalone no trae node_modules/.bin, y sin él `npx` no resuelve el binario
+# local. El seed es opcional: añadir '&& node prisma/seed.js' si se necesita.
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
