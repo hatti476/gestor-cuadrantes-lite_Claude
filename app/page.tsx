@@ -326,6 +326,11 @@ export default function HomePage() {
       if (annualBalanceRes.ok) {
         const { balances }: { balances: Record<string, number> } = await annualBalanceRes.json();
         setAnnualBalance(balances);
+      } else {
+        // No dejar el acumulado del año/mes anterior visible bajo el nuevo
+        // periodo si este fetch falla — mejor "sin datos" (0) que una cifra
+        // obsoleta y silenciosamente incorrecta (AC-10).
+        setAnnualBalance({});
       }
     } catch (err) {
       console.error(err);

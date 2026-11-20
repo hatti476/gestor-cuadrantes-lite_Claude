@@ -47,6 +47,22 @@ export async function GET(req: NextRequest) {
 
   const holidayDates = new Set(holidays.map((h) => h.date.toISOString().slice(0, 10)));
 
+  // Un solo pase sobre las asignaciones del año, agrupadas por mes y
+  // empleado — en vez de volver a recorrer el array completo por cada mes
+  // publicado (O(meses × asignaciones) en vez de O(asignaciones)).
+  const shiftsByMonth = new Map<number, Map<string, string[]>>();
+  for (const a of assignments) {
+    const month = a.date.getUTCMonth() + 1;
+    let byEmployee = shiftsByMonth.get(month);
+    if (!byEmployee) {
+      byEmployee = new Map();
+      shiftsByMonth.set(month, byEmployee);
+    }
+    const list = byEmployee.get(a.employeeId) ?? [];
+    list.push(a.shiftType);
+    byEmployee.set(a.employeeId, list);
+  }
+
   const balances: Record<string, number> = {};
   for (const employee of employees) {
     balances[employee.id] = 0;
@@ -54,17 +70,10 @@ export async function GET(req: NextRequest) {
 
   for (const { month } of publishedSchedules) {
     const laborable = countLaborableDays(year, month, holidayDates);
-
-    const shiftsByEmployee = new Map<string, string[]>();
-    for (const a of assignments) {
-      if (a.date.getUTCMonth() + 1 !== month) continue;
-      const list = shiftsByEmployee.get(a.employeeId) ?? [];
-      list.push(a.shiftType);
-      shiftsByEmployee.set(a.employeeId, list);
-    }
+    const shiftsByEmployee = shiftsByMonth.get(month);
 
     for (const employee of employees) {
-      const occupied = countOccupiedDays(shiftsByEmployee.get(employee.id) ?? []);
+      const occupied = countOccupiedDays(shiftsByEmployee?.get(employee.id) ?? []);
       balances[employee.id] += occupied - laborable;
     }
   }

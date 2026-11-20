@@ -12,6 +12,9 @@
  *          título del mes (petición del DM durante pruebas manuales; la
  *          barra duplicada sobre CountersTable se quitó por desalinear
  *          ExtraPayTable — ver AC-05).
+ * CP-190 — Si falla la petición del acumulado anual al cambiar de mes, no se
+ *          queda visible la cifra del mes anterior (AC-10): se limpia a 0 en
+ *          vez de mostrar un acumulado obsoleto como si fuera el actual.
  */
 
 import { test, expect } from "@playwright/test";
@@ -123,6 +126,35 @@ test("CP-189 — la píldora de días laborables se muestra una sola vez junto a
     expect(titleText.match(/\d+/)?.[0]).toBeTruthy();
   } catch (e) {
     await screenshotOnFail(page, "CP-189");
+    throw e;
+  }
+});
+
+test("CP-190 — un fetch fallido del acumulado anual no deja visible la cifra del mes anterior (AC-10)", async ({ page }) => {
+  test.setTimeout(60_000);
+  try {
+    await loginAsAdmin(page);
+    await page.goto(ROUTES.home);
+    await page.waitForLoadState("networkidle");
+
+    const countersTable = page.locator('[data-testid="counters-table"]');
+    const firstRow = countersTable.locator("tbody tr").first();
+    const employeeId = await firstRow.getAttribute("data-employee-id");
+    expect(employeeId).toBeTruthy();
+
+    const yearBalanceCell = page.locator(`[data-testid="year-balance-${employeeId}"]`);
+    await expect(yearBalanceCell).toBeVisible();
+
+    // Fuerza el fallo SOLO del acumulado anual al navegar al mes siguiente —
+    // el resto de la carga (asignaciones, festivos) sigue en verde.
+    await page.route("**/api/schedules/annual-balance*", (route) => route.fulfill({ status: 500, body: "{}" }));
+    await page.click('[data-testid="btn-next-month"]');
+    await page.waitForLoadState("networkidle");
+
+    await expect(yearBalanceCell).toBeVisible();
+    await expect(yearBalanceCell).toHaveText("0");
+  } catch (e) {
+    await screenshotOnFail(page, "CP-190");
     throw e;
   }
 });
