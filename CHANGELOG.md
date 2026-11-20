@@ -4,6 +4,43 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 Formato inspirado en Keep a Changelog y versionado semántico.
 
+## [Unreleased] — Sprint 7 (SPEC-013 + SPEC-014, dependencias y balance de jornadas)
+
+### Security
+- **0 vulnerabilidades de producción** (`npm audit --omit=dev`): `next` 16.2.6 → 16.4.6,
+  `next-auth`, `@auth/core`, `nanoid`, `uuid`, `source-map-js`, `baseline-browser-mapping`
+  actualizados. Validado contra build de producción (standalone, igual que CI): 123/123 en
+  verde en serie y con 2 workers concurrentes, sin ningún fallo.
+
+### Added
+- **Balance jornadas trabajadas vs. días laborables** (SPEC-014): por empleado, diferencia
+  mensual (jornadas ocupadas − días laborables del mes, excluyendo sábado/domingo/festivo —
+  nacional o añadido a mano por el ADMIN) y acumulado del año natural en curso (solo cuenta
+  meses con `Schedule.published = true`). Visible en `CountersTable` (columnas "Dif. mes" /
+  "Acum. año", en rojo si es negativo) y en una píldora junto al título del mes ("N días
+  laborables"). Nuevo endpoint `GET /api/schedules/annual-balance?year=YYYY`, N+1-safe.
+  El CSV exportado incluye las mismas 3 columnas al final de cada fila.
+
+### Fixed
+- **`npm run ci:check` fallaba con ~800 errores de lint**: `.next-dev/` (directorio de build
+  de pruebas manuales) no estaba en los `globalIgnores` de `eslint.config.mjs`.
+- **`npm run test:unit` podía vaciar `prisma/dev.db`**: `tests/unit/models/user-role.test.ts`
+  usaba el `PrismaClient` por defecto (sin datasource propio) y sus `beforeEach` truncaban
+  User/Employee/etc. — cualquiera que corriera la suite unitaria con un `next dev` abierto en
+  paralelo perdía los usuarios de prueba sembrados. Aislado en su propia `prisma/test-unit.db`.
+- **Flake de login en `next dev`** (solo desarrollo, no afecta a producción): bajo Turbopack
+  en Next 16.4.6, la primera petición autenticada tras levantar el servidor podía aterrizar
+  una vez en `/login?callbackUrl=%2F` sin volver a navegar. Corregido en la infraestructura de
+  tests E2E (proyecto Playwright `warmup` que precompila las rutas clave + el helper `login()`
+  reintenta una vez).
+
+### Tests
+- Unit: `countLaborableDays`, `countOccupiedDays`, `balanceColorClass`
+  (`lib/schedules/business-logic.ts`), endpoint de acumulado anual, `buildScheduleCsv`
+  extendido.
+- E2E: `sprint-7.balance-jornadas.spec.ts` (nuevo) — CP-186/187/188/189.
+- 523 tests unitarios + 125 E2E en verde contra la app real (producción y desarrollo).
+
 ## [Unreleased] — Sprint 6 (SPEC-012, paleta de edición y fixes de preparación)
 
 Seis hallazgos de una sesión de pruebas manuales del DM sobre la build de Sprint 5b.

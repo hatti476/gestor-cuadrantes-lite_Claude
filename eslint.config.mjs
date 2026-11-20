@@ -10,6 +10,7 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     ".next/**",
     ".next-test/**",
+    ".next-dev/**", // NEXT_DIST_DIR=.next-dev (servidor de pruebas manuales)
     "out/**",
     "build/**",
     "next-env.d.ts",

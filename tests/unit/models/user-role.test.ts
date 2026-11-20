@@ -1,6 +1,29 @@
+import { execSync } from "child_process";
+import path from "path";
+import fs from "fs";
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+// Aislado de prisma/dev.db: sin datasource propio, este fichero usaba el
+// PrismaClient por defecto y sus `beforeEach` truncan User/Employee/etc. —
+// cualquier `npm run test:unit` vaciaba la BD de pruebas manuales si había
+// un `next dev` abierto en paralelo.
+const cwd = path.resolve(__dirname, "../../../");
+const TEST_DB_PATH = path.join(cwd, "prisma", "test-unit.db");
+const TEST_DB_URL = `file:${TEST_DB_PATH}`;
+
+beforeAll(() => {
+  for (const suffix of ["", "-journal", "-wal", "-shm"]) {
+    const p = TEST_DB_PATH + suffix;
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
+  execSync("npx prisma db push --skip-generate", {
+    env: { ...process.env, DATABASE_URL: TEST_DB_URL },
+    cwd,
+    stdio: "pipe",
+  });
+});
+
+const prisma = new PrismaClient({ datasources: { db: { url: TEST_DB_URL } } });
 
 describe("User Role Enum - ADMIN | TECNICO | VIEWER", () => {
   beforeAll(async () => {

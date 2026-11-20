@@ -12,6 +12,9 @@ import {
   EXTRA_PAY_RATES,
   isRestOnlyDay,
   validateRestOnlyShift,
+  countLaborableDays,
+  countOccupiedDays,
+  balanceColorClass,
 } from "@/lib/schedules/business-logic";
 
 describe("isValidShiftType", () => {
@@ -170,6 +173,82 @@ describe("validateRestOnlyShift (SPEC-012 AC-12/13/14/15)", () => {
   it("no afecta a turnos M/T/N/J en festivo o fin de semana", () => {
     expect(validateRestOnlyShift("M", new Date("2026-05-16"), false).valid).toBe(true);
     expect(validateRestOnlyShift("N", new Date("2026-05-01"), true).valid).toBe(true);
+  });
+});
+
+describe("countLaborableDays (SPEC-014 AC-01)", () => {
+  it("mes sin festivos cuenta solo días entre semana", () => {
+    expect(countLaborableDays(2026, 2, new Set())).toBe(20); // febrero 2026, 28 días
+  });
+
+  it("festivo en fin de semana no resta doble (ya era fin de semana)", () => {
+    expect(countLaborableDays(2026, 8, new Set())).toBe(21); // agosto 2026 sin festivos
+    expect(countLaborableDays(2026, 8, new Set(["2026-08-15"]))).toBe(21); // 15 agosto = sábado
+  });
+
+  it("festivo en día laborable resta un día más", () => {
+    expect(countLaborableDays(2026, 5, new Set())).toBe(21); // mayo 2026 sin festivos
+    expect(countLaborableDays(2026, 5, new Set(["2026-05-01"]))).toBe(20); // 1 mayo = viernes
+  });
+
+  it("ignora festivos que no caen en el mes consultado", () => {
+    expect(countLaborableDays(2026, 2, new Set(["2026-05-01", "2026-08-15"]))).toBe(20);
+  });
+
+  it("resta también un festivo local añadido a mano por el ADMIN (no solo los nacionales precargados)", () => {
+    // "2026-05-15" (San Isidro) no está en el seed de festivos nacionales — llega vía
+    // POST /api/holidays, pero se guarda en la misma tabla Holiday sin distinción de origen.
+    expect(countLaborableDays(2026, 5, new Set(["2026-05-15"]))).toBe(20);
+  });
+
+  it("combina festivo nacional y festivo local añadido a mano en el mismo mes", () => {
+    expect(countLaborableDays(2026, 5, new Set(["2026-05-01", "2026-05-15"]))).toBe(19);
+  });
+});
+
+describe("countOccupiedDays (SPEC-014 AC-02)", () => {
+  it("cuenta todo excepto D", () => {
+    expect(countOccupiedDays(["M", "M", "T", "N", "D", "D", "V", "B"])).toBe(6);
+  });
+
+  it("devuelve 0 si la lista es solo D", () => {
+    expect(countOccupiedDays(["D", "D", "D"])).toBe(0);
+  });
+
+  it("devuelve 0 para lista vacía", () => {
+    expect(countOccupiedDays([])).toBe(0);
+  });
+
+  it("cuenta las variantes de festivo y Navidad igual que un turno normal", () => {
+    expect(countOccupiedDays(["MF", "TF", "NF", "MN", "TN", "NN", "D"])).toBe(6);
+  });
+});
+
+describe("diferencia mensual = jornadas ocupadas - laborables (SPEC-014 AC-03)", () => {
+  it("menos jornadas ocupadas que laborables da diferencia negativa", () => {
+    const shifts = [...Array(18).fill("M"), ...Array(13).fill("D")]; // 31 días, 18 ocupados
+    const laborable = countLaborableDays(2026, 5, new Set(["2026-05-01"])); // 20
+    expect(countOccupiedDays(shifts) - laborable).toBe(-2);
+  });
+
+  it("jornadas ocupadas igual a laborables da diferencia 0", () => {
+    const shifts = [...Array(21).fill("M"), ...Array(10).fill("D")]; // 31 días, 21 ocupados
+    const laborable = countLaborableDays(2026, 8, new Set(["2026-08-15"])); // 21
+    expect(countOccupiedDays(shifts) - laborable).toBe(0);
+  });
+});
+
+describe("balanceColorClass (SPEC-014 AC-06)", () => {
+  it("negativo → rojo", () => {
+    expect(balanceColorClass(-1)).toBe("text-red-700");
+  });
+
+  it("cero → verde", () => {
+    expect(balanceColorClass(0)).toBe("text-green-700");
+  });
+
+  it("positivo → verde", () => {
+    expect(balanceColorClass(3)).toBe("text-green-700");
   });
 });
 

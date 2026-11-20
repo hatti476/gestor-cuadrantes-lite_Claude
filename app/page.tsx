@@ -11,6 +11,9 @@ import { ScheduleAssignment, ScheduleEmployee, MonthStatus, computeMonthStatus }
 import {
   calculateExtraPay,
   countShifts,
+  countLaborableDays,
+  countOccupiedDays,
+  balanceColorClass,
   EXTRA_PAY_RATES,
   getExtraPayColumnsForMonth,
   isRestOnlyDay,
@@ -37,9 +40,13 @@ const euroFormatter = new Intl.NumberFormat("es-ES", {
 function CountersTable({
   employees,
   assignments,
+  laborableDays,
+  annualBalance,
 }: {
   employees: ScheduleEmployee[];
   assignments: ScheduleAssignment[];
+  laborableDays: number;
+  annualBalance: Record<string, number>;
 }) {
   return (
     <div className="mt-2 w-fit overflow-x-auto rounded-lg border border-gray-200 shadow-sm" data-testid="counters-table">
@@ -62,6 +69,12 @@ function CountersTable({
                 </div>
               </th>
             ))}
+            <th className="px-1 py-1 text-center border-b border-r border-gray-200 font-semibold text-gray-600 text-[10px] leading-tight">
+              Dif.<br />mes
+            </th>
+            <th className="px-1 py-1 text-center border-b border-r border-gray-200 font-semibold text-gray-600 text-[10px] leading-tight">
+              Acum.<br />año
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -70,9 +83,15 @@ function CountersTable({
               .filter((a) => a.employeeId === emp.id)
               .map((a) => a.shiftType);
             const counters = countShifts(empShifts);
+            const monthDiff = countOccupiedDays(empShifts) - laborableDays;
+            const yearBalance = annualBalance[emp.id] ?? 0;
             const rowBg = rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/50";
             return (
-              <tr key={emp.id} className={`${rowBg} hover:bg-yellow-50/40 transition-colors`}>
+              <tr
+                key={emp.id}
+                data-employee-id={emp.id}
+                className={`${rowBg} hover:bg-yellow-50/40 transition-colors`}
+              >
                 <td className={`sticky left-0 z-10 ${rowBg} px-3 py-1 font-medium text-gray-700 border-r border-b border-gray-200 whitespace-nowrap`}>
                   {emp.name}
                 </td>
@@ -89,6 +108,18 @@ function CountersTable({
                     </td>
                   );
                 })}
+                <td
+                  className={`w-9 px-1 py-1 text-center border-r border-b border-gray-200 font-mono font-semibold tabular-nums ${balanceColorClass(monthDiff)}`}
+                  data-testid={`month-diff-${emp.id}`}
+                >
+                  {monthDiff}
+                </td>
+                <td
+                  className={`w-9 px-1 py-1 text-center border-r border-b border-gray-200 font-mono font-semibold tabular-nums ${balanceColorClass(yearBalance)}`}
+                  data-testid={`year-balance-${emp.id}`}
+                >
+                  {yearBalance}
+                </td>
               </tr>
             );
           })}
@@ -228,6 +259,7 @@ export default function HomePage() {
     assignmentsRef.current = assignments;
   }, [assignments]);
   const [holidayDates, setHolidayDates] = useState<Map<string, string>>(new Map());
+  const [annualBalance, setAnnualBalance] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [monthStatus, setMonthStatus] = useState<MonthStatus>("ungenerated");
   const [published, setPublished] = useState(false);
@@ -250,10 +282,11 @@ export default function HomePage() {
     if (!opts.silent) setLoading(true);
     try {
       // /api/employees es solo ADMIN: TECNICO/VIEWER usan los empleados de las asignaciones
-      const [scheduleRes, holidayRes, employeeRes] = await Promise.all([
+      const [scheduleRes, holidayRes, employeeRes, annualBalanceRes] = await Promise.all([
         fetch(`/api/schedules?year=${year}&month=${month}`),
         fetch(`/api/holidays?year=${year}`),
         isAdmin ? fetch(`/api/employees`) : Promise.resolve(null),
+        fetch(`/api/schedules/annual-balance?year=${year}`),
       ]);
       if (!scheduleRes.ok) throw new Error("Error cargando cuadrante");
       const responseData: { assignments: ScheduleAssignment[]; monthStatus: MonthStatus; published?: boolean } = await scheduleRes.json();
@@ -288,6 +321,16 @@ export default function HomePage() {
               .map((h) => [h.date.slice(0, 10), h.description])
           )
         );
+      }
+
+      if (annualBalanceRes.ok) {
+        const { balances }: { balances: Record<string, number> } = await annualBalanceRes.json();
+        setAnnualBalance(balances);
+      } else {
+        // No dejar el acumulado del año/mes anterior visible bajo el nuevo
+        // periodo si este fetch falla — mejor "sin datos" (0) que una cifra
+        // obsoleta y silenciosamente incorrecta (AC-10).
+        setAnnualBalance({});
       }
     } catch (err) {
       console.error(err);
@@ -529,7 +572,14 @@ export default function HomePage() {
       return;
     }
 
-    const csv = buildScheduleCsv({ year, month, employees, assignments });
+    const csv = buildScheduleCsv({
+      year,
+      month,
+      employees,
+      assignments,
+      holidayDates: new Set(holidayDates.keys()),
+      annualBalance,
+    });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -553,6 +603,10 @@ export default function HomePage() {
   const vacacionesCount = assignments.filter((a) => a.shiftType === "V").length;
   const libresCount = assignments.filter((a) => a.shiftType === "D" && a.manual).length;
   const bajasCount = assignments.filter((a) => a.shiftType === "B").length;
+
+  // SPEC-014: días laborables del mes mostrado (sábado/domingo/festivo excluidos
+  // — festivos nacionales y los añadidos a mano por el ADMIN, misma tabla Holiday).
+  const laborableDaysThisMonth = countLaborableDays(year, month, new Set(holidayDates.keys()));
 
   // ---------------------------------------------------------------------------
   // Render
@@ -580,6 +634,13 @@ export default function HomePage() {
           >
             ›
           </button>
+          {/* SPEC-014: días laborables del mes, pill a juego con el resto de badges */}
+          <span
+            data-testid="laborable-days-month-title"
+            className="inline-flex items-center px-4 py-2 rounded-full bg-gray-100 border border-gray-200 shadow-sm text-sm font-semibold text-gray-700"
+          >
+            {laborableDaysThisMonth} días laborables
+          </span>
           {/* Badge de estado del mes */}
           {!loading && <MonthStatusBadge status={monthStatus} />}
           {canPublish && (
@@ -668,7 +729,12 @@ export default function HomePage() {
                 />
                 {employees.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-4 items-start">
-                    <CountersTable employees={employees} assignments={assignments} />
+                    <CountersTable
+                      employees={employees}
+                      assignments={assignments}
+                      laborableDays={laborableDaysThisMonth}
+                      annualBalance={annualBalance}
+                    />
                     <ExtraPayTable employees={employees} assignments={assignments} month={month} />
                     <RatesLegend month={month} />
                   </div>

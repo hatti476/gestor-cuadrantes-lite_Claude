@@ -10,37 +10,59 @@ import { USERS, ROUTES } from "./config";
 
 /**
  * Realiza el login con las credenciales indicadas y espera la redireccion a /.
+ *
+ * Bajo Turbopack (next dev), la primera petición autenticada a una ruta que
+ * aún no se compiló puede quedarse en "/login" sin llegar a navegar a "/" —
+ * ya sea porque la hidratación de React tarda más de lo esperado, o porque
+ * el proxy no llega a ver el token recién creado y redirige de vuelta
+ * ("/login?callbackUrl=%2F"). Ninguno de los dos casos se arregla esperando
+ * más (no es lentitud, ver AC-05/AC-06 de SPEC-013): hay que reintentar con
+ * la ruta ya compilada. Las credenciales incorrectas ("/login?error=...")
+ * NO se reintentan: es un fallo real, no una cuestión de compilación. No
+ * ocurre contra una build de producción (`next build` + `next start`), solo
+ * en desarrollo — cada intento conserva el timeout original de 30s, no se
+ * reduce (reducirlo rompería logins legítimamente lentos bajo contención).
  */
 export async function login(
   page: Page,
   email: string,
   password: string
 ): Promise<void> {
-  await page.goto(ROUTES.login);
+  const maxAttempts = 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await page.goto(ROUTES.login);
 
-  // CRITICO: en modo dev React tarda ~2s en hidratar. Si hacemos click antes,
-  // el navegador ejecuta el submit NATIVO del boton (GET /login?callbackUrl=/)
-  // en lugar del onSubmit de React, y el login nunca ocurre.
-  await page.waitForFunction(
-    () => {
-      const form = document.querySelector("form");
-      if (!form) return false;
-      const key = Object.keys(form).find((k) => k.startsWith("__reactProps"));
-      if (!key) return false;
-      return typeof (form as never as Record<string, { onSubmit?: unknown }>)[key].onSubmit === "function";
-    },
-    undefined,
-    { timeout: 30_000 }
-  );
+      // CRITICO: en modo dev React tarda ~2s en hidratar. Si hacemos click antes,
+      // el navegador ejecuta el submit NATIVO del boton (GET /login?callbackUrl=/)
+      // en lugar del onSubmit de React, y el login nunca ocurre.
+      await page.waitForFunction(
+        () => {
+          const form = document.querySelector("form");
+          if (!form) return false;
+          const key = Object.keys(form).find((k) => k.startsWith("__reactProps"));
+          if (!key) return false;
+          return typeof (form as never as Record<string, { onSubmit?: unknown }>)[key].onSubmit === "function";
+        },
+        undefined,
+        { timeout: 30_000 }
+      );
 
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Contraseña").fill(password);
-  await page.getByRole("button", { name: "Entrar" }).click();
+      await page.getByLabel("Email").fill(email);
+      await page.getByLabel("Contraseña").fill(password);
+      await page.getByRole("button", { name: "Entrar" }).click();
 
-  await page.waitForURL((url) => url.pathname === "/", {
-    timeout: 30_000,
-    waitUntil: "commit",
-  });
+      await page.waitForURL((url) => url.pathname === "/", {
+        timeout: 30_000,
+        waitUntil: "commit",
+      });
+      return;
+    } catch (err) {
+      const isLastAttempt = attempt === maxAttempts;
+      const isCredentialsError = page.url().includes("error=CredentialsSignin");
+      if (isLastAttempt || isCredentialsError) throw err;
+    }
+  }
 }
 
 /** Login rapido como ADMIN. */

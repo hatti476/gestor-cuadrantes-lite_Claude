@@ -82,6 +82,35 @@ export function countShifts(shiftTypes: string[]): ShiftCounter {
 }
 
 /**
+ * Días laborables de un mes: días que no son sábado, domingo ni festivo.
+ * `holidayDates` son fechas "YYYY-MM-DD" (mismo formato que `toDateStr` en
+ * date-utils.ts) — da igual si vienen de festivos nacionales precargados o
+ * añadidos a mano por el ADMIN vía POST /api/holidays, la tabla Holiday no
+ * distingue el origen.
+ */
+export function countLaborableDays(year: number, month: number, holidayDates: Set<string>): number {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  let count = 0;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCDay() === 0 || date.getUTCDay() === 6) continue;
+    if (holidayDates.has(date.toISOString().slice(0, 10))) continue;
+    count++;
+  }
+  return count;
+}
+
+/** Jornadas "ocupadas" de un empleado en un mes: cualquier turno excepto D (descanso) */
+export function countOccupiedDays(shiftTypes: string[]): number {
+  return shiftTypes.filter((t) => t !== "D").length;
+}
+
+/** Clase Tailwind para distinguir visualmente un balance negativo de uno positivo/cero (SPEC-014 AC-06) */
+export function balanceColorClass(value: number): "text-red-700" | "text-green-700" {
+  return value < 0 ? "text-red-700" : "text-green-700";
+}
+
+/**
  * Dado un turno base y si el día propio / el día siguiente es "especial"
  * (festivo O fin de semana), devuelve el turno resultante:
  *   M → MF si el día actual es especial
