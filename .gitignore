@@ -46,6 +46,7 @@ cookies.txt
 .env.local
 .env.development
 .env.production
+.env.prod
 .env.test
 # sí versionar el ejemplo
 !.env.example
