@@ -88,7 +88,7 @@ El fichero se guarda en `docs/qa-results/YYYY-MM-DD_HH-MM_sprint-{N}.md`.
 **Fecha**: YYYY-MM-DD  
 **Hora**: HH:MM (Europe/Madrid)  
 **Sprint**: Sprint {N} — {título del sprint}  
-**Entorno**: http://localhost:3000  
+**Entorno**: http://localhost:3100  
 **Rama**: {rama git actual}  
 **Resultado global**: X/Y tests pasados ✅|❌
 

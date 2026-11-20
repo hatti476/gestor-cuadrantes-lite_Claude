@@ -20,6 +20,13 @@ for pid in $(pgrep -f "next (dev|start)|next-server" 2>/dev/null || true); do
   case "$cwd_real" in
     "$PROJECT_ROOT"|"$PROJECT_ROOT/"*)
       cmd="$(ps -p "$pid" -o cmd= 2>/dev/null || true)"
+      # pgrep -f hace substring match contra la línea de comando completa:
+      # un comando que solo MENCIONE "next dev"/"next-server" como texto
+      # (p. ej. otro pgrep/grep buscando ese mismo patrón) también
+      # coincide y no debe matarse — ya nos pasó una vez.
+      case "$cmd" in
+        *pgrep*|*grep*) continue ;;
+      esac
       echo "Matando PID $pid ($cmd) — cwd: $cwd_real"
       kill "$pid" 2>/dev/null || true
       KILLED=$((KILLED + 1))

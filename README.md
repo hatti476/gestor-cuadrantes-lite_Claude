@@ -49,7 +49,8 @@ npm run db:seed
 npm run dev
 ```
 
-La aplicacion queda disponible en `http://localhost:3000`.
+La aplicacion queda disponible en `http://localhost:3100` (el puerto 3000
+queda reservado para el contenedor de produccion, ver `docker-compose.prod.yml`).
 
 ## Scripts utiles
 

@@ -23,7 +23,8 @@ export default defineConfig({
     video: "off",
   },
   // Servidor de tests en puerto 3001 con BD aislada (test.db)
-  // NO interfiere con el servidor de desarrollo en puerto 3000
+  // NO interfiere con el servidor de desarrollo (puerto 3100) ni con el
+  // contenedor de producción (puerto 3000, reservado — ver docker-compose.prod.yml)
   webServer: {
     command: "next dev -p 3001",
     url: "http://localhost:3001",
