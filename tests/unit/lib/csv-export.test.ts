@@ -51,10 +51,12 @@ describe("buildScheduleCsv (SPEC-012 AC-16/17/18)", () => {
     expect(emp1Row).toBeDefined();
     expect(emp2Row).toBeDefined();
 
-    // Técnico 1: 1 MF (39.6) + 1 N (46.2) = 85.8
-    expect(emp1Row).toContain("85.8");
-    // Técnico 2: 1 NF (59.4)
-    expect(emp2Row).toContain("59.4");
+    // Mayo de 2026 es anterior a la subida de tarifas de diciembre de 2026
+    // (SPEC-012 AC-19) — tarifa vieja: MF 33, N 38.5, NF 49.5.
+    // Técnico 1: 1 MF (33) + 1 N (38.5) = 71.5
+    expect(emp1Row).toContain("71.5");
+    // Técnico 2: 1 NF (49.5)
+    expect(emp2Row).toContain("49.5");
   });
 
   it("diciembre: incluye también columnas MN/TN/NN", () => {

@@ -10,6 +10,7 @@ import {
   validateShiftTransition,
   calculateExtraPay,
   EXTRA_PAY_RATES,
+  getExtraPayRates,
   isRestOnlyDay,
   validateRestOnlyShift,
   countLaborableDays,
@@ -93,33 +94,62 @@ describe("EXTRA_PAY_RATES (SPEC-012 AC-19: subida +20%)", () => {
   });
 });
 
-describe("calculateExtraPay (SPEC-012 AC-19/21: tarifas +20%)", () => {
+describe("calculateExtraPay (SPEC-012 AC-19/21: tarifas +20% desde diciembre 2026)", () => {
   it("empleado sin turnos extra devuelve 0 €", () => {
-    expect(calculateExtraPay({ M: 10, T: 8, D: 4 })).toBe(0);
+    expect(calculateExtraPay({ M: 10, T: 8, D: 4 }, 2026, 12)).toBe(0);
   });
 
-  it("calcula solo turnos MF a 39,6 €", () => {
-    expect(calculateExtraPay({ MF: 3 })).toBeCloseTo(118.8, 2);
+  it("calcula solo turnos MF a 39,6 € (diciembre, tarifa nueva)", () => {
+    expect(calculateExtraPay({ MF: 3 }, 2026, 12)).toBeCloseTo(118.8, 2);
   });
 
-  it("calcula solo turnos N a 46,2 €", () => {
-    expect(calculateExtraPay({ N: 4 })).toBeCloseTo(184.8, 2);
+  it("calcula solo turnos N a 46,2 € (diciembre, tarifa nueva)", () => {
+    expect(calculateExtraPay({ N: 4 }, 2026, 12)).toBeCloseTo(184.8, 2);
   });
 
-  it("calcula combinación de MF, TF, N y NF", () => {
-    expect(calculateExtraPay({ MF: 2, TF: 1, N: 7, NF: 1 })).toBeCloseTo(501.6, 2);
+  it("calcula combinación de MF, TF, N y NF (diciembre, tarifa nueva)", () => {
+    expect(calculateExtraPay({ MF: 2, TF: 1, N: 7, NF: 1 }, 2026, 12)).toBeCloseTo(501.6, 2);
   });
 
   it("mantiene decimales correctamente", () => {
-    expect(calculateExtraPay({ N: 1, NF: 1 })).toBeCloseTo(105.6, 2);
+    expect(calculateExtraPay({ N: 1, NF: 1 }, 2026, 12)).toBeCloseTo(105.6, 2);
   });
 
-  it("calcula turnos especiales de Navidad a 151,8 €", () => {
-    expect(calculateExtraPay({ MN: 1, TN: 1, NN: 1 })).toBeCloseTo(455.4, 2);
+  it("calcula turnos especiales de Navidad a 151,8 € (enero, tarifa nueva)", () => {
+    expect(calculateExtraPay({ MN: 1, TN: 1, NN: 1 }, 2027, 1)).toBeCloseTo(455.4, 2);
   });
 
   it("calcula complementos ordinarios y navideños juntos", () => {
-    expect(calculateExtraPay({ MF: 1, TF: 1, N: 1, NF: 1, MN: 1 })).toBeCloseTo(336.6, 2);
+    expect(calculateExtraPay({ MF: 1, TF: 1, N: 1, NF: 1, MN: 1 }, 2026, 12)).toBeCloseTo(336.6, 2);
+  });
+
+  it("noviembre de 2026 (o antes) usa la tarifa vieja, no la subida del 20%", () => {
+    // Mismos turnos que el caso de "combinación" de arriba, pero antes de la
+    // subida: 2*33 + 1*33 + 7*38.5 + 1*49.5 = 418.0, no 501.6.
+    expect(calculateExtraPay({ MF: 2, TF: 1, N: 7, NF: 1 }, 2026, 11)).toBeCloseTo(418, 2);
+  });
+
+  it("diciembre de 2026 es el primer mes con la tarifa nueva (límite exacto)", () => {
+    expect(calculateExtraPay({ MF: 1 }, 2026, 12)).toBeCloseTo(39.6, 2);
+    expect(calculateExtraPay({ MF: 1 }, 2026, 11)).toBeCloseTo(33, 2);
+  });
+});
+
+describe("getExtraPayRates (SPEC-012 AC-19: vigencia desde diciembre 2026)", () => {
+  it("antes de diciembre 2026 devuelve las tarifas viejas", () => {
+    expect(getExtraPayRates(2026, 11)).toEqual({
+      MF: 33, TF: 33, N: 38.5, NF: 49.5, MN: 126.5, TN: 126.5, NN: 126.5,
+    });
+  });
+
+  it("desde diciembre 2026 en adelante devuelve las tarifas nuevas", () => {
+    expect(getExtraPayRates(2026, 12)).toEqual(EXTRA_PAY_RATES);
+    expect(getExtraPayRates(2027, 1)).toEqual(EXTRA_PAY_RATES);
+    expect(getExtraPayRates(2027, 6)).toEqual(EXTRA_PAY_RATES);
+  });
+
+  it("años anteriores a 2026 también usan la tarifa vieja", () => {
+    expect(getExtraPayRates(2025, 12)).toEqual(getExtraPayRates(2026, 11));
   });
 });
 

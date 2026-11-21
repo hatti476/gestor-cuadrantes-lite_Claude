@@ -65,7 +65,9 @@ export function buildScheduleCsv({
     const counters = countShifts(empShiftTypes);
     const extraPayCounts = extraPayColumns.map((shift) => String(counters[shift] ?? 0));
     const extraPayTotal = calculateExtraPay(
-      Object.fromEntries(extraPayColumns.map((shift) => [shift, counters[shift] ?? 0]))
+      Object.fromEntries(extraPayColumns.map((shift) => [shift, counters[shift] ?? 0])),
+      year,
+      month
     );
     const roundedTotal = Math.round(extraPayTotal * 100) / 100;
 
