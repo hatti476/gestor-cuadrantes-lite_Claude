@@ -44,6 +44,7 @@ export interface ShiftCounter {
   [shiftType: string]: number;
 }
 
+/** Tarifas vigentes desde diciembre de 2026 (SPEC-012 AC-19, subida +20%). */
 export const EXTRA_PAY_RATES: Record<string, number> = {
   MF: 39.6,
   TF: 39.6,
@@ -54,6 +55,30 @@ export const EXTRA_PAY_RATES: Record<string, number> = {
   NN: 151.8,
 };
 
+/**
+ * Tarifas anteriores a la subida (vigentes hasta noviembre de 2026 inclusive).
+ * La subida se confirmó el 2026-11-17, pero con efecto desde el 1 de
+ * diciembre — noviembre se sigue pagando con la tarifa vieja.
+ */
+const EXTRA_PAY_RATES_PRE_RAISE: Record<string, number> = {
+  MF: 33,
+  TF: 33,
+  N: 38.5,
+  NF: 49.5,
+  MN: 126.5,
+  TN: 126.5,
+  NN: 126.5,
+};
+
+const RAISE_YEAR = 2026;
+const RAISE_MONTH = 12;
+
+/** Tarifas de paga extra vigentes para un año/mes concreto. */
+export function getExtraPayRates(year: number, month: number): Record<string, number> {
+  const beforeRaise = year < RAISE_YEAR || (year === RAISE_YEAR && month < RAISE_MONTH);
+  return beforeRaise ? EXTRA_PAY_RATES_PRE_RAISE : EXTRA_PAY_RATES;
+}
+
 export const EXTRA_PAY_SHIFTS = ["MF", "TF", "N", "NF", "MN", "TN", "NN"] as const;
 export type ExtraPayShift = (typeof EXTRA_PAY_SHIFTS)[number];
 
@@ -63,8 +88,13 @@ export function getExtraPayColumnsForMonth(month: number): ExtraPayShift[] {
   return EXTRA_PAY_SHIFTS.filter((s) => s !== "MN" && s !== "TN" && s !== "NN");
 }
 
-export function calculateExtraPay(shiftCounts: Record<string, number>): number {
-  return Object.entries(EXTRA_PAY_RATES).reduce(
+export function calculateExtraPay(
+  shiftCounts: Record<string, number>,
+  year: number,
+  month: number
+): number {
+  const rates = getExtraPayRates(year, month);
+  return Object.entries(rates).reduce(
     (total, [shift, rate]) => total + (shiftCounts[shift] ?? 0) * rate,
     0
   );

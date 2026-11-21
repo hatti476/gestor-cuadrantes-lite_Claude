@@ -14,7 +14,7 @@ import {
   countLaborableDays,
   countOccupiedDays,
   balanceColorClass,
-  EXTRA_PAY_RATES,
+  getExtraPayRates,
   getExtraPayColumnsForMonth,
   isRestOnlyDay,
 } from "@/lib/schedules/business-logic";
@@ -132,10 +132,12 @@ function CountersTable({
 function ExtraPayTable({
   employees,
   assignments,
+  year,
   month,
 }: {
   employees: ScheduleEmployee[];
   assignments: ScheduleAssignment[];
+  year: number;
   month: number;
 }) {
   const columns = getExtraPayColumnsForMonth(month);
@@ -174,7 +176,9 @@ function ExtraPayTable({
             const counters = countShifts(empShifts);
             const rowBg = rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/50";
             const extraPay = calculateExtraPay(
-              Object.fromEntries(columns.map((shift) => [shift, counters[shift] ?? 0]))
+              Object.fromEntries(columns.map((shift) => [shift, counters[shift] ?? 0])),
+              year,
+              month
             );
 
             return (
@@ -211,8 +215,9 @@ function ExtraPayTable({
 }
 
 
-function RatesLegend({ month }: { month: number }) {
+function RatesLegend({ year, month }: { year: number; month: number }) {
   const shifts = getExtraPayColumnsForMonth(month);
+  const rates = getExtraPayRates(year, month);
   return (
     <div
       className="mt-2 rounded-lg border border-gray-200 shadow-sm bg-white px-4 py-3"
@@ -229,7 +234,7 @@ function RatesLegend({ month }: { month: number }) {
               {shift}
             </span>
             <span className="text-xs text-gray-700 font-mono tabular-nums whitespace-nowrap">
-              {euroFormatter.format(EXTRA_PAY_RATES[shift]!)}/turno
+              {euroFormatter.format(rates[shift]!)}/turno
             </span>
           </div>
         ))}
@@ -735,8 +740,8 @@ export default function HomePage() {
                       laborableDays={laborableDaysThisMonth}
                       annualBalance={annualBalance}
                     />
-                    <ExtraPayTable employees={employees} assignments={assignments} month={month} />
-                    <RatesLegend month={month} />
+                    <ExtraPayTable employees={employees} assignments={assignments} year={year} month={month} />
+                    <RatesLegend year={year} month={month} />
                   </div>
                 )}
                 {/* Pista para el ADMIN: los empleados llegan de /api/employees aunque
